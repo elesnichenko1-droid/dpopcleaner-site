@@ -1,0 +1,25 @@
+DPopCleaner — release/update setup
+
+1) Create GitHub Release in repository elesnichenko1-droid/dpopcleaner-site
+   Tag: v0.2.14-beta
+   Title: DPopCleaner 0.2.14 BETA
+   Mark as pre-release.
+
+2) Upload the installer with EXACT name:
+   DPopCleaner_Setup_0.2.14_BETA.exe
+
+3) Publish the release.
+
+4) The website download buttons already point to:
+   https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.2.14-beta/DPopCleaner_Setup_0.2.14_BETA.exe
+
+5) Update manifest will be available after Pages deploy at:
+   https://elesnichenko1-droid.github.io/dpopcleaner-site/update/beta.json
+
+6) When a custom domain is connected, prefer it in the app, e.g.:
+   https://YOUR-DOMAIN/update/beta.json
+
+SECURITY:
+Current installer is marked signed=false/install_mode=manual in beta.json.
+Do not auto-run downloaded updates until Authenticode signing is configured.
+After signing a future release, compute the NEW SHA-256 and update the JSON.

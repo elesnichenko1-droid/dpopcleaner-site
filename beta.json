@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "product": "DPopCleaner",
+  "channel": "beta",
+  "version": "0.2.14",
+  "version_code": 214,
+  "published_at": "2026-08-18T00:00:00Z",
+  "mandatory": false,
+  "install_mode": "manual",
+  "signed": false,
+  "download_url": "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.2.14-beta/DPopCleaner_Setup_0.2.14_BETA.exe",
+  "release_page": "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/tag/v0.2.14-beta",
+  "sha256": "0b0e7eeec6fe7a28eb046b083700bf7ce94ab4b0ee17bba9ee355203e8c8983e",
+  "size": 4506112,
+  "notes": "DPopCleaner 0.2.14 BETA. Current beta uses manual installation until release signing is configured."
+}
