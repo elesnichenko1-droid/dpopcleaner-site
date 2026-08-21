@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="description" content="DPopCleaner — очистка, диагностика и контроль Windows в одном приложении. BETA 0.2.14 для Windows x64." />
+  <meta property="og:title" content="DPopCleaner — контроль Windows без лишнего шума" />
+  <meta property="og:description" content="Очистка, анализ системы, автозагрузка, DPopGuard 2 и инструменты Windows в одном приложении." />
+  <meta property="og:type" content="website" />
+  <title>DPopCleaner — очистка и контроль Windows</title>
+  <link rel="icon" href="assets/dpopcleaner-icon.png" type="image/png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <header class="site-header" id="top">
+    <div class="container nav-wrap">
+      <a class="brand" href="#top" aria-label="DPopCleaner — на главную">
+        <img src="assets/dpopcleaner-icon.png" alt="" width="42" height="42" />
+        <span>DPopCleaner</span>
+        <small>BETA</small>
+      </a>
+      <nav class="nav" aria-label="Основная навигация">
+        <a href="#features">Возможности</a>
+        <a href="#how">Как работает</a>
+        <a href="#security">О сборке</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="button button-small button-ghost" href="#download-pending" aria-disabled="true" onclick="return false;">Скоро</a>
+      <button class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <div class="eyebrow"><span class="dot"></span> DPopCleaner 0.2.14 BETA · Windows x64</div>
+          <h1>Windows под контролем.<br><span>Без лишнего шума.</span></h1>
+          <p class="lead">Очистка, диагностика системы, управление автозагрузкой, DPopGuard 2 и полезные инструменты Windows — в одном лёгком приложении.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#download-pending" aria-disabled="true" onclick="return false;">
+              <span class="download-icon">↓</span>
+              Скачать 0.2.14 BETA
+            </a>
+            <a class="button button-secondary" href="#features">Посмотреть возможности</a>
+          </div>
+          <div class="release-meta" aria-label="Сведения о релизе">
+            <span>Windows 10 / 11</span>
+            <i></i>
+            <span>x64</span>
+            <i></i>
+            <span>4.30 МБ</span>
+            <i></i>
+            <span>Бесплатная BETA</span>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal delay-1" aria-label="Иллюстрация возможностей DPopCleaner">
+          <div class="glow-ring"></div>
+          <div class="app-shell">
+            <div class="app-topbar">
+              <div class="mini-brand"><img src="assets/dpopcleaner-icon.png" alt="" /> <span>DPopCleaner</span></div>
+              <div class="window-controls"><b></b><b></b><b></b></div>
+            </div>
+            <div class="app-body">
+              <aside class="app-side">
+                <span class="active">Обзор</span>
+                <span>Очистка</span>
+                <span>DPopGuard 2</span>
+                <span>Автозагрузка</span>
+                <span>Инструменты</span>
+              </aside>
+              <div class="app-content">
+                <div class="status-row">
+                  <div><small>Состояние системы</small><strong>Готово к анализу</strong></div>
+                  <span class="status-pill">BETA</span>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric"><span>CPU</span><strong>Анализ</strong><em style="--p:68%"></em></div>
+                  <div class="metric"><span>RAM</span><strong>Контроль</strong><em style="--p:51%"></em></div>
+                  <div class="metric"><span>Диск</span><strong>Очистка</strong><em style="--p:42%"></em></div>
+                </div>
+                <div class="scan-card">
+                  <div class="scan-icon">✓</div>
+                  <div><strong>DPopGuard 2</strong><p>Быстрая проверка и системные эвристики</p></div>
+                  <span>Готов</span>
+                </div>
+                <div class="action-strip">
+                  <span>Очистить</span><span>Проверить Windows</span><span>Управлять запуском</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="visual-note">Иллюстрация возможностей, не точный скриншот интерфейса.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-strip">
+      <div class="container trust-grid reveal">
+        <div><strong>0.2.14</strong><span>текущая BETA-сборка</span></div>
+        <div><strong>x64</strong><span>64-битная Windows</span></div>
+        <div><strong>4.30 МБ</strong><span>размер установщика</span></div>
+        <div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-head reveal">
+          <p class="kicker">Возможности</p>
+          <h2>Один центр для повседневного ухода за Windows</h2>
+          <p>DPopCleaner объединяет инструменты, которые обычно приходится искать по разным разделам системы и отдельным утилитам.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card reveal"><div class="feature-icon">✦</div><h3>Очистка системы</h3><p>Поиск временных данных и ненужных файлов с понятным сценарием очистки.</p><span>Cleaner</span></article>
+          <article class="feature-card reveal delay-1"><div class="feature-icon">◉</div><h3>Анализ ресурсов</h3><p>Обзор CPU, RAM, дисков, GPU и доступных процессов для поиска проблемных мест.</p><span>System analysis</span></article>
+          <article class="feature-card reveal delay-2"><div class="feature-icon">⌁</div><h3>DPopGuard 2</h3><p>Быстрая проверка: сигнатуры, AMSI, автозапуск и эвристики, включая признаки майнеров.</p><span>Quick scan</span></article>
+          <article class="feature-card reveal"><div class="feature-icon">↗</div><h3>Автозагрузка</h3><p>Встроенное управление записями автозапуска из реестра и папки Startup.</p><span>Startup Manager</span></article>
+          <article class="feature-card reveal delay-1"><div class="feature-icon">⌘</div><h3>Инструменты Windows</h3><p>Быстрый доступ к диагностике, обслуживанию и проверке системных компонентов.</p><span>Windows tools</span></article>
+          <article class="feature-card reveal delay-2"><div class="feature-icon">⇄</div><h3>Интеграция Zapret</h3><p>Управление встроенными компонентами Zapret и журналами без затрагивания сторонних VPN.</p><span>Network tools</span></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section steps-section" id="how">
+      <div class="container">
+        <div class="section-head reveal">
+          <p class="kicker">Как это работает</p>
+          <h2>Три шага вместо десятка системных окон</h2>
+        </div>
+        <div class="steps">
+          <article class="step reveal"><b>01</b><h3>Запустите анализ</h3><p>DPopCleaner собирает доступные сведения о состоянии системы и показывает, где требуется внимание.</p></article>
+          <article class="step reveal delay-1"><b>02</b><h3>Проверьте рекомендации</h3><p>Вы выбираете нужные действия: очистка, автозагрузка, системные инструменты или быстрая проверка.</p></article>
+          <article class="step reveal delay-2"><b>03</b><h3>Примените изменения</h3><p>Выполняйте только выбранные действия и возвращайтесь к журналам, если нужно проверить результат.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="security">
+      <div class="container security-card reveal">
+        <div class="shield-wrap"><img src="assets/dpopcleaner-icon.png" alt="Иконка DPopCleaner" /></div>
+        <div class="security-copy">
+          <p class="kicker">О текущей сборке</p>
+          <h2>Проверяемый релиз, без громких обещаний</h2>
+          <p>На странице показываются технические данные установщика, чтобы файл можно было сверить после загрузки. DPopCleaner 0.2.14 пока находится в BETA — перед серьёзными изменениями системы рекомендуем создать точку восстановления.</p>
+          <div class="hash-box">
+            <div><small>SHA-256</small><code id="hashValue">0b0e7eeec6fe7a28eb046b083700bf7ce94ab4b0ee17bba9ee355203e8c8983e</code></div>
+            <button id="copyHash2" class="copy-button" type="button">Копировать</button>
+          </div>
+          <div class="build-facts">
+            <span><b>Формат</b> PE32+ Windows GUI</span>
+            <span><b>Архитектура</b> x86-64</span>
+            <span><b>Сборка</b> 18.08.2026</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="container faq-layout">
+        <div class="section-head reveal">
+          <p class="kicker">FAQ</p>
+          <h2>Перед установкой</h2>
+          <p>Короткие ответы на вопросы, которые особенно важны для BETA-версии.</p>
+        </div>
+        <div class="faq-list reveal delay-1">
+          <details open><summary>Для какой Windows предназначен DPopCleaner?</summary><p>Текущий установщик собран под 64-битную Windows. Для сайта мы позиционируем релиз для Windows 10 и Windows 11 x64.</p></details>
+          <details><summary>Почему некоторые действия требуют администратора?</summary><p>Управление системными списками памяти, компонентами Windows и частью обслуживающих операций требует повышенных прав. Приложение запрашивает их только для таких сценариев.</p></details>
+          <details><summary>DPopGuard 2 заменяет антивирус?</summary><p>Нет. В BETA это дополнительный инструмент быстрой проверки с сигнатурами и эвристиками. Он не должен позиционироваться как полноценная замена постоянно обновляемому защитному решению.</p></details>
+          <details><summary>Как проверить скачанный установщик?</summary><p>Вычислите SHA-256 файла и сравните его со значением на этой странице. Для релиза 0.2.14 BETA ожидаемый хеш указан выше.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-section">
+      <div class="container cta reveal">
+        <div><p class="kicker">DPopCleaner 0.2.14 BETA</p><h2>Попробуйте текущую сборку</h2><p>Для Windows x64 · установщик 4.30 МБ</p></div>
+        <a class="button button-primary" href="#download-pending" aria-disabled="true" onclick="return false;"><span class="download-icon">↓</span> Скачать DPopCleaner — скоро</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div class="footer-brand"><img src="assets/dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · BETA</span></div></div>
+      <div class="footer-links"><a href="#features">Возможности</a><a href="#security">О сборке</a><a href="#faq">FAQ</a><a href="#top">Наверх ↑</a></div>
+      <p>© 2026 DPopCleaner. BETA software.</p>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">SHA-256 скопирован</div>
+  <script src="script.js"></script>
+</body>
+</html>

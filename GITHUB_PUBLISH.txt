@@ -1,0 +1,13 @@
+DPopCleaner — публикация на GitHub Pages
+
+1. GitHub -> New repository.
+2. Repository name: dpopcleaner-site
+3. Public -> Create repository.
+4. Add file -> Upload files.
+5. Загрузите ВСЁ содержимое этой папки, включая скрытые .github и .nojekyll.
+6. Commit changes в ветку main.
+7. Settings -> Pages -> Source: GitHub Actions.
+8. Actions -> дождитесь зелёного Deploy DPopCleaner website.
+9. Адрес появится в Settings -> Pages.
+
+Важно: не загружайте ZIP как один файл. Нужно загрузить его содержимое.

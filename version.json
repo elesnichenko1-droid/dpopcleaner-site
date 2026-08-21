@@ -1,0 +1,10 @@
+{
+  "product": "DPopCleaner",
+  "version": "0.2.14",
+  "channel": "beta",
+  "platform": "windows",
+  "architecture": "x86-64",
+  "installer": null,
+  "size_bytes": 4506112,
+  "sha256": "0b0e7eeec6fe7a28eb046b083700bf7ce94ab4b0ee17bba9ee355203e8c8983e"
+}
