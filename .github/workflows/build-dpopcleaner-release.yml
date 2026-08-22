@@ -1,4 +1,4 @@
-name: Build and publish DPopCleaner 0.3.1 BETA (manifest fix)
+name: Build, release and deploy DPopCleaner 0.3.1 Stage 3 R2
 
 on:
   workflow_dispatch:
@@ -8,43 +8,34 @@ on:
       - "*.cpp"
       - "*.h"
       - "CMakeLists.txt"
+      - "dpopcleaner.ico"
       - ".github/workflows/build-dpopcleaner-release.yml"
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
-  group: dpopcleaner-0-3-1-release
+  group: dpopcleaner-0-3-1-stage3-r2
   cancel-in-progress: false
 
 jobs:
   build-release:
     runs-on: windows-2022
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Reconstruct project folders from flat GitHub upload
+      - name: Reconstruct project tree from flat repository
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-
-          $dirs = @(
-            "src/app",
-            "src/core",
-            "src/modules",
-            "src/update",
-            "src/updater",
-            "resources",
-            "release",
-            "update"
-          )
-          foreach ($d in $dirs) {
-            New-Item -ItemType Directory -Force -Path $d | Out-Null
-          }
+          $dirs = @("src/app","src/core","src/modules","src/update","src/updater","resources","update")
+          foreach ($d in $dirs) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
 
           $map = @{
+            "main.cpp"            = "src/main.cpp"
             "MainWindow.cpp"      = "src/app/MainWindow.cpp"
             "MainWindow.h"        = "src/app/MainWindow.h"
             "Logger.cpp"          = "src/core/Logger.cpp"
@@ -71,28 +62,25 @@ jobs:
             "Hash.h"              = "src/update/Hash.h"
             "Signature.cpp"       = "src/update/Signature.cpp"
             "Signature.h"         = "src/update/Signature.h"
+            "UpdaterMain.cpp"     = "src/updater/main.cpp"
           }
 
           $missing = @()
           foreach ($src in $map.Keys) {
             $dst = $map[$src]
-            if (Test-Path $dst) {
-              Write-Host "Already present: $dst"
-            }
-            elseif (Test-Path $src) {
+            if (Test-Path $src) {
               Copy-Item $src $dst -Force
-              Write-Host "Restored: $src -> $dst"
-            }
-            else {
+              Write-Host "Patched: $src -> $dst"
+            } elseif (Test-Path $dst) {
+              Write-Host "Using repository copy: $dst"
+            } else {
               $missing += $src
             }
           }
-
           if ($missing.Count -gt 0) {
-            Write-Host ""
-            Write-Host "Missing required source files:" -ForegroundColor Red
+            Write-Host "Missing source files:" -ForegroundColor Red
             $missing | ForEach-Object { Write-Host " - $_" -ForegroundColor Red }
-            throw "Some C++ source files are missing from the repository."
+            throw "Required DPopCleaner source files are missing."
           }
 
           @'
@@ -101,156 +89,41 @@ jobs:
           inline constexpr wchar_t kProductName[] = L"DPopCleaner";
           inline constexpr wchar_t kVersion[] = L"0.3.1";
           inline constexpr wchar_t kChannel[] = L"beta";
-          inline constexpr int kVersionCode = 301;
+          inline constexpr int kVersionCode = 3011;
+          inline constexpr int kRevision = 2;
           }
           '@ | Set-Content -Encoding utf8 "src/core/Version.h"
 
           @'
           #pragma once
           namespace dpop::update_config {
-          inline constexpr wchar_t kManifestUrl[] =
-              L"https://elesnichenko1-droid.github.io/dpopcleaner-site/update/beta.json";
-          inline constexpr wchar_t kUserAgent[] = L"DPopCleaner-Updater/0.3.1";
+          inline constexpr wchar_t kManifestUrl[] = L"https://elesnichenko1-droid.github.io/dpopcleaner-site/update/beta.json";
+          inline constexpr wchar_t kUserAgent[] = L"DPopCleaner-Updater/0.3.1-stage3-r2";
           inline constexpr unsigned long kConnectTimeoutMs = 8000;
-          inline constexpr unsigned long kReceiveTimeoutMs = 20000;
+          inline constexpr unsigned long kReceiveTimeoutMs = 30000;
           }
           '@ | Set-Content -Encoding utf8 "src/update/UpdateConfig.h"
 
-          @'
-          #include "app/MainWindow.h"
+          if (Test-Path "dpopcleaner.ico") {
+            Copy-Item "dpopcleaner.ico" "resources/dpopcleaner.ico" -Force
+            @'
           #include <windows.h>
-          int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int showCommand){
-              return dpop::ui::Run(instance,showCommand);
-          }
-          '@ | Set-Content -Encoding utf8 "src/main.cpp"
-
-          @'
-          #include "update/Hash.h"
-          #include "update/Signature.h"
-          #include <windows.h>
-          #include <shellapi.h>
-          #include <filesystem>
-          #include <string>
-          #include <vector>
-          #include <algorithm>
-          #include <cwctype>
-
-          namespace {
-          std::wstring ArgValue(const std::vector<std::wstring>& args,const std::wstring& key){
-              for(size_t i=0;i+1<args.size();++i) if(args[i]==key) return args[i+1];
-              return {};
-          }
-          bool HasArg(const std::vector<std::wstring>& args,const std::wstring& key){
-              return std::find(args.begin(),args.end(),key)!=args.end();
-          }
-          bool EqualsNoCase(std::wstring a,std::wstring b){
-              std::transform(a.begin(),a.end(),a.begin(),::towlower);
-              std::transform(b.begin(),b.end(),b.begin(),::towlower);
-              return a==b;
-          }
-          }
-
-          int WINAPI wWinMain(HINSTANCE,HINSTANCE,LPWSTR,int){
-              int argc=0;
-              LPWSTR* argv=CommandLineToArgvW(GetCommandLineW(),&argc);
-              std::vector<std::wstring> args;
-              for(int i=0;i<argc;++i) args.emplace_back(argv[i]);
-              LocalFree(argv);
-
-              const auto parentText=ArgValue(args,L"--parent");
-              const auto package=ArgValue(args,L"--package");
-              const auto expectedHash=ArgValue(args,L"--sha256");
-              const auto installArgs=ArgValue(args,L"--args");
-              const auto restartPath=ArgValue(args,L"--restart");
-              const bool allowUnsigned=HasArg(args,L"--allow-unsigned");
-              if(parentText.empty()||package.empty()||expectedHash.empty()) return 2;
-
-              const DWORD parent=static_cast<DWORD>(std::stoul(parentText));
-              HANDLE process=OpenProcess(SYNCHRONIZE,FALSE,parent);
-              if(process){ WaitForSingleObject(process,30000); CloseHandle(process); }
-
-              std::wstring actualHash,hashError;
-              if(!dpop::update::Sha256File(package,actualHash,hashError) ||
-                 !EqualsNoCase(actualHash,expectedHash)){
-                  MessageBoxW(nullptr,
-                      (L"Обновление остановлено: SHA-256 пакета не совпадает.\n"+hashError).c_str(),
-                      L"DPopUpdater",MB_ICONERROR);
-                  return 3;
-              }
-
-              std::wstring sigError;
-              if(!allowUnsigned && !dpop::update::VerifyAuthenticode(package,sigError)){
-                  MessageBoxW(nullptr,(L"Обновление остановлено.\n"+sigError).c_str(),
-                              L"DPopUpdater",MB_ICONERROR);
-                  return 4;
-              }
-
-              SHELLEXECUTEINFOW sei{};
-              sei.cbSize=sizeof(sei);
-              sei.fMask=SEE_MASK_NOCLOSEPROCESS;
-              sei.lpVerb=L"runas";
-              sei.lpFile=package.c_str();
-              sei.lpParameters=installArgs.empty()?nullptr:installArgs.c_str();
-              sei.nShow=SW_SHOWNORMAL;
-
-              if(!ShellExecuteExW(&sei)){
-                  MessageBoxW(nullptr,L"Не удалось запустить установщик обновления.",
-                              L"DPopUpdater",MB_ICONERROR);
-                  return 5;
-              }
-
-              if(sei.hProcess){
-                  WaitForSingleObject(sei.hProcess,INFINITE);
-                  DWORD exitCode=0;
-                  GetExitCodeProcess(sei.hProcess,&exitCode);
-                  CloseHandle(sei.hProcess);
-                  if(exitCode!=0 && exitCode!=3010) return static_cast<int>(exitCode);
-              }
-
-              if(!restartPath.empty() && std::filesystem::exists(restartPath)){
-                  ShellExecuteW(nullptr,L"open",restartPath.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
-              }
-              return 0;
-          }
-          '@ | Set-Content -Encoding utf8 "src/updater/main.cpp"
-
-          # Do NOT embed RT_MANIFEST here.
-          # MSVC/Visual Studio already generates and embeds the default application
-          # manifest for WIN32 executables. Adding resource ID 1 again causes:
-          # CVT1100 duplicate resource type:MANIFEST name:1.
-          @'
-          #include <windows.h>
+          101 ICON "dpopcleaner.ico"
           '@ | Set-Content -Encoding ascii "resources/app.rc"
-
-          @'
+            @'
           #include <windows.h>
+          101 ICON "dpopcleaner.ico"
           '@ | Set-Content -Encoding ascii "resources/updater.rc"
-
-          @'
-          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-            <assemblyIdentity version="1.0.0.0" processorArchitecture="amd64"
-                              name="DPopCleaner" type="win32"/>
-            <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
-              <security>
-                <requestedPrivileges>
-                  <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
-                </requestedPrivileges>
-              </security>
-            </trustInfo>
-            <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
-              <application>
-                <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
-              </application>
-            </compatibility>
-          </assembly>
-          '@ | Set-Content -Encoding utf8 "resources/app.manifest"
+          } else {
+            '#include <windows.h>' | Set-Content -Encoding ascii "resources/app.rc"
+            '#include <windows.h>' | Set-Content -Encoding ascii "resources/updater.rc"
+          }
 
           @'
           #include <windows.h>
           VS_VERSION_INFO VERSIONINFO
-           FILEVERSION 0,3,1,0
-           PRODUCTVERSION 0,3,1,0
+           FILEVERSION 0,3,1,1
+           PRODUCTVERSION 0,3,1,1
            FILEFLAGSMASK 0x3fL
           #ifdef _DEBUG
            FILEFLAGS 0x1L
@@ -263,25 +136,23 @@ jobs:
           BEGIN
               BLOCK "StringFileInfo"
               BEGIN
-                  BLOCK "040904B0"
+                  BLOCK "041904B0"
                   BEGIN
                       VALUE "CompanyName", "DPopCleaner Project\0"
-                      VALUE "FileDescription", "DPopCleaner\0"
-                      VALUE "FileVersion", "0.3.1 BETA\0"
+                      VALUE "FileDescription", "DPopCleaner Stage 3\0"
+                      VALUE "FileVersion", "0.3.1.1\0"
                       VALUE "InternalName", "DPopCleaner.exe\0"
                       VALUE "OriginalFilename", "DPopCleaner.exe\0"
                       VALUE "ProductName", "DPopCleaner\0"
-                      VALUE "ProductVersion", "0.3.1 BETA\0"
+                      VALUE "ProductVersion", "0.3.1 BETA Stage 3 R2\0"
                   END
               END
               BLOCK "VarFileInfo"
               BEGIN
-                  VALUE "Translation", 0x0409, 1200
+                  VALUE "Translation", 0x0419, 1200
               END
           END
           '@ | Set-Content -Encoding ascii "resources/version.rc.in"
-
-          Write-Host "Project folders reconstructed successfully."
 
       - name: Configure CMake x64
         shell: pwsh
@@ -294,17 +165,9 @@ jobs:
       - name: Stage binaries
         shell: pwsh
         run: |
-          $cleaner = Get-ChildItem -Recurse -Filter DPopCleaner.exe out/build |
-                     Where-Object { $_.FullName -match 'Release' } |
-                     Select-Object -First 1
-          $updater = Get-ChildItem -Recurse -Filter DPopUpdater.exe out/build |
-                     Where-Object { $_.FullName -match 'Release' } |
-                     Select-Object -First 1
-
-          if (-not $cleaner -or -not $updater) {
-            throw "Built EXE files were not found."
-          }
-
+          $cleaner = Get-ChildItem -Recurse -Filter DPopCleaner.exe out/build | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          $updater = Get-ChildItem -Recurse -Filter DPopUpdater.exe out/build | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          if (-not $cleaner -or -not $updater) { throw "Built EXE files were not found." }
           New-Item -ItemType Directory -Force -Path "_release/stage" | Out-Null
           Copy-Item $cleaner.FullName "_release/stage/DPopCleaner.exe"
           Copy-Item $updater.FullName "_release/stage/DPopUpdater.exe"
@@ -321,9 +184,8 @@ jobs:
             Write-Host "No signing certificate configured; unsigned BETA will be created."
             exit 0
           }
-
           $bytes = [Convert]::FromBase64String($env:CERT_PFX_BASE64)
-          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\dpopcert.pfx",$bytes)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\dpopcert.pfx", $bytes)
           "enabled=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Sign application binaries (optional)
@@ -332,37 +194,22 @@ jobs:
         env:
           CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
-                        -Recurse -Filter signtool.exe |
-                        Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } |
-                        Sort-Object FullName -Descending |
-                        Select-Object -First 1).FullName
-
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           if (-not $signtool) { throw "signtool.exe not found" }
-
-          & $signtool sign /fd SHA256 `
-             /f "$env:RUNNER_TEMP\dpopcert.pfx" `
-             /p "$env:CERT_PASSWORD" `
-             /tr http://timestamp.digicert.com /td SHA256 `
-             "_release/stage/DPopCleaner.exe"
-
-          & $signtool sign /fd SHA256 `
-             /f "$env:RUNNER_TEMP\dpopcert.pfx" `
-             /p "$env:CERT_PASSWORD" `
-             /tr http://timestamp.digicert.com /td SHA256 `
-             "_release/stage/DPopUpdater.exe"
-
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in @("_release/stage/DPopCleaner.exe", "_release/stage/DPopUpdater.exe")) {
+            & $signtool sign /fd SHA256 /f "$env:RUNNER_TEMP\dpopcert.pfx" /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td SHA256 $file
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Generate installer definition
+      - name: Generate full installer
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "_release/output" | Out-Null
-
           @'
           #define MyAppName "DPopCleaner"
           #define MyAppVersion "0.3.1 BETA"
@@ -379,10 +226,10 @@ jobs:
           AppPublisherURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
           AppSupportURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
           AppUpdatesURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
-          VersionInfoVersion=0.3.1.0
-          VersionInfoProductVersion=0.3.1.0
+          VersionInfoVersion=0.3.1.1
+          VersionInfoProductVersion=0.3.1.1
           VersionInfoCompany=DPopCleaner Project
-          VersionInfoDescription=DPopCleaner Setup
+          VersionInfoDescription=DPopCleaner Stage 3 Setup
           VersionInfoProductName=DPopCleaner
           DefaultDirName={autopf}\DPopCleaner
           DefaultGroupName=DPopCleaner
@@ -427,17 +274,12 @@ jobs:
           Type: dirifempty; Name: "{localappdata}\DPopCleaner"
           '@ | Set-Content -Encoding utf8 "_release/DPopCleaner.iss"
 
-      - name: Build full installer
-        shell: pwsh
-        run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found" }
-
           Push-Location "_release"
           & $iscc "/DSourceDir=$((Resolve-Path 'stage').Path)" "DPopCleaner.iss"
           $exit = $LASTEXITCODE
           Pop-Location
-
           if ($exit -ne 0) { exit $exit }
 
       - name: Sign installer (optional)
@@ -446,25 +288,15 @@ jobs:
         env:
           CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
-                        -Recurse -Filter signtool.exe |
-                        Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } |
-                        Sort-Object FullName -Descending |
-                        Select-Object -First 1).FullName
-
-          & $signtool sign /fd SHA256 `
-             /f "$env:RUNNER_TEMP\dpopcert.pfx" `
-             /p "$env:CERT_PASSWORD" `
-             /tr http://timestamp.digicert.com /td SHA256 `
-             "_release/output/DPopCleaner_Setup_0.3.1_BETA.exe"
-
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          & $signtool sign /fd SHA256 /f "$env:RUNNER_TEMP\dpopcert.pfx" /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td SHA256 "_release/output/DPopCleaner_Setup_0.3.1_BETA.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Generate update manifest
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "update" | Out-Null
-
           $installer = (Resolve-Path "_release/output/DPopCleaner_Setup_0.3.1_BETA.exe").Path
           $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
           $size = (Get-Item $installer).Length
@@ -472,12 +304,12 @@ jobs:
           $tag = "v0.3.1-beta"
           $name = [IO.Path]::GetFileName($installer)
           $signed = "${{ steps.signing.outputs.enabled }}" -eq "true"
-
-          $manifest = [ordered]@{
+          [ordered]@{
             product = "DPopCleaner"
             channel = "beta"
             version = "0.3.1"
-            version_code = 301
+            version_code = 3011
+            revision = 2
             mandatory = $false
             download_url = "https://github.com/$repo/releases/download/$tag/$name"
             sha256 = $hash
@@ -486,31 +318,18 @@ jobs:
             available = $true
             notes_url = "https://elesnichenko1-droid.github.io/dpopcleaner-site/"
             install_args = "/SILENT /NORESTART"
-          }
-
-          $manifest | ConvertTo-Json | Set-Content -Encoding utf8 "update/beta.json"
-
-          if (-not (Test-Path "update/stable.json")) {
-            [ordered]@{
-              product = "DPopCleaner"
-              channel = "stable"
-              version = "0.0.0"
-              version_code = 0
-              available = $false
-            } | ConvertTo-Json | Set-Content -Encoding utf8 "update/stable.json"
-          }
-
+          } | ConvertTo-Json | Set-Content -Encoding utf8 "update/beta.json"
           [ordered]@{
             product = "DPopCleaner"
             version = "0.3.1"
+            version_code = 3011
+            revision = 2
             channel = "beta"
             platform = "windows"
             architecture = "x86-64"
             manifest = "./update/beta.json"
           } | ConvertTo-Json | Set-Content -Encoding utf8 "version.json"
-
           Write-Host "Installer SHA256: $hash"
-          Write-Host "Installer size: $size"
 
       - name: Create or update GitHub Release
         shell: pwsh
@@ -518,32 +337,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v0.3.1-beta"
-
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag `
-              --title "DPopCleaner 0.3.1 BETA" `
-              --notes "Stage 3: полноценный установщик, реальные установленные приложения, штатная деинсталляция, поиск хвостов и система автообновления." `
-              --prerelease
+            gh release create $tag --title "DPopCleaner 0.3.1 BETA — Stage 3" --notes "Stage 3 Revision 2: возвращена полноценная концепция DPopCleaner, реальные приложения, DPopGuard 2, очистка, автозагрузка, Zapret Center и обновления." --prerelease
           }
-
-          gh release upload $tag `
-            "_release/output/DPopCleaner_Setup_0.3.1_BETA.exe" `
-            "_release/stage/DPopCleaner.exe" `
-            "_release/stage/DPopUpdater.exe" `
-            --clobber
+          gh release upload $tag "_release/output/DPopCleaner_Setup_0.3.1_BETA.exe" "_release/stage/DPopCleaner.exe" "_release/stage/DPopUpdater.exe" --clobber
 
       - name: Commit update metadata
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add update/beta.json update/stable.json version.json
+          git add update/beta.json version.json
           git diff --cached --quiet
-
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "Publish DPopCleaner 0.3.1 update manifest"
+            git commit -m "Publish DPopCleaner 0.3.1 Stage 3 R2 manifest"
             git pull --rebase origin main
             git push origin HEAD:main
           }
@@ -551,9 +359,48 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DPopCleaner-0.3.1-BETA
+          name: DPopCleaner-0.3.1-Stage3-R2
           path: |
             _release/output/DPopCleaner_Setup_0.3.1_BETA.exe
             _release/stage/DPopCleaner.exe
             _release/stage/DPopUpdater.exe
             update/beta.json
+
+  deploy-site:
+    name: Deploy updated website
+    needs: build-release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Stage public website
+        shell: bash
+        run: |
+          set -e
+          rm -rf _site
+          mkdir -p _site/update
+          cp index.html _site/
+          cp styles.css _site/
+          cp script.js _site/
+          cp dpopcleaner-icon.png _site/
+          cp version.json _site/
+          cp update/beta.json _site/update/
+          if [ -f update/stable.json ]; then cp update/stable.json _site/update/; fi
+          touch _site/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
