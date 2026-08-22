@@ -23,12 +23,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Stage public website only
+        run: |
+          mkdir -p _site/update
+          cp index.html styles.css script.js dpopcleaner-icon.png version.json .nojekyll _site/
+          cp update/beta.json update/stable.json _site/update/
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
