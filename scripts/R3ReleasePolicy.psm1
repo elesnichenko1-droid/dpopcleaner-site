@@ -426,6 +426,9 @@ function Assert-R3WorkflowDefinition {
         'WINDOWS_CERT_PFX_BASE64',
         'WINDOWS_CERT_PASSWORD',
         'MpCmdRun.exe',
+        'Remove-MpPreference -ExclusionPath',
+        "if (`$outputText -match 'was skipped')",
+        "if (`$outputText -notmatch 'found no threats')",
         'scripts/Capture-AppScreenshot.ps1'
     )) {
         if (-not $content.Contains($required)) {

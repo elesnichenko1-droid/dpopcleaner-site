@@ -61,6 +61,20 @@ try {
     Assert-Throws 'rejects an ambiguous PowerShell variable before a colon' {
         Assert-R3WorkflowDefinition -Path $invalidPowerShellInterpolation
     } 'ambiguous PowerShell variable interpolation'
+
+    $excludedDefenderTargets = Join-Path $tempRoot 'excluded-defender-targets.yml'
+    $original.Replace('Remove-MpPreference -ExclusionPath $originalExclusions', '# exclusions left active') |
+        Set-Content -LiteralPath $excludedDefenderTargets -Encoding utf8
+    Assert-Throws 'rejects Defender scans that leave hosted-runner exclusions active' {
+        Assert-R3WorkflowDefinition -Path $excludedDefenderTargets
+    } 'required release policy text: Remove-MpPreference -ExclusionPath'
+
+    $allowsSkippedScan = Join-Path $tempRoot 'allows-skipped-defender-scan.yml'
+    $original.Replace("if (`$outputText -match 'was skipped')", "if (`$false)") |
+        Set-Content -LiteralPath $allowsSkippedScan -Encoding utf8
+    Assert-Throws 'rejects a Defender gate that permits skipped scans' {
+        Assert-R3WorkflowDefinition -Path $allowsSkippedScan
+    } 'required release policy text: if \(\$outputText -match ''was skipped''\)'
 } finally {
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force

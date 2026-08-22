@@ -191,16 +191,50 @@ jobs:
             Sort-Object Name -Descending | Select-Object -First 1
           $mp = if ($platform) { Join-Path $platform.FullName 'MpCmdRun.exe' } else { "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
           if (-not (Test-Path -LiteralPath $mp -PathType Leaf)) { throw 'MpCmdRun.exe was not found.' }
+
           $log = [Collections.Generic.List[string]]::new()
-          foreach ($target in @('r3-payload', "artifacts/$env:R3_ASSET")) {
-            $log.Add("SCAN TARGET: $target")
-            $output = & $mp -Scan -ScanType 3 -File (Resolve-Path $target).Path 2>&1
-            $exitCode = $LASTEXITCODE
-            foreach ($line in $output) { $log.Add([string]$line) }
-            $log.Add("EXIT CODE: $exitCode")
-            if ($exitCode -ne 0) { throw "Defender scan failed or detected a threat in $target (exit $exitCode)." }
+          $preference = Get-MpPreference
+          $originalExclusions = @($preference.ExclusionPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+          $originalArchiveScanningDisabled = [bool]$preference.DisableArchiveScanning
+          $scanRoot = Join-Path $env:RUNNER_TEMP ("dpop-defender-" + [guid]::NewGuid().ToString('N'))
+          try {
+            if ($originalExclusions.Count -gt 0) {
+              $log.Add("TEMPORARILY REMOVING EXCLUSIONS: $($originalExclusions -join ', ')")
+              Remove-MpPreference -ExclusionPath $originalExclusions
+            }
+            Set-MpPreference -DisableArchiveScanning $false
+            $remainingExclusions = @((Get-MpPreference).ExclusionPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            if ($remainingExclusions.Count -gt 0) { throw "Defender exclusions remain active: $($remainingExclusions -join ', ')" }
+
+            $signatureOutput = & $mp -SignatureUpdate 2>&1
+            $signatureExitCode = $LASTEXITCODE
+            foreach ($line in $signatureOutput) { $log.Add([string]$line) }
+            if ($signatureExitCode -ne 0) { throw "Defender signature update failed (exit $signatureExitCode)." }
+            $status = Get-MpComputerStatus
+            $log.Add("ANTIVIRUS SIGNATURE: $($status.AntivirusSignatureVersion) / $($status.AntivirusSignatureLastUpdated.ToUniversalTime().ToString('o'))")
+
+            New-Item -ItemType Directory -Path $scanRoot | Out-Null
+            Copy-Item -LiteralPath 'r3-payload' -Destination (Join-Path $scanRoot 'payload') -Recurse
+            Copy-Item -LiteralPath "artifacts/$env:R3_ASSET" -Destination (Join-Path $scanRoot $env:R3_ASSET)
+            foreach ($target in @((Join-Path $scanRoot 'payload'), (Join-Path $scanRoot $env:R3_ASSET))) {
+              $log.Add("SCAN TARGET: $target")
+              $output = & $mp -Scan -ScanType 3 -File $target 2>&1
+              $exitCode = $LASTEXITCODE
+              foreach ($line in $output) { $log.Add([string]$line) }
+              $log.Add("EXIT CODE: $exitCode")
+              $outputText = $output -join "`n"
+              if ($outputText -match 'was skipped') { throw "Defender skipped the required target: $target" }
+              if ($outputText -notmatch 'found no threats') { throw "Defender did not explicitly confirm a clean target: $target" }
+              if ($exitCode -ne 0) { throw "Defender scan failed or detected a threat in $target (exit $exitCode)." }
+            }
+          } finally {
+            Set-MpPreference -DisableArchiveScanning $originalArchiveScanningDisabled -ErrorAction SilentlyContinue
+            if ($originalExclusions.Count -gt 0) {
+              Add-MpPreference -ExclusionPath $originalExclusions -ErrorAction SilentlyContinue
+            }
+            if (Test-Path -LiteralPath $scanRoot) { Remove-Item -LiteralPath $scanRoot -Recurse -Force }
+            $log | Set-Content evidence/defender-scan.txt -Encoding utf8
           }
-          $log | Set-Content evidence/defender-scan.txt -Encoding utf8
 
       - name: Capture final application screenshot and verify close behavior
         shell: pwsh
