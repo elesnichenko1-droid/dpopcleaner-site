@@ -8,11 +8,13 @@ struct Manifest {
     std::wstring channel;
     std::wstring version;
     int versionCode{};
+    int revision{};
     bool mandatory{};
     std::wstring downloadUrl;
     std::wstring sha256;
     std::uint64_t size{};
     bool signedPackage{};
+    bool available{};
     std::wstring releaseNotesUrl;
     std::wstring installArgs;
 };

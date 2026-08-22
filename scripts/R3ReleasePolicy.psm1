@@ -52,6 +52,8 @@ $script:SourceMap = @(
     @{ Source = 'UpdateConfig.h'; Destination = 'src/update/UpdateConfig.h' },
     @{ Source = 'UpdateManifest.cpp'; Destination = 'src/update/UpdateManifest.cpp' },
     @{ Source = 'UpdateManifest.h'; Destination = 'src/update/UpdateManifest.h' },
+    @{ Source = 'UpdatePolicy.cpp'; Destination = 'src/update/UpdatePolicy.cpp' },
+    @{ Source = 'UpdatePolicy.h'; Destination = 'src/update/UpdatePolicy.h' },
     @{ Source = 'UpdaterMain.cpp'; Destination = 'src/updater/main.cpp' },
     @{ Source = 'tests/UpdatePolicyTests.cpp'; Destination = 'tests/UpdatePolicyTests.cpp' },
     @{ Source = 'app.manifest'; Destination = 'resources/app.manifest' },

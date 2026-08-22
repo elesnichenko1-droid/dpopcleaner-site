@@ -9,6 +9,7 @@
 #include "modules/ZapretManager.h"
 #include "modules/Applications.h"
 #include "update/UpdateClient.h"
+#include "update/UpdatePolicy.h"
 
 #include <windows.h>
 #include <commctrl.h>
@@ -25,6 +26,7 @@
 #include <iterator>
 #include <string>
 #include <algorithm>
+#include <atomic>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "dwmapi.lib")
@@ -87,6 +89,8 @@ HBRUSH g_cardBrush{};
 Page g_page = Page::Overview;
 std::vector<dpop::apps::InstalledApp> g_apps;
 std::vector<dpop::startup::Entry> g_startup;
+std::atomic_bool g_shuttingDown{false};
+std::wstring g_availableUpdateVersion;
 
 std::wstring Bytes(std::uint64_t b) {
     const wchar_t* units[] = {L"Б", L"КБ", L"МБ", L"ГБ", L"ТБ"};
@@ -161,7 +165,7 @@ void ShowOverview() {
       << L"  (" << std::fixed << std::setprecision(0) << freePercent << L"%)\r\n"
       << L"GPU       " << s.gpuName << L"\r\n"
       << L"Процессы  " << s.processCount << L"\r\n\r\n"
-      << L"DPopCleaner " << dpop::version::kVersion << L" BETA  •  Stage 3 Revision 2\r\n\r\n"
+      << L"DPopCleaner " << dpop::version::kDisplayVersion << L"\r\n\r\n"
       << L"В этой сборке возвращена исходная концепция DPopCleaner: очистка, DPopGuard 2,\r\n"
       << L"автозагрузка, реальные установленные приложения, Zapret Center, системные\r\n"
       << L"инструменты, журналирование и автоматические обновления.";
@@ -296,12 +300,17 @@ void ShowUpdates() {
     SetAction(1, L"Открыть страницу релиза");
     SetLabel(g_pageTitle, L"Обновления");
     SetLabel(g_pageHint, L"HTTPS → SHA-256 → Authenticode (для подписанных релизов) → DPopUpdater.");
-    SetText(L"Текущая версия: 0.3.1 BETA\r\n"
-            L"Внутренний build: Stage 3 Revision 2\r\n\r\n"
+    std::wstring updateText = L"Текущая версия: 0.3.1 BETA R3\r\n"
+            L"Внутренний код: 3013, revision 3\r\n\r\n"
             L"DPopCleaner проверяет update/beta.json на сайте. При новой версии пакет загружается\r\n"
             L"во временную папку, сверяется SHA-256 и только затем передаётся DPopUpdater.\r\n\r\n"
             L"Для неподписанной BETA автоматический запуск требует отдельного подтверждения.\r\n"
-            L"После подключения Code Signing неподписанные обновления можно будет полностью запретить.");
+            L"После установки DPopCleaner не запускается повторно автоматически.";
+    if (!g_availableUpdateVersion.empty()) {
+        updateText += L"\r\n\r\nДоступна версия: " + g_availableUpdateVersion +
+                      L". Нажмите «Проверить обновления» для явного запуска установки.";
+    }
+    SetText(updateText);
 }
 
 void ShowSettings() {
@@ -311,7 +320,7 @@ void ShowSettings() {
     SetAction(2, L"Сайт проекта");
     SetLabel(g_pageTitle, L"Настройки и поддержка");
     SetLabel(g_pageHint, L"Служебные каталоги, журнал DPopCleaner и страница проекта.");
-    SetText(L"DPopCleaner 0.3.1 BETA\r\n\r\n"
+    SetText(L"DPopCleaner 0.3.1 BETA R3\r\n\r\n"
             L"Данные приложения: %LOCALAPPDATA%\\DPopCleaner\r\n"
             L"Логи: %LOCALAPPDATA%\\DPopCleaner\\Logs\r\n"
             L"Обновления: %LOCALAPPDATA%\\DPopCleaner\\Updates\r\n\r\n"
@@ -396,6 +405,7 @@ void UninstallSelected(HWND hwnd) {
 }
 
 void CheckUpdatesAsync(HWND hwnd, bool interactive) {
+    if (g_shuttingDown.load()) return;
     if (interactive) {
         g_page = Page::Updates;
         ShowUpdates();
@@ -403,20 +413,33 @@ void CheckUpdatesAsync(HWND hwnd, bool interactive) {
     }
     std::thread([hwnd, interactive] {
         auto* message = new UpdateMessage{dpop::update::CheckForUpdates(), interactive};
-        PostMessageW(hwnd, WM_UPDATE_RESULT, 0, reinterpret_cast<LPARAM>(message));
+        if (g_shuttingDown.load() || !PostMessageW(hwnd, WM_UPDATE_RESULT, 0, reinterpret_cast<LPARAM>(message))) {
+            delete message;
+        }
     }).detach();
 }
 
 void HandleUpdateResult(HWND hwnd, UpdateMessage* raw) {
     std::unique_ptr<UpdateMessage> message(raw);
+    if (g_shuttingDown.load()) return;
     auto& r = message->result;
-    if (!r.success) {
-        if (message->interactive) SetText(L"Ошибка проверки обновлений:\r\n\r\n" + r.error);
-        return;
-    }
-    if (!r.updateAvailable) {
-        if (message->interactive) SetText(L"Установлена актуальная версия DPopCleaner 0.3.1 BETA.\r\n\r\nНовых BETA-релизов сейчас нет.");
-        return;
+    const auto mode = message->interactive ? dpop::update::CheckMode::Interactive
+                                           : dpop::update::CheckMode::Background;
+    switch (dpop::update::DecideUpdateResult(mode, r.success, r.updateAvailable)) {
+        case dpop::update::ResultAction::Ignore:
+            return;
+        case dpop::update::ResultAction::ShowError:
+            SetText(L"Ошибка проверки обновлений:\r\n\r\n" + r.error);
+            return;
+        case dpop::update::ResultAction::ShowCurrent:
+            SetText(L"Установлена актуальная версия DPopCleaner 0.3.1 BETA R3.\r\n\r\nНовых BETA-релизов сейчас нет.");
+            return;
+        case dpop::update::ResultAction::RecordAvailable:
+            g_availableUpdateVersion = r.manifest.version;
+            SetWindowTextW(g_build, L"0.3.1 BETA R3  •  доступно обновление");
+            return;
+        case dpop::update::ResultAction::OfferInstall:
+            break;
     }
 
     const auto& m = r.manifest;
@@ -442,6 +465,7 @@ void HandleUpdateResult(HWND hwnd, UpdateMessage* raw) {
     if (!dpop::update::PrepareAndLaunchUpdater(m, file, allowUnsigned, error)) {
         SetText(L"Запуск обновления остановлен:\r\n\r\n" + error); return;
     }
+    g_shuttingDown.store(true);
     DestroyWindow(hwnd);
 }
 
@@ -596,7 +620,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
             g_title = CreateWindowW(L"STATIC", L"DPopCleaner", WS_CHILD|WS_VISIBLE, 28, 20, 210, 38, hwnd, nullptr, nullptr, nullptr);
             SendMessageW(g_title, WM_SETFONT, reinterpret_cast<WPARAM>(g_fontTitle), TRUE);
-            g_build = CreateWindowW(L"STATIC", L"0.3.1 BETA  •  Stage 3", WS_CHILD|WS_VISIBLE, 30, 57, 220, 24, hwnd, nullptr, nullptr, nullptr);
+            g_build = CreateWindowW(L"STATIC", L"0.3.1 BETA R3", WS_CHILD|WS_VISIBLE, 30, 57, 220, 24, hwnd, nullptr, nullptr, nullptr);
             SendMessageW(g_build, WM_SETFONT, reinterpret_cast<WPARAM>(g_fontSmall), TRUE);
 
             const wchar_t* navText[] = {L"Обзор", L"Очистка", L"DPopGuard 2", L"Автозагрузка", L"Приложения", L"Zapret Center", L"Инструменты", L"Обновления", L"Настройки"};
@@ -674,14 +698,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_UPDATE_RESULT:
             HandleUpdateResult(hwnd, reinterpret_cast<UpdateMessage*>(lp));
             return 0;
-        case WM_DESTROY:
+        case WM_CLOSE:
+            g_shuttingDown.store(true);
             KillTimer(hwnd, ID_STARTUP_UPDATE_TIMER);
+            DestroyWindow(hwnd);
+            return 0;
+        case WM_DESTROY:
+            g_shuttingDown.store(true);
+            KillTimer(hwnd, ID_STARTUP_UPDATE_TIMER);
+            MSG pending{};
+            while (PeekMessageW(&pending, hwnd, WM_UPDATE_RESULT, WM_UPDATE_RESULT, PM_REMOVE)) {
+                delete reinterpret_cast<UpdateMessage*>(pending.lParam);
+            }
             if (g_font) DeleteObject(g_font);
             if (g_fontSmall) DeleteObject(g_fontSmall);
             if (g_fontTitle) DeleteObject(g_fontTitle);
             if (g_fontPage) DeleteObject(g_fontPage);
             if (g_bgBrush) DeleteObject(g_bgBrush);
             if (g_cardBrush) DeleteObject(g_cardBrush);
+            g_hwnd = nullptr;
             PostQuitMessage(0);
             return 0;
     }
@@ -691,8 +726,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 namespace dpop::ui {
 int Run(HINSTANCE instance, int showCommand) {
+    g_shuttingDown.store(false);
+    g_availableUpdateVersion.clear();
     dpop::paths::EnsureDirectories();
-    dpop::log::Info(L"DPopCleaner 0.3.1 Stage 3 Revision 2 started");
+    dpop::log::Info(L"DPopCleaner 0.3.1 BETA R3 started");
 
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
@@ -704,7 +741,7 @@ int Run(HINSTANCE instance, int showCommand) {
     wc.hbrBackground = nullptr;
     if (!RegisterClassExW(&wc)) return 1;
 
-    HWND hwnd = CreateWindowExW(0, wc.lpszClassName, L"DPopCleaner 0.3.1 BETA — Stage 3",
+    HWND hwnd = CreateWindowExW(0, wc.lpszClassName, L"DPopCleaner 0.3.1 BETA R3",
                                 WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX,
                                 CW_USEDEFAULT, CW_USEDEFAULT, 1215, 715,
                                 nullptr, nullptr, instance, nullptr);

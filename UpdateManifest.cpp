@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <regex>
 #include <optional>
+#include <algorithm>
 
 namespace {
 std::wstring Utf8ToWide(const std::string& s) {
@@ -33,6 +34,16 @@ std::optional<bool> BoolField(const std::string& json, const char* key) {
     if (!std::regex_search(json, m, re)) return std::nullopt;
     return m[1].str() == "true";
 }
+
+bool IsHttpsUrl(const std::string& value) {
+    return value.starts_with("https://") && value.size() > 8 && value.find_first_of("\r\n\t ") == std::string::npos;
+}
+
+bool IsSha256(const std::string& value) {
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+        return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+    });
+}
 }
 
 namespace dpop::update {
@@ -41,21 +52,30 @@ bool ParseManifestUtf8(const std::string& json, Manifest& out, std::wstring& err
     const auto channel = StringField(json, "channel");
     const auto version = StringField(json, "version");
     const auto versionCode = IntField(json, "version_code");
+    const auto revision = IntField(json, "revision");
+    const auto available = BoolField(json, "available");
     const auto url = StringField(json, "download_url");
     const auto hash = StringField(json, "sha256");
-    if (!version || !versionCode || !url || !hash) {
+    const auto size = IntField(json, "size");
+    if (!version || !versionCode || !available) {
         error = L"Манифест обновления не содержит обязательных полей.";
+        return false;
+    }
+    if (*available && (!url || !hash || !size || *size <= 0 || !IsHttpsUrl(*url) || !IsSha256(*hash))) {
+        error = L"Доступный пакет обновления не прошёл проверку HTTPS, SHA-256 и размера.";
         return false;
     }
     out.product = Utf8ToWide(product.value_or("DPopCleaner"));
     out.channel = Utf8ToWide(channel.value_or("beta"));
     out.version = Utf8ToWide(*version);
     out.versionCode = static_cast<int>(*versionCode);
+    out.revision = static_cast<int>(revision.value_or(0));
     out.mandatory = BoolField(json, "mandatory").value_or(false);
-    out.downloadUrl = Utf8ToWide(*url);
-    out.sha256 = Utf8ToWide(*hash);
-    out.size = static_cast<std::uint64_t>(IntField(json, "size").value_or(0));
+    out.downloadUrl = Utf8ToWide(url.value_or(""));
+    out.sha256 = Utf8ToWide(hash.value_or(""));
+    out.size = static_cast<std::uint64_t>(size.value_or(0));
     out.signedPackage = BoolField(json, "signed").value_or(false);
+    out.available = *available;
     out.releaseNotesUrl = Utf8ToWide(StringField(json, "notes_url").value_or(""));
     out.installArgs = Utf8ToWide(StringField(json, "install_args").value_or(""));
     return true;

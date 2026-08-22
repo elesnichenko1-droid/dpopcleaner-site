@@ -2,7 +2,6 @@
 #include "update/Signature.h"
 #include <windows.h>
 #include <shellapi.h>
-#include <filesystem>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -30,7 +29,6 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,LPWSTR,int){
     const auto package=ArgValue(args,L"--package");
     const auto expectedHash=ArgValue(args,L"--sha256");
     const auto installArgs=ArgValue(args,L"--args");
-    const auto restartPath=ArgValue(args,L"--restart");
     const bool allowUnsigned=HasArg(args,L"--allow-unsigned");
     if(parentText.empty()||package.empty()||expectedHash.empty()) return 2;
 
@@ -60,9 +58,6 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,LPWSTR,int){
         DWORD exitCode=0; GetExitCodeProcess(sei.hProcess,&exitCode);
         CloseHandle(sei.hProcess);
         if(exitCode!=0 && exitCode!=3010) return static_cast<int>(exitCode);
-    }
-    if(!restartPath.empty() && std::filesystem::exists(restartPath)){
-        ShellExecuteW(nullptr,L"open",restartPath.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
     }
     return 0;
 }
