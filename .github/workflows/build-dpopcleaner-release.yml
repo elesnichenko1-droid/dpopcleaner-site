@@ -1,4 +1,4 @@
-name: Build and publish DPopCleaner 0.3.1 BETA
+name: Build and publish DPopCleaner 0.3.1 BETA (manifest fix)
 
 on:
   workflow_dispatch:
@@ -214,14 +214,16 @@ jobs:
           }
           '@ | Set-Content -Encoding utf8 "src/updater/main.cpp"
 
+          # Do NOT embed RT_MANIFEST here.
+          # MSVC/Visual Studio already generates and embeds the default application
+          # manifest for WIN32 executables. Adding resource ID 1 again causes:
+          # CVT1100 duplicate resource type:MANIFEST name:1.
           @'
           #include <windows.h>
-          1 RT_MANIFEST "app.manifest"
           '@ | Set-Content -Encoding ascii "resources/app.rc"
 
           @'
           #include <windows.h>
-          1 RT_MANIFEST "app.manifest"
           '@ | Set-Content -Encoding ascii "resources/updater.rc"
 
           @'
