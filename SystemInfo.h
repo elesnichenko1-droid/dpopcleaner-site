@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <string>
 
 namespace dpop::system_info {
 struct Snapshot {
@@ -9,6 +10,7 @@ struct Snapshot {
     std::uint64_t systemDriveTotal{};
     std::uint64_t systemDriveFree{};
     unsigned processCount{};
+    std::wstring gpuName;
 };
 Snapshot Collect();
 }
