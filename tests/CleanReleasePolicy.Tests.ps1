@@ -132,7 +132,7 @@ Source: "setup.ps1"; DestDir: "{app}"; DestName: "DPopCleaner.exe"
     }
 
     $siteFixture = Join-Path $tempRoot 'site-fixture'
-    $siteOutput = Join-Path $tempRoot 'site-output'
+    $siteOutput = Join-Path $siteFixture '_site'
     New-Item -ItemType Directory -Path (Join-Path $siteFixture 'update') | Out-Null
     $allowedSiteFiles = @(
         '.nojekyll',
@@ -152,6 +152,9 @@ Source: "setup.ps1"; DestDir: "{app}"; DestName: "DPopCleaner.exe"
     Set-Content -LiteralPath (Join-Path $siteFixture 'README.md') -Value 'must not deploy' -Encoding utf8
 
     $stageScript = Join-Path $root 'scripts/Stage-Site.ps1'
+    Assert-Throws 'rejects a staging destination outside the site root' {
+        & $stageScript -Root $siteFixture -Destination (Join-Path $tempRoot 'outside-site')
+    } 'Unsafe website staging destination'
     & $stageScript -Root $siteFixture -Destination $siteOutput
     $actualFiles = Get-ChildItem -LiteralPath $siteOutput -File -Recurse |
         ForEach-Object { [IO.Path]::GetRelativePath($siteOutput, $_.FullName).Replace('\', '/') } |

@@ -9,7 +9,8 @@ Set-StrictMode -Version Latest
 
 $rootPath = (Resolve-Path -LiteralPath $Root).Path
 $destinationPath = [IO.Path]::GetFullPath($Destination)
-if ($destinationPath -eq $rootPath -or $destinationPath -eq [IO.Path]::GetPathRoot($destinationPath)) {
+$rootPrefix = $rootPath.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if (-not $destinationPath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Unsafe website staging destination: $destinationPath"
 }
 
