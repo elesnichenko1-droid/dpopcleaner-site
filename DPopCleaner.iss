@@ -1,5 +1,5 @@
 #define MyAppName "DPopCleaner"
-#define MyAppVersion "0.3.1 BETA"
+#define MyAppVersion "0.3.1 BETA R3"
 #define MyAppDisplayVersion "0.3.1"
 #ifndef SourceDir
   #define SourceDir "."
@@ -29,10 +29,10 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 OutputDir=output
-OutputBaseFilename=DPopCleaner_Setup_0.3.1_BETA
+OutputBaseFilename=DPopCleaner_Setup_0.3.1_BETA_R3
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\DPopCleaner.exe
-UninstallDisplayName=DPopCleaner 0.3.1 BETA
+UninstallDisplayName=DPopCleaner 0.3.1 BETA R3
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

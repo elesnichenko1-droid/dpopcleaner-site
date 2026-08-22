@@ -30,6 +30,8 @@ $script:SourceMap = @(
     @{ Source = 'Logger.h'; Destination = 'src/core/Logger.h' },
     @{ Source = 'Paths.cpp'; Destination = 'src/core/Paths.cpp' },
     @{ Source = 'Paths.h'; Destination = 'src/core/Paths.h' },
+    @{ Source = 'SingleInstance.cpp'; Destination = 'src/core/SingleInstance.cpp' },
+    @{ Source = 'SingleInstance.h'; Destination = 'src/core/SingleInstance.h' },
     @{ Source = 'Version.h'; Destination = 'src/core/Version.h' },
     @{ Source = 'Applications.cpp'; Destination = 'src/modules/Applications.cpp' },
     @{ Source = 'Applications.h'; Destination = 'src/modules/Applications.h' },
@@ -56,7 +58,9 @@ $script:SourceMap = @(
     @{ Source = 'UpdatePolicy.h'; Destination = 'src/update/UpdatePolicy.h' },
     @{ Source = 'UpdaterMain.cpp'; Destination = 'src/updater/main.cpp' },
     @{ Source = 'tests/UpdatePolicyTests.cpp'; Destination = 'tests/UpdatePolicyTests.cpp' },
+    @{ Source = 'tests/SingleInstanceTests.cpp'; Destination = 'tests/SingleInstanceTests.cpp' },
     @{ Source = 'app.manifest'; Destination = 'resources/app.manifest' },
+    @{ Source = 'updater.manifest'; Destination = 'resources/updater.manifest' },
     @{ Source = 'app.rc'; Destination = 'resources/app.rc' },
     @{ Source = 'updater.rc'; Destination = 'resources/updater.rc' },
     @{ Source = 'dpopcleaner.ico'; Destination = 'resources/dpopcleaner.ico' },
@@ -142,4 +146,59 @@ function Assert-R3VersionHeader {
     }
 }
 
-Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader
+function Assert-R3ResourceDefinitions {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$AppManifestPath,
+        [Parameter(Mandatory)][string]$UpdaterManifestPath,
+        [Parameter(Mandatory)][string]$AppResourcePath,
+        [Parameter(Mandatory)][string]$UpdaterResourcePath,
+        [Parameter(Mandatory)][string]$VersionResourcePath,
+        [Parameter(Mandatory)][string]$InstallerDefinitionPath
+    )
+
+    foreach ($path in @($AppManifestPath, $UpdaterManifestPath, $AppResourcePath, $UpdaterResourcePath, $VersionResourcePath, $InstallerDefinitionPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "R3 resource definition does not exist: $path"
+        }
+    }
+
+    $appManifest = Get-Content -Raw -LiteralPath $AppManifestPath
+    if ($appManifest -notmatch 'requestedExecutionLevel\s+level="requireAdministrator"\s+uiAccess="false"') {
+        throw 'Application manifest must require administrator rights.'
+    }
+    $updaterManifest = Get-Content -Raw -LiteralPath $UpdaterManifestPath
+    if ($updaterManifest -notmatch 'requestedExecutionLevel\s+level="asInvoker"\s+uiAccess="false"') {
+        throw 'Updater manifest must remain asInvoker.'
+    }
+
+    $appResource = Get-Content -Raw -LiteralPath $AppResourcePath
+    if ($appResource -notmatch 'IDI_APP_ICON\s+ICON\s+"dpopcleaner\.ico"' -or
+        $appResource -notmatch '1\s+RT_MANIFEST\s+"app\.manifest"') {
+        throw 'Application resource must embed icon 101 and app.manifest.'
+    }
+    $updaterResource = Get-Content -Raw -LiteralPath $UpdaterResourcePath
+    if ($updaterResource -notmatch 'IDI_APP_ICON\s+ICON\s+"dpopcleaner\.ico"' -or
+        $updaterResource -notmatch '1\s+RT_MANIFEST\s+"updater\.manifest"') {
+        throw 'Updater resource must embed icon 101 and updater.manifest.'
+    }
+
+    $versionResource = Get-Content -Raw -LiteralPath $VersionResourcePath
+    if ($versionResource -notmatch 'FILEVERSION\s+0,3,1,3' -or
+        $versionResource -notmatch 'PRODUCTVERSION\s+0,3,1,3' -or
+        $versionResource -notmatch 'VALUE\s+"ProductVersion",\s*"0\.3\.1 BETA R3\\0"') {
+        throw 'Version resource must identify DPopCleaner 0.3.1 BETA R3 revision 3.'
+    }
+
+    $installer = Get-Content -Raw -LiteralPath $InstallerDefinitionPath
+    $validInstaller =
+        $installer -match '#define MyAppVersion "0\.3\.1 BETA R3"' -and
+        $installer -match 'PrivilegesRequired=admin' -and
+        $installer -match 'SetupIconFile=\{#IconFile\}' -and
+        $installer -match 'OutputBaseFilename=DPopCleaner_Setup_0\.3\.1_BETA_R3'
+    if (-not $validInstaller) {
+        throw 'Installer resources do not match the R3 UAC/icon contract.'
+    }
+}
+
+Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader, Assert-R3ResourceDefinitions

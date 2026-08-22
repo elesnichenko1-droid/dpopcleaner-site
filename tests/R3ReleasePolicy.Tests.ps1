@@ -66,6 +66,15 @@ Assert-Throws 'rejects two sources with the same destination' {
 Assert-R3VersionHeader -Path (Join-Path $root 'Version.h')
 Write-Host 'PASS: accepts a version header aligned with the R3 contract'
 
+Assert-R3ResourceDefinitions `
+    -AppManifestPath (Join-Path $root 'app.manifest') `
+    -UpdaterManifestPath (Join-Path $root 'updater.manifest') `
+    -AppResourcePath (Join-Path $root 'app.rc') `
+    -UpdaterResourcePath (Join-Path $root 'updater.rc') `
+    -VersionResourcePath (Join-Path $root 'version.rc.in') `
+    -InstallerDefinitionPath (Join-Path $root 'DPopCleaner.iss')
+Write-Host 'PASS: application updater and installer resources match the R3 contract'
+
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dpop-r3-source-' + [guid]::NewGuid().ToString('N'))
 $destination = Join-Path $tempRoot 'prepared'
 try {
@@ -85,6 +94,25 @@ inline constexpr int kRevision = 3;
     Assert-Throws 'rejects a header with the old internal version code' {
         Assert-R3VersionHeader -Path $wrongVersionHeader
     } 'Version header does not match R3 release contract'
+
+    $wrongManifest = Join-Path $tempRoot 'wrong.manifest'
+    @'
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security><requestedPrivileges><requestedExecutionLevel level="asInvoker" uiAccess="false"/></requestedPrivileges></security>
+  </trustInfo>
+</assembly>
+'@ | Set-Content -LiteralPath $wrongManifest -Encoding utf8
+    Assert-Throws 'rejects an application manifest without elevation' {
+        Assert-R3ResourceDefinitions `
+            -AppManifestPath $wrongManifest `
+            -UpdaterManifestPath (Join-Path $root 'updater.manifest') `
+            -AppResourcePath (Join-Path $root 'app.rc') `
+            -UpdaterResourcePath (Join-Path $root 'updater.rc') `
+            -VersionResourcePath (Join-Path $root 'version.rc.in') `
+            -InstallerDefinitionPath (Join-Path $root 'DPopCleaner.iss')
+    } 'Application manifest must require administrator rights'
 
     & (Join-Path $root 'scripts/Prepare-R3Source.ps1') -RepositoryRoot $root -Destination $destination
 

@@ -1,8 +1,8 @@
 #include <windows.h>
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,3,1,0
- PRODUCTVERSION 0,3,1,0
+ FILEVERSION 0,3,1,3
+ PRODUCTVERSION 0,3,1,3
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -19,12 +19,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "DPopCleaner\0"
             VALUE "FileDescription", "DPopCleaner Windows utility\0"
-            VALUE "FileVersion", "0.3.1 BETA\0"
+            VALUE "FileVersion", "0.3.1.3\0"
             VALUE "InternalName", "DPopCleaner.exe\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 DPopCleaner\0"
             VALUE "OriginalFilename", "DPopCleaner.exe\0"
             VALUE "ProductName", "DPopCleaner\0"
-            VALUE "ProductVersion", "0.3.1 BETA\0"
+            VALUE "ProductVersion", "0.3.1 BETA R3\0"
         END
     END
 

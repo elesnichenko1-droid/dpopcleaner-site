@@ -19,6 +19,7 @@ endif()
 
 add_executable(DPopCleaner WIN32
     src/main.cpp
+    src/core/SingleInstance.cpp
     src/app/MainWindow.cpp
     src/core/Logger.cpp
     src/core/Paths.cpp
@@ -45,6 +46,7 @@ target_link_libraries(DPopCleaner PRIVATE
 )
 if(MSVC)
     target_compile_options(DPopCleaner PRIVATE /W4 /permissive- /utf-8)
+    target_link_options(DPopCleaner PRIVATE /MANIFEST:NO)
 endif()
 
 add_executable(DPopUpdater WIN32
@@ -61,6 +63,7 @@ target_compile_definitions(DPopUpdater PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_M
 target_link_libraries(DPopUpdater PRIVATE user32 shell32 bcrypt wintrust crypt32)
 if(MSVC)
     target_compile_options(DPopUpdater PRIVATE /W4 /permissive- /utf-8)
+    target_link_options(DPopUpdater PRIVATE /MANIFEST:NO)
 endif()
 
 set_target_properties(DPopCleaner DPopUpdater PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -83,4 +86,16 @@ if(BUILD_TESTING)
         target_compile_options(UpdatePolicyTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME UpdatePolicyTests COMMAND UpdatePolicyTests)
+
+    add_executable(SingleInstanceTests
+        tests/SingleInstanceTests.cpp
+        src/core/SingleInstance.cpp
+    )
+    target_include_directories(SingleInstanceTests PRIVATE src)
+    target_compile_definitions(SingleInstanceTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(SingleInstanceTests PRIVATE user32)
+    if(MSVC)
+        target_compile_options(SingleInstanceTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME SingleInstanceTests COMMAND SingleInstanceTests)
 endif()

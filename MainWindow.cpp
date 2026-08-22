@@ -738,6 +738,7 @@ int Run(HINSTANCE instance, int showCommand) {
     wc.lpszClassName = L"DPopCleanerMainV3";
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(101));
+    wc.hIconSm = LoadIconW(instance, MAKEINTRESOURCEW(101));
     wc.hbrBackground = nullptr;
     if (!RegisterClassExW(&wc)) return 1;
 
