@@ -54,6 +54,13 @@ try {
     Assert-Throws 'rejects a release without the Defender gate' {
         Assert-R3WorkflowDefinition -Path $missingDefender
     } 'required gate: Run Defender scans'
+
+    $invalidPowerShellInterpolation = Join-Path $tempRoot 'invalid-powershell-interpolation.yml'
+    $original.Replace('${binary}:', '$binary:') |
+        Set-Content -LiteralPath $invalidPowerShellInterpolation -Encoding utf8
+    Assert-Throws 'rejects an ambiguous PowerShell variable before a colon' {
+        Assert-R3WorkflowDefinition -Path $invalidPowerShellInterpolation
+    } 'ambiguous PowerShell variable interpolation'
 } finally {
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force

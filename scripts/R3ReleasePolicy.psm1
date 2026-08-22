@@ -392,6 +392,9 @@ function Assert-R3WorkflowDefinition {
     if ($content -match '(?im)Set-Content[^\r\n]*(?:\.cpp|\.h|\.rc)(?:\s|$)') {
         throw 'Workflow must not generate C++ source or resource files.'
     }
+    if ($content -match '\$binary:') {
+        throw 'Workflow contains ambiguous PowerShell variable interpolation before a colon.'
+    }
 
     $requiredGates = @(
         'Run release policy tests',
