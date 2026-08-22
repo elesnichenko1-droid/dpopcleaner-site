@@ -13,21 +13,23 @@ VS_VERSION_INFO VERSIONINFO
  FILETYPE 0x1L
  FILESUBTYPE 0x0L
 BEGIN
-  BLOCK "StringFileInfo"
-  BEGIN
-    BLOCK "041904B0"
+    BLOCK "StringFileInfo"
     BEGIN
-      VALUE "CompanyName", "DPopCleaner Project\0"
-      VALUE "FileDescription", "DPopCleaner - Windows maintenance utility\0"
-      VALUE "FileVersion", "0.3.1 BETA\0"
-      VALUE "InternalName", "DPopCleaner\0"
-      VALUE "OriginalFilename", "DPopCleaner.exe\0"
-      VALUE "ProductName", "DPopCleaner\0"
-      VALUE "ProductVersion", "0.3.1 BETA\0"
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "DPopCleaner\0"
+            VALUE "FileDescription", "DPopCleaner Windows utility\0"
+            VALUE "FileVersion", "0.3.1 BETA\0"
+            VALUE "InternalName", "DPopCleaner.exe\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 DPopCleaner\0"
+            VALUE "OriginalFilename", "DPopCleaner.exe\0"
+            VALUE "ProductName", "DPopCleaner\0"
+            VALUE "ProductVersion", "0.3.1 BETA\0"
+        END
     END
-  END
-  BLOCK "VarFileInfo"
-  BEGIN
-    VALUE "Translation", 0x419, 1200
-  END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
 END
