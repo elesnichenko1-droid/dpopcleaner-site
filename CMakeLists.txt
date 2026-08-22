@@ -11,7 +11,14 @@ if(MSVC)
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
-configure_file(resources/version.rc.in "${CMAKE_BINARY_DIR}/generated/version.rc" @ONLY)
+set(DPOP_FILE_DESCRIPTION "DPopCleaner Windows utility")
+set(DPOP_INTERNAL_NAME "DPopCleaner.exe")
+set(DPOP_ORIGINAL_FILENAME "DPopCleaner.exe")
+configure_file(resources/version.rc.in "${CMAKE_BINARY_DIR}/generated/dpopcleaner-version.rc" @ONLY)
+set(DPOP_FILE_DESCRIPTION "DPopCleaner secure updater")
+set(DPOP_INTERNAL_NAME "DPopUpdater.exe")
+set(DPOP_ORIGINAL_FILENAME "DPopUpdater.exe")
+configure_file(resources/version.rc.in "${CMAKE_BINARY_DIR}/generated/dpopupdater-version.rc" @ONLY)
 
 if(NOT WIN32)
     message(FATAL_ERROR "DPopCleaner targets Windows only.")
@@ -36,7 +43,7 @@ add_executable(DPopCleaner WIN32
     src/update/Hash.cpp
     src/update/Signature.cpp
     resources/app.rc
-    "${CMAKE_BINARY_DIR}/generated/version.rc"
+    "${CMAKE_BINARY_DIR}/generated/dpopcleaner-version.rc"
 )
 
 target_include_directories(DPopCleaner PRIVATE src)
@@ -56,7 +63,7 @@ add_executable(DPopUpdater WIN32
     src/update/Signature.cpp
     src/core/Paths.cpp
     resources/updater.rc
-    "${CMAKE_BINARY_DIR}/generated/version.rc"
+    "${CMAKE_BINARY_DIR}/generated/dpopupdater-version.rc"
 )
 
 target_include_directories(DPopUpdater PRIVATE src)

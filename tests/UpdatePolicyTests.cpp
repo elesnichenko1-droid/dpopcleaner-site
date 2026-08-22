@@ -76,6 +76,28 @@ int main() {
            "parser preserves availability size and version code");
 
     auto invalidManifest = validManifest;
+    invalidManifest.replace(invalidManifest.find("DPopCleaner"), std::string("DPopCleaner").size(), "OtherProduct");
+    Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
+           "wrong manifest product is rejected");
+
+    invalidManifest = validManifest;
+    invalidManifest.erase(invalidManifest.find("\"product\":\"DPopCleaner\","),
+                          std::string("\"product\":\"DPopCleaner\",").size());
+    Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
+           "missing manifest product is rejected");
+
+    invalidManifest = validManifest;
+    invalidManifest.replace(invalidManifest.find("\"beta\""), std::string("\"beta\"").size(), "\"stable\"");
+    Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
+           "wrong manifest channel is rejected");
+
+    invalidManifest = validManifest;
+    invalidManifest.erase(invalidManifest.find("\"channel\":\"beta\","),
+                          std::string("\"channel\":\"beta\",").size());
+    Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
+           "missing manifest channel is rejected");
+
+    invalidManifest = validManifest;
     invalidManifest.replace(invalidManifest.find("https://example.test/setup.exe"),
                             std::string("https://example.test/setup.exe").size(),
                             "http://example.test/setup.exe");
@@ -102,6 +124,18 @@ int main() {
                             "99999999999999999999999999999999999999999999999999");
     Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
            "out-of-range manifest integers are rejected without terminating the app");
+
+    invalidManifest = validManifest;
+    invalidManifest.replace(invalidManifest.find("3020"), 4, "2147483648");
+    Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
+           "version code outside the native int range is rejected");
+
+    invalidManifest = validManifest;
+    invalidManifest.replace(invalidManifest.find("\"revision\":1"),
+                            std::string("\"revision\":1").size(),
+                            "\"revision\":2147483648");
+    Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
+           "revision outside the native int range is rejected");
 
     if (failures != 0) {
         std::cerr << failures << " update policy test(s) failed.\n";

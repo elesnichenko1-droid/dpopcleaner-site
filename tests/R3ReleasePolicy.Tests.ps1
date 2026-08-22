@@ -77,8 +77,12 @@ Assert-R3ResourceDefinitions `
     -AppResourcePath (Join-Path $root 'app.rc') `
     -UpdaterResourcePath (Join-Path $root 'updater.rc') `
     -VersionResourcePath (Join-Path $root 'version.rc.in') `
-    -InstallerDefinitionPath (Join-Path $root 'DPopCleaner.iss')
+    -InstallerDefinitionPath (Join-Path $root 'release/DPopCleaner_0.3.1_R3.iss')
 Write-Host 'PASS: application updater and installer resources match the R3 contract'
+if (Test-Path -LiteralPath (Join-Path $root 'DPopCleaner.iss')) {
+    throw 'The obsolete duplicate installer definition must not exist.'
+}
+Write-Host 'PASS: release uses one canonical installer definition'
 
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dpop-r3-source-' + [guid]::NewGuid().ToString('N'))
 $destination = Join-Path $tempRoot 'prepared'
@@ -116,7 +120,7 @@ inline constexpr int kRevision = 3;
             -AppResourcePath (Join-Path $root 'app.rc') `
             -UpdaterResourcePath (Join-Path $root 'updater.rc') `
             -VersionResourcePath (Join-Path $root 'version.rc.in') `
-            -InstallerDefinitionPath (Join-Path $root 'DPopCleaner.iss')
+            -InstallerDefinitionPath (Join-Path $root 'release/DPopCleaner_0.3.1_R3.iss')
     } 'Application manifest must require administrator rights'
 
     $hashFixture = Join-Path $tempRoot 'hash-fixture.bin'

@@ -189,7 +189,9 @@ function Assert-R3ResourceDefinitions {
     $versionResource = Get-Content -Raw -LiteralPath $VersionResourcePath
     if ($versionResource -notmatch 'FILEVERSION\s+0,3,1,3' -or
         $versionResource -notmatch 'PRODUCTVERSION\s+0,3,1,3' -or
-        $versionResource -notmatch 'VALUE\s+"ProductVersion",\s*"0\.3\.1 BETA R3\\0"') {
+        $versionResource -notmatch 'VALUE\s+"ProductVersion",\s*"0\.3\.1 BETA R3\\0"' -or
+        $versionResource -notmatch 'VALUE\s+"InternalName",\s*"@DPOP_INTERNAL_NAME@\\0"' -or
+        $versionResource -notmatch 'VALUE\s+"OriginalFilename",\s*"@DPOP_ORIGINAL_FILENAME@\\0"') {
         throw 'Version resource must identify DPopCleaner 0.3.1 BETA R3 revision 3.'
     }
 
@@ -429,11 +431,47 @@ function Assert-R3WorkflowDefinition {
         'Remove-MpPreference -ExclusionPath',
         "if (`$outputText -match 'was skipped')",
         "if (`$outputText -notmatch 'found no threats')",
-        'scripts/Capture-AppScreenshot.ps1'
+        'scripts/Capture-AppScreenshot.ps1',
+        'ref: ${{ github.sha }}',
+        '--target $env:GITHUB_SHA',
+        'git rev-list -n 1 $env:R3_TAG',
+        'git fetch origin main',
+        'if ($remoteMain -ne $env:GITHUB_SHA)',
+        'Upload verified Pages site',
+        'dpopcleaner-pages-site-${{ github.run_id }}'
     )) {
         if (-not $content.Contains($required)) {
             throw "Workflow is missing required release policy text: $required"
         }
+    }
+}
+
+function Assert-R3PagesWorkflowDefinition {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Pages workflow does not exist: $Path"
+    }
+    $content = Get-Content -Raw -LiteralPath $Path
+    if ($content -match '(?m)^\s{2}workflow_dispatch:\s*$') {
+        throw 'Pages workflow must not expose workflow_dispatch.'
+    }
+    foreach ($required in @(
+        'workflow_run:',
+        'github.event.workflow_run.conclusion == ''success''',
+        'github.event.workflow_run.head_branch == ''main''',
+        'actions/download-artifact@v5',
+        'run-id: ${{ github.event.workflow_run.id }}',
+        'dpopcleaner-pages-site-${{ github.event.workflow_run.id }}',
+        'actions/deploy-pages@v5'
+    )) {
+        if (-not $content.Contains($required)) {
+            throw "Pages workflow is missing verified-artifact policy text: $required"
+        }
+    }
+    if ($content.Contains('actions/checkout@') -or $content.Contains('Stage-Site.ps1')) {
+        throw 'Pages workflow must deploy the verified artifact without checkout.'
     }
 }
 
@@ -453,4 +491,4 @@ function Assert-LegacyReleaseWorkflowsManualOnly {
     }
 }
 
-Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader, Assert-R3ResourceDefinitions, Assert-R3FileHash, Assert-R3BundleTree, Assert-R3StagedPayload, Assert-R3InstallerDefinition, New-R3ReleaseManifest, Assert-R3ReleaseManifest, Assert-R3WorkflowDefinition, Assert-LegacyReleaseWorkflowsManualOnly
+Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader, Assert-R3ResourceDefinitions, Assert-R3FileHash, Assert-R3BundleTree, Assert-R3StagedPayload, Assert-R3InstallerDefinition, New-R3ReleaseManifest, Assert-R3ReleaseManifest, Assert-R3WorkflowDefinition, Assert-R3PagesWorkflowDefinition, Assert-LegacyReleaseWorkflowsManualOnly

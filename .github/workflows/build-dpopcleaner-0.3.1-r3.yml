@@ -18,9 +18,11 @@ on:
       - "scripts/R3ReleasePolicy.psm1"
       - "scripts/Prepare-R3Source.ps1"
       - "scripts/Stage-R3Payload.ps1"
+      - "scripts/Stage-Site.ps1"
       - "scripts/Capture-AppScreenshot.ps1"
       - "tests/**"
       - ".github/workflows/build-dpopcleaner-0.3.1-r3.yml"
+      - ".github/workflows/static.yml"
 
 permissions:
   contents: write
@@ -119,10 +121,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not extract DPopUpdater manifest.' }
           if ((Get-Content -Raw evidence/DPopCleaner.manifest.xml) -notmatch 'requireAdministrator') { throw 'DPopCleaner does not require administrator rights.' }
           if ((Get-Content -Raw evidence/DPopUpdater.manifest.xml) -notmatch 'asInvoker') { throw 'DPopUpdater is not asInvoker.' }
-          foreach ($binary in @($app, $updater)) {
+          foreach ($expectedBinary in @(
+            @{ path = $app; internal = 'DPopCleaner.exe'; description = 'DPopCleaner Windows utility' },
+            @{ path = $updater; internal = 'DPopUpdater.exe'; description = 'DPopCleaner secure updater' }
+          )) {
+            $binary = $expectedBinary.path
             $info = (Get-Item -LiteralPath $binary).VersionInfo
             if ($info.FileVersion -ne '0.3.1.3' -or $info.ProductVersion -ne '0.3.1 BETA R3') {
               throw "Unexpected version resource in ${binary}: $($info.FileVersion) / $($info.ProductVersion)"
+            }
+            if ($info.InternalName -ne $expectedBinary.internal -or $info.OriginalFilename -ne $expectedBinary.internal -or
+                $info.FileDescription -ne $expectedBinary.description) {
+              throw "Incorrect target-specific version identity in ${binary}."
             }
           }
           Add-Type -AssemblyName System.Drawing
@@ -242,13 +252,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $started = Get-Date
           $capture = ./scripts/Capture-AppScreenshot.ps1 -ExecutablePath r3-build/bin/Release/DPopCleaner.exe -OutputPath evidence/dpopcleaner-0.3.1-r3.png
+          if (-not $capture.graceful_close) { throw 'Screenshot gate did not prove a graceful DPopCleaner close.' }
           $capture | ConvertTo-Json | Set-Content evidence/screenshot-report.json -Encoding utf8
-          Start-Sleep -Seconds 7
-          $unexpected = @(Get-Process DPopCleaner,DPopUpdater -ErrorAction SilentlyContinue | Where-Object {
+          $unexpected = @(Get-Process DPopCleaner,DPopUpdater,DPopCleaner_Setup_0.3.1_BETA_R3 -ErrorAction SilentlyContinue | Where-Object {
             try { $_.StartTime -ge $started } catch { $false }
           })
           if ($unexpected.Count -gt 0) { throw "DPopCleaner close test left or relaunched processes: $($unexpected.Name -join ', ')" }
-          'PASS: closing DPopCleaner produced no DPopCleaner or DPopUpdater process.' | Set-Content evidence/close-test.txt
+          'PASS: DPopCleaner closed gracefully and launched no DPopCleaner, DPopUpdater, or R3 installer process.' | Set-Content evidence/close-test.txt
 
       - name: Generate R3 release manifest
         shell: pwsh
@@ -285,7 +295,7 @@ jobs:
       - name: Checkout verified main
         uses: actions/checkout@v5
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Download verified build artifact
@@ -300,16 +310,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
+          git fetch origin main
+          $remoteMain = git rev-parse origin/main
+          if ($remoteMain -ne $env:GITHUB_SHA) {
+            throw "Main advanced to $remoteMain after verified commit $env:GITHUB_SHA; refusing to publish the release."
+          }
           $installer = "release-bundle/artifacts/$env:R3_ASSET"
           $evidence = 'release-bundle/artifacts/DPopCleaner_0.3.1_R3_build_evidence.zip'
           if (gh release view $env:R3_TAG --repo $env:GITHUB_REPOSITORY 2>$null) {
+            git fetch --force origin "refs/tags/$env:R3_TAG:refs/tags/$env:R3_TAG"
+            $tagCommit = git rev-list -n 1 $env:R3_TAG
+            if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:GITHUB_SHA) {
+              throw "The immutable R3 tag targets $tagCommit instead of verified commit $env:GITHUB_SHA."
+            }
             New-Item -ItemType Directory -Path existing-release | Out-Null
             gh release download $env:R3_TAG --repo $env:GITHUB_REPOSITORY --pattern $env:R3_ASSET --dir existing-release
             if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne (Get-FileHash "existing-release/$env:R3_ASSET" -Algorithm SHA256).Hash) {
               throw 'The immutable R3 tag already contains different installer bytes.'
             }
           } else {
-            gh release create $env:R3_TAG $installer $evidence --repo $env:GITHUB_REPOSITORY --prerelease --title 'DPopCleaner 0.3.1 BETA R3' --notes 'Полная BETA-сборка: DPopCleaner, DPopUpdater и проверенный официальный Zapret 1.10.1. Служба Zapret устанавливается только вручную через Zapret Center.'
+            gh release create $env:R3_TAG $installer $evidence --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'DPopCleaner 0.3.1 BETA R3' --notes 'Полная BETA-сборка: DPopCleaner, DPopUpdater и проверенный официальный Zapret 1.10.1. Служба Zapret устанавливается только вручную через Zapret Center.'
           }
 
       - name: Verify fresh release download
@@ -341,6 +361,11 @@ jobs:
           ./scripts/Stage-Site.ps1 -Root $PWD -Destination "$PWD/_site"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          $remoteMain = git rev-parse origin/main
+          if ($remoteMain -ne $env:GITHUB_SHA) {
+            throw "Main advanced to $remoteMain after verified commit $env:GITHUB_SHA; refusing to publish mismatched metadata."
+          }
           git add update/beta.json version.json assets/dpopcleaner-0.3.1-r3.png
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
@@ -349,3 +374,11 @@ jobs:
             git commit -m 'Publish DPopCleaner 0.3.1 BETA R3 manifest and screenshot'
             git push origin HEAD:main
           }
+
+      - name: Upload verified Pages site
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-pages-site-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 2
+          path: _site

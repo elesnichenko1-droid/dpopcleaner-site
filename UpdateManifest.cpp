@@ -4,6 +4,7 @@
 #include <optional>
 #include <algorithm>
 #include <exception>
+#include <limits>
 
 namespace {
 std::wstring Utf8ToWide(const std::string& s) {
@@ -62,19 +63,27 @@ bool ParseManifestUtf8(const std::string& json, Manifest& out, std::wstring& err
     const auto url = StringField(json, "download_url");
     const auto hash = StringField(json, "sha256");
     const auto size = IntField(json, "size");
-    if (!version || !versionCode || !available) {
+    if (!product || !channel || !version || !versionCode || !revision || !available) {
         error = L"Манифест обновления не содержит обязательных полей.";
+        return false;
+    }
+    if (*product != "DPopCleaner" || *channel != "beta") {
+        error = L"Манифест обновления предназначен для другого продукта или канала.";
+        return false;
+    }
+    if (*versionCode > std::numeric_limits<int>::max() || *revision > std::numeric_limits<int>::max()) {
+        error = L"Числовые поля манифеста обновления выходят за допустимый диапазон.";
         return false;
     }
     if (*available && (!url || !hash || !size || *size <= 0 || !IsHttpsUrl(*url) || !IsSha256(*hash))) {
         error = L"Доступный пакет обновления не прошёл проверку HTTPS, SHA-256 и размера.";
         return false;
     }
-    out.product = Utf8ToWide(product.value_or("DPopCleaner"));
-    out.channel = Utf8ToWide(channel.value_or("beta"));
+    out.product = Utf8ToWide(*product);
+    out.channel = Utf8ToWide(*channel);
     out.version = Utf8ToWide(*version);
     out.versionCode = static_cast<int>(*versionCode);
-    out.revision = static_cast<int>(revision.value_or(0));
+    out.revision = static_cast<int>(*revision);
     out.mandatory = BoolField(json, "mandatory").value_or(false);
     out.downloadUrl = Utf8ToWide(url.value_or(""));
     out.sha256 = Utf8ToWide(hash.value_or(""));
