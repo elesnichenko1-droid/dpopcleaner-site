@@ -204,4 +204,107 @@ function Assert-R3ResourceDefinitions {
     }
 }
 
-Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader, Assert-R3ResourceDefinitions
+function Assert-R3FileHash {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedSha256,
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "$Description does not exist: $Path"
+    }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+    if ($actual -ne $ExpectedSha256.ToLowerInvariant()) {
+        throw "Unexpected $Description SHA-256: $actual"
+    }
+}
+
+function Assert-R3BundleTree {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        throw "Zapret bundle directory does not exist: $Path"
+    }
+    $requiredFiles = @(
+        'general.bat',
+        'service.bat',
+        'bin/winws.exe',
+        'bin/WinDivert.dll',
+        'bin/WinDivert64.sys',
+        'bin/cygwin1.dll',
+        'utils/check_updates.enabled',
+        'LICENSE.txt'
+    )
+    foreach ($relative in $requiredFiles) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Path $relative) -PathType Leaf)) {
+            throw "Missing required Zapret file: $relative"
+        }
+    }
+    $listFiles = @(Get-ChildItem -LiteralPath (Join-Path $Path 'lists') -File -ErrorAction SilentlyContinue)
+    if ($listFiles.Count -eq 0) {
+        throw 'Missing required Zapret lists payload.'
+    }
+}
+
+function Assert-R3StagedPayload {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        throw "R3 staged payload does not exist: $Path"
+    }
+    $actual = @(Get-ChildItem -LiteralPath $Path -Force | ForEach-Object Name | Sort-Object)
+    $expected = @('DPopCleaner.exe', 'DPopUpdater.exe', 'zapret') | Sort-Object
+    if (Compare-Object -ReferenceObject $expected -DifferenceObject $actual) {
+        throw "Unexpected R3 staged payload: $($actual -join ', ')"
+    }
+    foreach ($binary in @('DPopCleaner.exe', 'DPopUpdater.exe')) {
+        $item = Get-Item -LiteralPath (Join-Path $Path $binary)
+        if ($item.PSIsContainer -or $item.Length -le 0) {
+            throw "Invalid staged application binary: $binary"
+        }
+    }
+    Assert-R3BundleTree -Path (Join-Path $Path 'zapret')
+}
+
+function Assert-R3InstallerDefinition {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "R3 installer definition does not exist: $Path"
+    }
+    $content = Get-Content -Raw -LiteralPath $Path
+    $lines = Get-Content -LiteralPath $Path
+    $inFiles = $false
+    $payloads = @()
+    foreach ($line in $lines) {
+        if ($line -match '^\s*\[Files\]\s*$') { $inFiles = $true; continue }
+        if ($inFiles -and $line -match '^\s*\[[^]]+\]\s*$') { break }
+        if ($inFiles -and $line -match '^\s*Source\s*:') { $payloads += $line }
+    }
+    if ($payloads.Count -ne 3) {
+        throw "R3 installer must contain exactly three payload declarations; found $($payloads.Count)."
+    }
+    $validPayloads =
+        @($payloads | Where-Object { $_ -match 'Source:\s*"\{#SourceDir\}\\DPopCleaner\.exe";\s*DestDir:\s*"\{app\}"' }).Count -eq 1 -and
+        @($payloads | Where-Object { $_ -match 'Source:\s*"\{#SourceDir\}\\DPopUpdater\.exe";\s*DestDir:\s*"\{app\}"' }).Count -eq 1 -and
+        @($payloads | Where-Object { $_ -match 'Source:\s*"\{#ZapretDir\}\\\*";\s*DestDir:\s*"\{app\}\\zapret"' -and $_ -match 'recursesubdirs' -and $_ -match 'createallsubdirs' }).Count -eq 1
+    if (-not $validPayloads) {
+        throw 'R3 installer payload declarations do not match the approved staging roots.'
+    }
+    if ($content -notmatch '#define MyAppVersion "0\.3\.1 BETA R3"' -or
+        $content -notmatch 'OutputBaseFilename=DPopCleaner_Setup_0\.3\.1_BETA_R3' -or
+        $content -notmatch 'PrivilegesRequired=admin' -or
+        $content -notmatch 'SetupIconFile=\{#IconFile\}') {
+        throw 'R3 installer identity, privileges, or icon is invalid.'
+    }
+    if ($content -match '(?im)^\s*Filename\s*:.*(?:service\.bat|general[^;]*\.bat|winws\.exe)') {
+        throw 'R3 installer must not start Zapret or WinDivert automatically.'
+    }
+}
+
+Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader, Assert-R3ResourceDefinitions, Assert-R3FileHash, Assert-R3BundleTree, Assert-R3StagedPayload, Assert-R3InstallerDefinition

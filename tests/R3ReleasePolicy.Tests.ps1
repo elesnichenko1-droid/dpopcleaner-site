@@ -45,6 +45,11 @@ Assert-Equal 'uses exact revision' $contract.Revision 3
 Assert-Equal 'uses a new immutable release tag' $contract.Tag 'v0.3.1-beta-r3'
 Assert-Equal 'uses the exact installer asset name' $contract.AssetName 'DPopCleaner_Setup_0.3.1_BETA_R3.exe'
 
+$zapretContract = Get-R3ZapretContract
+Assert-Equal 'pins official Zapret version' $zapretContract.Version '1.10.1'
+Assert-Equal 'pins official Zapret archive SHA-256' $zapretContract.ArchiveSha256 'f748d61fec75e4edc992cb5b09d554e914197c68c690384aceb61f143d8f76c9'
+Assert-Equal 'pins official Zapret license SHA-256' $zapretContract.LicenseSha256 'fe3983a1e91206ad1a530bcfae01fad207020cb61882edd62c1e3cb5f8d5d430'
+
 $sourceMap = @(Get-R3SourceMap)
 Assert-Equal 'maps the main application source' ($sourceMap | Where-Object Destination -eq 'src/main.cpp').Source 'main.cpp'
 Assert-Equal 'maps the updater source' ($sourceMap | Where-Object Destination -eq 'src/updater/main.cpp').Source 'UpdaterMain.cpp'
@@ -113,6 +118,62 @@ inline constexpr int kRevision = 3;
             -VersionResourcePath (Join-Path $root 'version.rc.in') `
             -InstallerDefinitionPath (Join-Path $root 'DPopCleaner.iss')
     } 'Application manifest must require administrator rights'
+
+    $hashFixture = Join-Path $tempRoot 'hash-fixture.bin'
+    [IO.File]::WriteAllBytes($hashFixture, [Text.Encoding]::UTF8.GetBytes('known-r3-fixture'))
+    $fixtureHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $hashFixture).Hash.ToLowerInvariant()
+    Assert-R3FileHash -Path $hashFixture -ExpectedSha256 $fixtureHash -Description 'test fixture'
+    Write-Host 'PASS: accepts an exact expected payload hash'
+    Assert-Throws 'rejects a modified payload hash' {
+        Assert-R3FileHash -Path $hashFixture -ExpectedSha256 ('0' * 64) -Description 'test fixture'
+    } 'Unexpected test fixture SHA-256'
+
+    $bundleFixture = Join-Path $tempRoot 'zapret'
+    foreach ($relative in @(
+        'general.bat', 'service.bat', 'bin/winws.exe', 'bin/WinDivert.dll',
+        'bin/WinDivert64.sys', 'bin/cygwin1.dll', 'utils/check_updates.enabled',
+        'LICENSE.txt', 'lists/list-general.txt'
+    )) {
+        $fixturePath = Join-Path $bundleFixture $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $fixturePath) -Force | Out-Null
+        Set-Content -LiteralPath $fixturePath -Value 'fixture' -Encoding utf8
+    }
+    Assert-R3BundleTree -Path $bundleFixture
+    Write-Host 'PASS: accepts a complete Zapret bundle tree'
+    Remove-Item -LiteralPath (Join-Path $bundleFixture 'service.bat')
+    Assert-Throws 'rejects a bundle without service.bat' {
+        Assert-R3BundleTree -Path $bundleFixture
+    } 'Missing required Zapret file: service.bat'
+    Set-Content -LiteralPath (Join-Path $bundleFixture 'service.bat') -Value 'fixture' -Encoding utf8
+
+    $stageFixture = Join-Path $tempRoot 'stage'
+    New-Item -ItemType Directory -Path $stageFixture | Out-Null
+    Set-Content -LiteralPath (Join-Path $stageFixture 'DPopCleaner.exe') -Value 'app' -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $stageFixture 'DPopUpdater.exe') -Value 'updater' -Encoding utf8
+    Copy-Item -LiteralPath $bundleFixture -Destination (Join-Path $stageFixture 'zapret') -Recurse
+    Assert-R3StagedPayload -Path $stageFixture
+    Write-Host 'PASS: accepts exactly two binaries and the verified Zapret tree'
+    Set-Content -LiteralPath (Join-Path $stageFixture 'unexpected.ps1') -Value 'forbidden' -Encoding utf8
+    Assert-Throws 'rejects an unexpected staged top-level payload' {
+        Assert-R3StagedPayload -Path $stageFixture
+    } 'Unexpected R3 staged payload'
+
+    Assert-R3InstallerDefinition -Path (Join-Path $root 'release/DPopCleaner_0.3.1_R3.iss')
+    Write-Host 'PASS: installer definition contains only the approved R3 payload'
+    $extraPayloadInstaller = Join-Path $tempRoot 'extra-payload.iss'
+    $installerText = Get-Content -Raw -LiteralPath (Join-Path $root 'release/DPopCleaner_0.3.1_R3.iss')
+    $installerText.Replace('[Icons]', "Source: `"outside.ps1`"; DestDir: `"{app}`"`r`n`r`n[Icons]") |
+        Set-Content -LiteralPath $extraPayloadInstaller -Encoding utf8
+    Assert-Throws 'rejects an installer payload outside the approved roots' {
+        Assert-R3InstallerDefinition -Path $extraPayloadInstaller
+    } 'exactly three payload declarations'
+
+    $autoStartInstaller = Join-Path $tempRoot 'autostart-zapret.iss'
+    $installerText.Replace('[UninstallDelete]', "[Run]`r`nFilename: `"{app}\\zapret\\service.bat`"`r`n`r`n[UninstallDelete]") |
+        Set-Content -LiteralPath $autoStartInstaller -Encoding utf8
+    Assert-Throws 'rejects automatic Zapret service startup' {
+        Assert-R3InstallerDefinition -Path $autoStartInstaller
+    } 'must not start Zapret'
 
     & (Join-Path $root 'scripts/Prepare-R3Source.ps1') -RepositoryRoot $root -Destination $destination
 
