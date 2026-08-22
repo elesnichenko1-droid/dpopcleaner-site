@@ -344,7 +344,7 @@ jobs:
             throw 'Fresh release SHA-256 does not match the verified manifest.'
           }
 
-      - name: Commit verified site metadata
+      - name: Prepare verified site metadata and Pages artifact
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -359,6 +359,19 @@ jobs:
           Assert-R3ReleaseManifest -Manifest (Get-Content -Raw update/beta.json | ConvertFrom-Json) -Published
           node --test tests/release-manifest.test.cjs tests/release-manifest-r3.test.cjs
           ./scripts/Stage-Site.ps1 -Root $PWD -Destination "$PWD/_site"
+
+      - name: Upload verified Pages site
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-pages-site-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 2
+          path: _site
+
+      - name: Commit verified site metadata
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin main
@@ -374,11 +387,3 @@ jobs:
             git commit -m 'Publish DPopCleaner 0.3.1 BETA R3 manifest and screenshot'
             git push origin HEAD:main
           }
-
-      - name: Upload verified Pages site
-        uses: actions/upload-artifact@v4
-        with:
-          name: dpopcleaner-pages-site-${{ github.run_id }}
-          if-no-files-found: error
-          retention-days: 2
-          path: _site

@@ -24,6 +24,12 @@ $pagesWorkflow = Join-Path $root '.github/workflows/static.yml'
 
 Assert-R3WorkflowDefinition -Path $workflow
 Write-Host 'PASS: accepts the gated R3 build and release workflow'
+$workflowContent = Get-Content -Raw -LiteralPath $workflow
+if ($workflowContent.IndexOf('Upload verified Pages site', [StringComparison]::Ordinal) -gt
+    $workflowContent.IndexOf('Commit verified site metadata', [StringComparison]::Ordinal)) {
+    throw 'Verified Pages site must be uploaded before main is advanced by the metadata commit.'
+}
+Write-Host 'PASS: uploads the retryable Pages artifact before advancing main'
 Assert-R3PagesWorkflowDefinition -Path $pagesWorkflow
 Write-Host 'PASS: accepts Pages deployment only from the verified release artifact'
 

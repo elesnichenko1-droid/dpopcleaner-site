@@ -437,12 +437,18 @@ function Assert-R3WorkflowDefinition {
         'git rev-list -n 1 $env:R3_TAG',
         'git fetch origin main',
         'if ($remoteMain -ne $env:GITHUB_SHA)',
+        'Prepare verified site metadata and Pages artifact',
         'Upload verified Pages site',
+        'Commit verified site metadata',
         'dpopcleaner-pages-site-${{ github.run_id }}'
     )) {
         if (-not $content.Contains($required)) {
             throw "Workflow is missing required release policy text: $required"
         }
+    }
+    if ($content.IndexOf('Upload verified Pages site', [StringComparison]::Ordinal) -gt
+        $content.IndexOf('Commit verified site metadata', [StringComparison]::Ordinal)) {
+        throw 'Workflow must upload the verified Pages site before committing metadata to main.'
     }
 }
 
