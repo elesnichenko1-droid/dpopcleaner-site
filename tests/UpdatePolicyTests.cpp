@@ -97,6 +97,12 @@ int main() {
     Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
            "missing availability flag is rejected");
 
+    invalidManifest = validManifest;
+    invalidManifest.replace(invalidManifest.find("3020"), 4,
+                            "99999999999999999999999999999999999999999999999999");
+    Expect(!dpop::update::ParseManifestUtf8(invalidManifest, manifest, error),
+           "out-of-range manifest integers are rejected without terminating the app");
+
     if (failures != 0) {
         std::cerr << failures << " update policy test(s) failed.\n";
         return 1;

@@ -18,10 +18,14 @@ bool SingleInstance::IsPrimary() const noexcept {
 }
 
 bool SingleInstance::ActivateExistingWindow(const wchar_t* windowClassName) {
-    HWND window = FindWindowW(windowClassName, nullptr);
-    if (window == nullptr) {
-        return false;
+    HWND window = nullptr;
+    for (int attempt = 0; attempt < 40 && window == nullptr; ++attempt) {
+        window = FindWindowW(windowClassName, nullptr);
+        if (window == nullptr) {
+            Sleep(50);
+        }
     }
+    if (window == nullptr) return false;
     ShowWindow(window, IsIconic(window) ? SW_RESTORE : SW_SHOW);
     return SetForegroundWindow(window) != FALSE;
 }

@@ -3,6 +3,7 @@
 #include <regex>
 #include <optional>
 #include <algorithm>
+#include <exception>
 
 namespace {
 std::wstring Utf8ToWide(const std::string& s) {
@@ -25,7 +26,11 @@ std::optional<long long> IntField(const std::string& json, const char* key) {
     const std::regex re(std::string("\\\"") + key + "\\\"\\s*:\\s*([0-9]+)");
     std::smatch m;
     if (!std::regex_search(json, m, re)) return std::nullopt;
-    return std::stoll(m[1].str());
+    try {
+        return std::stoll(m[1].str());
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
 }
 
 std::optional<bool> BoolField(const std::string& json, const char* key) {
