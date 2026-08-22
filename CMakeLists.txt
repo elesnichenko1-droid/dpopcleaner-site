@@ -28,6 +28,7 @@ add_executable(DPopCleaner WIN32
     src/modules/StartupManager.cpp
     src/modules/DPopGuard.cpp
     src/modules/ZapretManager.cpp
+    src/modules/ZapretPolicy.cpp
     src/modules/Applications.cpp
     src/update/UpdateManifest.cpp
     src/update/UpdatePolicy.cpp
@@ -98,4 +99,15 @@ if(BUILD_TESTING)
         target_compile_options(SingleInstanceTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME SingleInstanceTests COMMAND SingleInstanceTests)
+
+    add_executable(ZapretPolicyTests
+        tests/ZapretPolicyTests.cpp
+        src/modules/ZapretPolicy.cpp
+    )
+    target_include_directories(ZapretPolicyTests PRIVATE src)
+    target_compile_definitions(ZapretPolicyTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    if(MSVC)
+        target_compile_options(ZapretPolicyTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME ZapretPolicyTests COMMAND ZapretPolicyTests)
 endif()

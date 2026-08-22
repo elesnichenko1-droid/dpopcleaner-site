@@ -262,17 +262,21 @@ void RefreshApps() {
 void ShowZapret() {
     ShowTextMode(); HideAllActions();
     SetAction(0, L"Обновить статус");
-    SetAction(1, L"Открыть папку Zapret");
+    SetAction(1, L"Запустить general.bat");
+    SetAction(2, L"Менеджер service.bat");
+    SetAction(3, L"Открыть папку Zapret");
     SetLabel(g_pageTitle, L"Zapret Center");
-    SetLabel(g_pageHint, L"DPopCleaner показывает состояние интегрированного Zapret/WinDivert, не затрагивая сторонние VPN.");
+    SetLabel(g_pageHint, L"Официальный комплект Zapret 1.10.1. Служба и стратегия запускаются только вашим явным действием.");
     const auto z = dpop::zapret::QueryStatus();
     std::wstring t = L"ZAPRET / WINDIVERT\r\n\r\nСлужба zapret: ";
     t += z.serviceInstalled ? (z.serviceRunning ? L"RUNNING" : L"STOPPED") : L"не установлена";
-    t += L"\r\nwinws.exe: ";
+    t += L"\r\nВстроенный winws.exe: ";
     t += z.winwsRunning ? L"RUNNING" : L"не запущен";
     t += L"\r\nПапка: ";
-    t += z.detectedFolder.empty() ? L"не обнаружена" : z.detectedFolder.wstring();
-    t += L"\r\n\r\nDPopCleaner не завершает сторонние VPN-процессы и не меняет стратегию без явного действия пользователя.";
+    t += z.bundleFolder.wstring();
+    t += L"\r\nКомплект: ";
+    t += z.bundleValid ? L"проверен" : (L"неполный — отсутствует " + z.missingBundleFile.wstring());
+    t += L"\r\n\r\nDPopCleaner не устанавливает службу автоматически, не завершает сторонние VPN-процессы и не принимает чужой winws.exe за встроенный.";
     SetText(t);
 }
 
@@ -555,7 +559,24 @@ void HandleAction(int index) {
             break;
         case Page::Zapret:
             if (index == 0) ShowZapret();
-            else if (index == 1) { std::wstring e; if (!dpop::zapret::OpenDetectedFolder(e)) MessageBoxW(g_hwnd, e.c_str(), L"DPopCleaner", MB_OK | MB_ICONINFORMATION); }
+            else if (index == 1) {
+                if (MessageBoxW(g_hwnd,
+                    L"Запустить точный файл {app}\\zapret\\general.bat в видимом окне?\n\nDPopCleaner не добавляет скрытых аргументов и не устанавливает службу.",
+                    L"Запуск стратегии Zapret", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
+                    std::wstring e;
+                    if (!dpop::zapret::LaunchDefaultStrategy(e)) MessageBoxW(g_hwnd, e.c_str(), L"DPopCleaner", MB_OK | MB_ICONERROR);
+                }
+            } else if (index == 2) {
+                if (MessageBoxW(g_hwnd,
+                    L"Открыть официальный менеджер {app}\\zapret\\service.bat?\n\nУстановка, удаление и обновление службы выполняются только через его видимое меню.",
+                    L"Менеджер службы Zapret", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
+                    std::wstring e;
+                    if (!dpop::zapret::OpenServiceManager(e)) MessageBoxW(g_hwnd, e.c_str(), L"DPopCleaner", MB_OK | MB_ICONERROR);
+                }
+            } else if (index == 3) {
+                std::wstring e;
+                if (!dpop::zapret::OpenBundledFolder(e)) MessageBoxW(g_hwnd, e.c_str(), L"DPopCleaner", MB_OK | MB_ICONINFORMATION);
+            }
             break;
         case Page::Tools:
             if (index == 0) OpenTool(L"taskmgr.exe");

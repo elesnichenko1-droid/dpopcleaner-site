@@ -7,8 +7,12 @@ struct Status {
     bool serviceInstalled{};
     bool serviceRunning{};
     bool winwsRunning{};
-    std::filesystem::path detectedFolder;
+    bool bundleValid{};
+    std::filesystem::path bundleFolder;
+    std::filesystem::path missingBundleFile;
 };
 Status QueryStatus();
-bool OpenDetectedFolder(std::wstring& error);
+bool LaunchDefaultStrategy(std::wstring& error);
+bool OpenServiceManager(std::wstring& error);
+bool OpenBundledFolder(std::wstring& error);
 }
