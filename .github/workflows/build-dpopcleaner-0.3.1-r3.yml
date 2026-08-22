@@ -1,0 +1,39 @@
+name: Verify DPopCleaner 0.3.1 R3 branch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/dpopcleaner-0.3.1-r3
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v5
+
+      - name: Run release policy tests
+        shell: pwsh
+        run: |
+          ./tests/CleanReleasePolicy.Tests.ps1
+          ./tests/R3ReleasePolicy.Tests.ps1
+
+      - name: Prepare tracked source tree
+        shell: pwsh
+        run: ./scripts/Prepare-R3Source.ps1 -RepositoryRoot $PWD -Destination "$PWD/r3-source"
+
+      - name: Configure MSVC build
+        shell: pwsh
+        run: cmake -S r3-source -B r3-build -A x64 -DBUILD_TESTING=ON
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build r3-build --config Release --parallel
+
+      - name: Run C++ tests
+        shell: pwsh
+        run: ctest --test-dir r3-build -C Release --output-on-failure

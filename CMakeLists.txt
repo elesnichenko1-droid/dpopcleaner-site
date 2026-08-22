@@ -29,6 +29,7 @@ add_executable(DPopCleaner WIN32
     src/modules/ZapretManager.cpp
     src/modules/Applications.cpp
     src/update/UpdateManifest.cpp
+    src/update/UpdatePolicy.cpp
     src/update/UpdateClient.cpp
     src/update/Hash.cpp
     src/update/Signature.cpp
@@ -69,3 +70,17 @@ foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
         "RUNTIME_OUTPUT_DIRECTORY_${CFG_UPPER}" "${CMAKE_BINARY_DIR}/bin/${cfg}"
     )
 endforeach()
+
+if(BUILD_TESTING)
+    add_executable(UpdatePolicyTests
+        tests/UpdatePolicyTests.cpp
+        src/update/UpdateManifest.cpp
+        src/update/UpdatePolicy.cpp
+    )
+    target_include_directories(UpdatePolicyTests PRIVATE src)
+    target_compile_definitions(UpdatePolicyTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    if(MSVC)
+        target_compile_options(UpdatePolicyTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME UpdatePolicyTests COMMAND UpdatePolicyTests)
+endif()
