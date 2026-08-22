@@ -2,6 +2,14 @@ name: Build DPopCleaner 0.2.15 BETA
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "resources/**"
+      - "release/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/build-dpopcleaner-release.yml"
 
 permissions:
   contents: write
@@ -53,7 +61,28 @@ jobs:
         shell: pwsh
         run: |
           $installer = (Resolve-Path 'release/output/DPopCleaner_Setup_0.2.15_BETA.exe').Path
-          ./scripts/update-manifest.ps1 -Installer $installer -Repository "${{ github.repository }}"
+          $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
+          $size = (Get-Item $installer).Length
+          $name = [IO.Path]::GetFileName($installer)
+          $repo = "${{ github.repository }}"
+          $tag = "v0.2.15-beta"
+          $manifest = [ordered]@{
+            product = "DPopCleaner"
+            channel = "beta"
+            version = "0.2.15"
+            version_code = 215
+            mandatory = $false
+            download_url = "https://github.com/$repo/releases/download/$tag/$name"
+            sha256 = $hash
+            size = $size
+            signed = $false
+            available = $true
+            notes_url = "https://elesnichenko1-droid.github.io/dpopcleaner-site/"
+            install_args = "/SILENT /NORESTART"
+          }
+          $manifest | ConvertTo-Json | Set-Content -Encoding utf8 "update/beta.json"
+          Write-Host "Release URL: $($manifest.download_url)"
+          Write-Host "SHA256: $hash"
 
       - name: Create or update GitHub Release
         shell: pwsh
@@ -78,7 +107,8 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Update DPopCleaner beta manifest to 0.2.15"
-            git push
+            git pull --rebase origin main
+            git push origin HEAD:main
           } else {
             Write-Host "Manifest already up to date"
           }

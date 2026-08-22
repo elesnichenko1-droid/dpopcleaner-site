@@ -29,7 +29,7 @@
         <a href="#security">О сборке</a>
         <a href="#faq">FAQ</a>
       </nav>
-      <a class="button button-small button-ghost js-download" href="https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.2.15-beta/DPopCleaner_Setup_0.2.15_BETA.exe">Скачать</a>
+      <a class="button button-small button-ghost js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="js-download-label">Скоро</span></a>
       <button class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
     </div>
   </header>
@@ -42,9 +42,9 @@
           <h1>Windows под контролем.<br><span>Без лишнего шума.</span></h1>
           <p class="lead">Очистка, диагностика системы, управление автозагрузкой, DPopGuard 2 и полезные инструменты Windows — в одном лёгком приложении.</p>
           <div class="hero-actions">
-            <a class="button button-primary js-download" href="https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.2.15-beta/DPopCleaner_Setup_0.2.15_BETA.exe">
+            <a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true">
               <span class="download-icon">↓</span>
-              Скачать <span class="js-version">0.2.15</span> BETA
+              <span class="js-download-label">Сборка готовится</span>
             </a>
             <a class="button button-secondary" href="#features">Посмотреть возможности</a>
           </div>
@@ -96,6 +96,15 @@
             </div>
           </div>
           <p class="visual-note">Иллюстрация возможностей, не точный скриншот интерфейса.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="release-status-section" id="release-status">
+      <div class="container">
+        <div class="release-status-card reveal">
+          <span class="release-status-dot"></span>
+          <div><strong>Статус релиза</strong><p id="releaseStatus">DPopCleaner 0.2.15 BETA сейчас собирается на GitHub. Кнопка скачивания включится автоматически после публикации релиза.</p></div>
         </div>
       </div>
     </section>
@@ -171,7 +180,7 @@
         <div class="faq-list reveal delay-1">
           <details open><summary>Для какой Windows предназначен DPopCleaner?</summary><p>Текущий установщик собран под 64-битную Windows. Для сайта мы позиционируем релиз для Windows 10 и Windows 11 x64.</p></details>
           <details><summary>Почему некоторые действия требуют администратора?</summary><p>Управление системными списками памяти, компонентами Windows и частью обслуживающих операций требует повышенных прав. Приложение запрашивает их только для таких сценариев.</p></details>
-          <details><summary>DPopGuard 2 заменяет антивирус?</summary><p>Нет. Нет. В 0.2.15 BETA это дополнительная эвристическая проверка автозапуска. Она ничего не удаляет автоматически и не заменяет Microsoft Defender или другой антивирус.</p></details>
+          <details><summary>DPopGuard 2 заменяет антивирус?</summary><p>Нет. В 0.2.15 BETA это дополнительная эвристическая проверка автозапуска. Она ничего не удаляет автоматически и не заменяет Microsoft Defender или другой антивирус.</p></details>
           <details><summary>Как проверить скачанный установщик?</summary><p>Вычислите SHA-256 файла и сравните его со значением на этой странице. Для текущего BETA-релиза ожидаемый хеш загружается из update/beta.json и отображается выше.</p></details>
         </div>
       </div>
@@ -180,7 +189,7 @@
     <section class="cta-section">
       <div class="container cta reveal">
         <div><p class="kicker">DPopCleaner 0.2.15 BETA</p><h2>Попробуйте текущую сборку</h2><p>Для Windows x64 · установщик <span class="js-size">ожидается сборка</span></p></div>
-        <a class="button button-primary js-download" href="https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.2.15-beta/DPopCleaner_Setup_0.2.15_BETA.exe"><span class="download-icon">↓</span> Скачать DPopCleaner</a>
+        <a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span> <span class="js-download-label">Сборка готовится</span></a>
       </div>
     </section>
   </main>

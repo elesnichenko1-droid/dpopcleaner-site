@@ -8,7 +8,7 @@
 - CLR/.NET runtime header отсутствует: это не обычная .NET-сборка.
 - Импорты: KERNEL32, USER32, GDI32, SHELL32, OLE32, ADVAPI32, COMDLG32, DNSAPI, DWMAPI.
 - В строках видны: DPopGuard 2, RAM cleanup/monitor, Startup, Windows Update cleanup, logs/quarantine, Zapret/WinDivert, WinGet, default apps, `DPopUpdate.bat`.
-- Внутри встречается `DPopCleaner BETA 0.2.11`, несмотря на имя переданного файла `0.2.14`. В новой базе версия унифицирована как 0.2.14 / version_code 214.
+- Внутри встречается `DPopCleaner BETA 0.2.11`, несмотря на имя переданного файла `0.2.14`. В новой базе для текущего тестового релиза версия унифицирована как 0.2.15 / version_code 215.
 
 ## Ограничение
 

@@ -36,3 +36,14 @@ h1{font-size:clamp(48px,6vw,76px);line-height:1.02;letter-spacing:-.052em;margin
 @media(max-width:900px){.nav,.nav-wrap>.button-small{display:none}.menu-button{display:block}.nav.open{display:flex;position:absolute;top:70px;left:20px;right:20px;flex-direction:column;background:#0b1a2a;border:1px solid var(--line);padding:18px;border-radius:15px;box-shadow:var(--shadow)}.hero{padding-top:58px}.hero-grid{grid-template-columns:1fr;gap:50px}.hero-copy{text-align:center}.hero-copy .lead{margin-left:auto;margin-right:auto}.hero-actions,.release-meta{justify-content:center}.hero-visual{max-width:650px;margin:auto}.trust-grid{grid-template-columns:1fr 1fr;row-gap:20px}.trust-grid>div:nth-child(2){border-right:0}.feature-grid{grid-template-columns:1fr 1fr}.steps{grid-template-columns:1fr}.security-card{grid-template-columns:1fr;padding:38px;gap:25px}.shield-wrap img{width:170px}.faq-layout{grid-template-columns:1fr;gap:8px}.cta{align-items:flex-start;flex-direction:column}.footer-grid{grid-template-columns:1fr}.footer-links{flex-wrap:wrap}}
 @media(max-width:600px){.container{width:min(100% - 26px,1180px)}.nav-wrap{height:68px}.brand span{font-size:14px}.brand img{width:35px;height:35px}.hero{padding:45px 0 55px}h1{font-size:45px}.lead{font-size:16px}.hero-actions{flex-direction:column}.hero-actions .button{width:100%}.app-body{grid-template-columns:1fr}.app-side{display:none}.app-content{padding:16px}.metric-grid{gap:6px}.metric{padding:9px}.action-strip{overflow:auto}.trust-grid{grid-template-columns:1fr 1fr}.trust-grid>div{padding:0 12px}.section{padding:82px 0}.feature-grid{grid-template-columns:1fr}.feature-card{min-height:220px}.security-card{padding:27px 18px}.hash-box{align-items:flex-start;flex-direction:column}.copy-button{width:100%}.build-facts{flex-direction:column;gap:6px}.cta{padding:29px 22px}.cta .button{width:100%}.footer-links{gap:12px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.reveal{opacity:1;transform:none;transition:none}.button{transition:none}}
+
+
+/* Release availability state */
+.button.is-disabled{opacity:.58;cursor:not-allowed;filter:saturate(.55);box-shadow:none}
+.button.is-disabled:hover{transform:none}
+.release-status-section{padding:18px 0 0}
+.release-status-card{display:flex;gap:14px;align-items:flex-start;padding:18px 20px;border:1px solid rgba(138,170,197,.18);background:rgba(10,27,43,.72);border-radius:18px;color:#c8d6e5}
+.release-status-card strong{display:block;color:#f1f7ff;margin-bottom:4px}
+.release-status-card p{margin:0;line-height:1.55}
+.release-status-dot{width:11px;height:11px;border-radius:50%;background:#ffc857;box-shadow:0 0 0 6px rgba(255,200,87,.10);margin-top:6px;flex:0 0 auto}
+.release-status-card:has(#releaseStatus.ready) .release-status-dot{background:#78f05b;box-shadow:0 0 0 6px rgba(120,240,91,.10)}

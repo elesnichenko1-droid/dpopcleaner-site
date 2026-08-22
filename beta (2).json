@@ -4,10 +4,11 @@
   "version": "0.2.15",
   "version_code": 215,
   "mandatory": false,
-  "download_url": "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.2.15-beta/DPopCleaner_Setup_0.2.15_BETA.exe",
-  "sha256": "GENERATED_BY_GITHUB_ACTIONS",
+  "download_url": "",
+  "sha256": "",
   "size": 0,
   "signed": false,
   "notes_url": "https://elesnichenko1-droid.github.io/dpopcleaner-site/",
-  "install_args": "/SILENT /NORESTART"
+  "install_args": "/SILENT /NORESTART",
+  "available": false
 }
