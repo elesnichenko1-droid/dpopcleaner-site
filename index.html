@@ -38,7 +38,7 @@
     <section class="hero">
       <div class="container hero-grid">
         <div class="hero-copy reveal">
-          <div class="eyebrow"><span class="dot"></span> DPopCleaner <span class="js-version">0.2.14</span> BETA · Windows x64</div>
+          <div class="eyebrow"><span class="dot"></span> DPopCleaner <span class="js-version">0.2.14</span> BETA R1 · Windows x64</div>
           <h1>Windows под контролем.<br><span>Без лишнего шума.</span></h1>
           <p class="lead">Очистка, диагностика системы, управление автозагрузкой, DPopGuard 2, полезные инструменты Windows — в одном лёгком приложении.</p>
           <div class="hero-actions">
@@ -104,14 +104,14 @@
       <div class="container">
         <div class="release-status-card reveal">
           <span class="release-status-dot"></span>
-          <div><strong>Статус релиза</strong><p id="releaseStatus">Оригинальная рабочая сборка DPopCleaner 0.2.14 BETA готова к загрузке.</p></div>
+          <div><strong>Статус релиза</strong><p id="releaseStatus">Чистая сборка DPopCleaner 0.2.14 BETA R1 готовится к проверке и публикации.</p></div>
         </div>
       </div>
     </section>
 
     <section class="trust-strip">
       <div class="container trust-grid reveal">
-        <div><strong class="js-version">0.2.14</strong><span>текущая BETA-сборка</span></div>
+        <div><strong class="js-version">0.2.14</strong><span>чистая BETA-сборка R1</span></div>
         <div><strong>x64</strong><span>64-битная Windows</span></div>
         <div><strong class="js-size">ожидается сборка</strong><span>размер установщика</span></div>
         <div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div>
@@ -157,7 +157,7 @@
         <div class="security-copy">
           <p class="kicker">О текущей сборке</p>
           <h2>Проверяемый релиз, без громких обещаний</h2>
-          <p>На странице показываются технические данные установщика, чтобы файл можно было сверить после загрузки. DPopCleaner 0.2.14 пока находится в BETA — перед серьёзными изменениями системы рекомендуем создать точку восстановления.</p>
+          <p>На странице показываются технические данные установщика, чтобы файл можно было сверить после загрузки. Чистый установщик DPopCleaner 0.2.14 BETA R1 содержит только основное приложение и не включает дополнительные компоненты Zapret/WinDivert. Перед серьёзными изменениями системы рекомендуем создать точку восстановления.</p>
           <div class="hash-box">
             <div><small>SHA-256</small><code id="hashValue">будет опубликован после сборки</code></div>
             <button id="copyHash2" class="copy-button" type="button">Копировать</button>
@@ -189,7 +189,7 @@
 
     <section class="cta-section">
       <div class="container cta reveal">
-        <div><p class="kicker">DPopCleaner 0.2.14 BETA</p><h2>Скачать оригинальную сборку</h2><p>Для Windows x64 · установщик <span class="js-size">ожидается сборка</span></p></div>
+        <div><p class="kicker">DPopCleaner 0.2.14 BETA R1</p><h2>Скачать чистую сборку</h2><p>Для Windows x64 · установщик <span class="js-size">ожидается сборка</span></p></div>
         <a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span> <span class="js-download-label">Сборка готовится</span></a>
       </div>
     </section>
@@ -204,6 +204,7 @@
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite">SHA-256 скопирован</div>
+  <script src="release-manifest.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

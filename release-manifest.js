@@ -1,0 +1,24 @@
+(function(root, factory){
+  const api = factory();
+  if(typeof module === 'object' && module.exports) module.exports = api;
+  if(root) root.DPopReleaseManifest = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function(){
+  const releaseUrl = /^https:\/\/github\.com\/elesnichenko1-droid\/dpopcleaner-site\/releases\/download\/v0\.2\.14-clean-r1\/DPopCleaner_Setup_0\.2\.14_BETA_CLEAN_R1\.exe$/;
+
+  function isUsableManifest(m){
+    return Boolean(
+      m &&
+      m.version === '0.2.14' &&
+      Number(m.revision) === 1 &&
+      m.available === true &&
+      typeof m.download_url === 'string' &&
+      releaseUrl.test(m.download_url) &&
+      Number.isFinite(Number(m.size)) &&
+      Number(m.size) > 0 &&
+      typeof m.sha256 === 'string' &&
+      /^[a-f0-9]{64}$/i.test(m.sha256)
+    );
+  }
+
+  return { isUsableManifest };
+});

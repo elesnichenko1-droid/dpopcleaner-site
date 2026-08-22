@@ -27,18 +27,18 @@ function setDownloadState(available, url, version){
   });
   const status=document.getElementById('releaseStatus');
   if(status){
-    status.textContent = available ? `DPopCleaner ${version} BETA опубликован и готов к загрузке.` : `DPopCleaner ${version} BETA сейчас собирается на GitHub. Кнопка скачивания включится автоматически после публикации релиза.`;
+    status.textContent = available ? `Чистая сборка DPopCleaner ${version} BETA R1 опубликована и готова к загрузке.` : `Чистая сборка DPopCleaner ${version} BETA R1 готовится на GitHub. Кнопка скачивания включится автоматически после проверки и публикации релиза.`;
     status.classList.toggle('ready', !!available);
   }
 }
 
 function applyManifest(m){
-  if(!m || !m.version) return;
-  document.querySelectorAll('.js-version').forEach(el => el.textContent = m.version);
-  document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(Number(m.size)));
-  const available = m.available === true && typeof m.download_url === 'string' && m.download_url.startsWith('https://');
-  setDownloadState(available, m.download_url || '', m.version);
-  if(typeof m.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(m.sha256)){
+  const available = globalThis.DPopReleaseManifest?.isUsableManifest(m) === true;
+  const version = '0.2.14';
+  document.querySelectorAll('.js-version').forEach(el => el.textContent = version);
+  document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(available ? Number(m.size) : 0));
+  setDownloadState(available, available ? m.download_url : '', version);
+  if(available){
     currentHash = m.sha256.toLowerCase();
     const hv = document.getElementById('hashValue');
     if(hv) hv.textContent = currentHash;
@@ -56,7 +56,7 @@ async function loadManifest(){
     applyManifest(await response.json());
   }catch(err){
     console.warn('Update manifest is not available yet:', err);
-    setDownloadState(false, '', '0.3.1');
+    applyManifest(null);
   }
 }
 
