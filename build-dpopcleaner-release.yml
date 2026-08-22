@@ -1,10 +1,193 @@
-name: Future DPopCleaner build (disabled)
+name: Build and publish DPopCleaner 0.3.1 BETA
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "resources/**"
+      - "release/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/build-dpopcleaner-release.yml"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: dpopcleaner-0-3-1-release
+  cancel-in-progress: false
 
 jobs:
-  info:
-    runs-on: ubuntu-latest
+  build-release:
+    runs-on: windows-2022
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      - run: echo "Automatic 0.2.15 build is disabled until the reconstructed source is verified. Current downloadable release is 0.2.14 BETA."
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Configure CMake x64
+        shell: pwsh
+        run: cmake -S . -B out/build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build out/build --config Release --parallel
+
+      - name: Stage binaries
+        shell: pwsh
+        run: |
+          $cleaner = Get-ChildItem -Recurse -Filter DPopCleaner.exe out/build | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          $updater = Get-ChildItem -Recurse -Filter DPopUpdater.exe out/build | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          if (-not $cleaner -or -not $updater) { throw "Built EXE files were not found" }
+          New-Item -ItemType Directory -Force -Path release/stage | Out-Null
+          Copy-Item $cleaner.FullName release/stage/DPopCleaner.exe
+          Copy-Item $updater.FullName release/stage/DPopUpdater.exe
+
+      - name: Import code-signing certificate (optional)
+        id: signing
+        shell: pwsh
+        env:
+          CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERT_PFX_BASE64)) {
+            "enabled=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "No signing certificate configured; building unsigned BETA."
+            exit 0
+          }
+          $bytes = [Convert]::FromBase64String($env:CERT_PFX_BASE64)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\dpopcert.pfx", $bytes)
+          "enabled=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Sign application binaries (optional)
+        if: steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          if (-not $signtool) { throw "signtool.exe not found" }
+          & $signtool sign /fd SHA256 /f "$env:RUNNER_TEMP\dpopcert.pfx" /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td SHA256 release/stage/DPopCleaner.exe
+          & $signtool sign /fd SHA256 /f "$env:RUNNER_TEMP\dpopcert.pfx" /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td SHA256 release/stage/DPopUpdater.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build full installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found" }
+          & $iscc "/DSourceDir=$((Resolve-Path 'release/stage').Path)" "/DIconFile=$((Resolve-Path 'resources/dpopcleaner.ico').Path)" release/DPopCleaner.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sign installer (optional)
+        if: steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          & $signtool sign /fd SHA256 /f "$env:RUNNER_TEMP\dpopcert.pfx" /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td SHA256 release/output/DPopCleaner_Setup_0.3.1_BETA.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Generate release manifest
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path 'release/output/DPopCleaner_Setup_0.3.1_BETA.exe').Path
+          $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
+          $size = (Get-Item $installer).Length
+          $name = [IO.Path]::GetFileName($installer)
+          $repo = "${{ github.repository }}"
+          $tag = "v0.3.1-beta"
+          $signed = "${{ steps.signing.outputs.enabled }}" -eq "true"
+          $manifest = [ordered]@{
+            product = "DPopCleaner"
+            channel = "beta"
+            version = "0.3.1"
+            version_code = 301
+            mandatory = $false
+            download_url = "https://github.com/$repo/releases/download/$tag/$name"
+            sha256 = $hash
+            size = $size
+            signed = $signed
+            available = $true
+            notes_url = "https://elesnichenko1-droid.github.io/dpopcleaner-site/"
+            install_args = "/SILENT /NORESTART"
+          }
+          $manifest | ConvertTo-Json | Set-Content -Encoding utf8 "update/beta.json"
+          @{
+            product = "DPopCleaner"
+            version = "0.3.1"
+            channel = "beta"
+            platform = "windows"
+            architecture = "x86-64"
+            manifest = "./update/beta.json"
+          } | ConvertTo-Json | Set-Content -Encoding utf8 "version.json"
+          Write-Host "Release URL: $($manifest.download_url)"
+          Write-Host "SHA256: $hash"
+          Write-Host "Signed: $signed"
+
+      - name: Create or update GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v0.3.1-beta"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "DPopCleaner 0.3.1 BETA" --notes "Stage 3: полноценный установщик, реальный список установленных приложений, запуск штатного удаления, консервативная очистка хвостов и встроенная система обновлений." --prerelease
+          }
+          gh release upload $tag release/output/DPopCleaner_Setup_0.3.1_BETA.exe --clobber
+          gh release upload $tag release/stage/DPopCleaner.exe --clobber
+          gh release upload $tag release/stage/DPopUpdater.exe --clobber
+
+      - name: Commit generated update metadata
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/beta.json version.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Publish DPopCleaner 0.3.1 beta manifest"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          }
+
+      - name: Stage public website
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path _site/update | Out-Null
+          Copy-Item index.html,styles.css,script.js,dpopcleaner-icon.png,version.json,.nojekyll _site/
+          Copy-Item update/beta.json,update/stable.json _site/update/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DPopCleaner-0.3.1-BETA
+          path: |
+            release/output/DPopCleaner_Setup_0.3.1_BETA.exe
+            release/stage/DPopCleaner.exe
+            release/stage/DPopUpdater.exe
+            update/beta.json

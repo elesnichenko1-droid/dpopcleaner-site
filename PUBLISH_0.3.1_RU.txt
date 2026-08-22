@@ -1,0 +1,22 @@
+DPopCleaner 0.3.1 BETA — публикация
+
+1. Распакуйте архив.
+2. В GitHub откройте репозиторий dpopcleaner-site -> Code -> Add file -> Upload files.
+3. Загрузите ВСЁ содержимое папки пакета с сохранением папок src, resources, release, .github и update.
+4. Нажмите Commit changes.
+5. Откройте Actions.
+6. Дождитесь workflow "Build and publish DPopCleaner 0.3.1 BETA".
+   Он запускается автоматически после изменения src/resources/release/CMakeLists.txt.
+   При необходимости откройте его -> Run workflow.
+7. После зелёной галочки GitHub создаст Release v0.3.1-beta и файл:
+   DPopCleaner_Setup_0.3.1_BETA.exe
+8. Тот же workflow запишет реальный размер и SHA-256 в update/beta.json и обновит GitHub Pages.
+9. На сайте нажмите Ctrl+F5. Кнопка скачивания должна автоматически стать активной.
+
+ВАЖНО ПРО ПЕРВОЕ ОБНОВЛЕНИЕ:
+Старая 0.2.14 не умеет обновлять себя до новой архитектуры, поэтому 0.3.1 устанавливается один раз вручную. Начиная с 0.3.1 проверка новых версий выполняется автоматически.
+
+ВАЖНО ПРО ПОДПИСЬ:
+Без настоящего Code Signing сертификата Windows может показывать SmartScreen/Defender предупреждения. Workflow уже умеет подписывать файлы, если позднее добавить GitHub Secrets:
+WINDOWS_CERT_PFX_BASE64
+WINDOWS_CERT_PASSWORD

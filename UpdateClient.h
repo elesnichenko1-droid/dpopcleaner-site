@@ -13,5 +13,5 @@ struct CheckResult {
 
 CheckResult CheckForUpdates();
 bool DownloadPackage(const Manifest& manifest, std::filesystem::path& downloadedFile, std::wstring& error);
-bool PrepareAndLaunchUpdater(const Manifest& manifest, const std::filesystem::path& package, std::wstring& error);
+bool PrepareAndLaunchUpdater(const Manifest& manifest, const std::filesystem::path& package, bool allowUnsigned, std::wstring& error);
 }

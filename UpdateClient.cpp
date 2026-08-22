@@ -149,18 +149,21 @@ bool DownloadPackage(const Manifest& manifest, fs::path& downloadedFile, std::ws
     return true;
 }
 
-bool PrepareAndLaunchUpdater(const Manifest& manifest,const fs::path& package,std::wstring& error){
-    if(!manifest.signedPackage){
-        error=L"Пакет помечен как unsigned. SHA-256 проверен, но автоматический запуск заблокирован до появления цифровой подписи.";
+bool PrepareAndLaunchUpdater(const Manifest& manifest,const fs::path& package,bool allowUnsigned,std::wstring& error){
+    if(manifest.signedPackage){
+        if(!VerifyAuthenticode(package,error)) return false;
+    } else if(!allowUnsigned){
+        error=L"Пакет не подписан Authenticode. Для BETA требуется явное подтверждение пользователя.";
         return false;
     }
-    if(!VerifyAuthenticode(package,error)) return false;
 
     const auto updater=dpop::paths::ExecutableDir()/L"DPopUpdater.exe";
     if(!fs::exists(updater)){ error=L"DPopUpdater.exe не найден рядом с DPopCleaner.exe"; return false; }
 
     const DWORD pid=GetCurrentProcessId();
-    std::wstring args=L"--parent "+std::to_wstring(pid)+L" --package \""+package.wstring()+L"\"";
+    const auto restart=dpop::paths::ExecutableDir()/L"DPopCleaner.exe";
+    std::wstring args=L"--parent "+std::to_wstring(pid)+L" --package \""+package.wstring()+L"\" --sha256 \""+manifest.sha256+L"\" --restart \""+restart.wstring()+L"\"";
+    if(allowUnsigned) args += L" --allow-unsigned";
     if(!manifest.installArgs.empty()) args += L" --args \""+manifest.installArgs+L"\"";
 
     SHELLEXECUTEINFOW sei{}; sei.cbSize=sizeof(sei); sei.lpFile=updater.c_str(); sei.lpParameters=args.c_str(); sei.nShow=SW_SHOWNORMAL;

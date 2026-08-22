@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
-project(DPopCleaner VERSION 0.2.15 LANGUAGES CXX RC)
+project(DPopCleaner VERSION 0.3.1 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 configure_file(resources/version.rc.in "${CMAKE_BINARY_DIR}/generated/version.rc" @ONLY)
@@ -22,6 +25,7 @@ add_executable(DPopCleaner WIN32
     src/modules/StartupManager.cpp
     src/modules/DPopGuard.cpp
     src/modules/ZapretManager.cpp
+    src/modules/Applications.cpp
     src/update/UpdateManifest.cpp
     src/update/UpdateClient.cpp
     src/update/Hash.cpp
@@ -34,7 +38,7 @@ target_include_directories(DPopCleaner PRIVATE src)
 target_compile_definitions(DPopCleaner PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(DPopCleaner PRIVATE
     user32 gdi32 shell32 ole32 advapi32 comdlg32 dwmapi
-    winhttp bcrypt wintrust crypt32 shlwapi
+    winhttp bcrypt wintrust crypt32 shlwapi comctl32
 )
 
 if(MSVC)

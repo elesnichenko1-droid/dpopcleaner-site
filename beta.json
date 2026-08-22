@@ -1,14 +1,14 @@
 {
   "product": "DPopCleaner",
   "channel": "beta",
-  "version": "0.2.14",
-  "version_code": 214,
+  "version": "0.3.1",
+  "version_code": 301,
   "mandatory": false,
-  "download_url": "https://elesnichenko1-droid.github.io/dpopcleaner-site/downloads/DPopCleaner_0.2.14_BETA.exe",
-  "sha256": "7d5e0a510189db31ef7ee1aca72dc182332a8020d994c81be40a519c5960515c",
-  "size": 389632,
+  "download_url": "",
+  "sha256": "",
+  "size": 0,
   "signed": false,
-  "available": true,
   "notes_url": "https://elesnichenko1-droid.github.io/dpopcleaner-site/",
-  "install_mode": "manual"
+  "install_args": "/SILENT /NORESTART",
+  "available": false
 }
