@@ -1,0 +1,16 @@
+DPopCleaner — сделать кнопку «Скачать» рабочей прямо сейчас
+
+1. Загрузи ВСЕ файлы этого пакета в корень репозитория dpopcleaner-site поверх старых.
+2. В репозитории открой папку downloads.
+3. Нажми Add file -> Upload files.
+4. Возьми уже имеющийся у тебя DPopCleaner_0.2.14_BETA(1).exe, переименуй его в:
+   DPopCleaner_0.2.14_BETA.exe
+5. Загрузи этот EXE в папку downloads и нажми Commit changes.
+6. Открой Actions и дождись зелёного Deploy DPopCleaner website.
+7. На сайте нажми Ctrl+F5.
+
+После этого кнопка будет вести на:
+https://elesnichenko1-droid.github.io/dpopcleaner-site/downloads/DPopCleaner_0.2.14_BETA.exe
+
+SHA-256 ожидаемого EXE:
+7d5e0a510189db31ef7ee1aca72dc182332a8020d994c81be40a519c5960515c

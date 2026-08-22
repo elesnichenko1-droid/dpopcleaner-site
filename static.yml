@@ -1,4 +1,4 @@
-name: Deploy static content to Pages
+name: Deploy DPopCleaner website
 
 on:
   push:
@@ -23,15 +23,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Stage public website only
+      - name: Stage public website
         run: |
-          mkdir -p _site/update
+          mkdir -p _site/update _site/downloads
           cp index.html styles.css script.js dpopcleaner-icon.png version.json .nojekyll _site/
           cp update/beta.json update/stable.json _site/update/
+          if [ -f downloads/DPopCleaner_0.2.14_BETA.exe ]; then
+            cp downloads/DPopCleaner_0.2.14_BETA.exe _site/downloads/
+          fi
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: '_site'
       - name: Deploy to GitHub Pages

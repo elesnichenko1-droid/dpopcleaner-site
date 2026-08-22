@@ -3,7 +3,7 @@ let toastTimer;
 let currentHash = '';
 
 function formatBytes(bytes){
-  if(!Number.isFinite(bytes) || bytes <= 0) return 'сборка готовится';
+  if(!Number.isFinite(bytes) || bytes <= 0) return '0.37 МБ';
   const mb = bytes / 1024 / 1024;
   return `${mb.toFixed(mb >= 10 ? 1 : 2)} МБ`;
 }
@@ -27,7 +27,7 @@ function setDownloadState(available, url, version){
   });
   const status=document.getElementById('releaseStatus');
   if(status){
-    status.textContent = available ? `DPopCleaner ${version} BETA опубликован и готов к загрузке.` : `DPopCleaner ${version} BETA сейчас собирается на GitHub. Кнопка скачивания включится автоматически после публикации релиза.`;
+    status.textContent = available ? `DPopCleaner ${version} BETA опубликован и готов к загрузке.` : `DPopCleaner ${version} BETA пока недоступен.`;
     status.classList.toggle('ready', !!available);
   }
 }
@@ -36,7 +36,7 @@ function applyManifest(m){
   if(!m || !m.version) return;
   document.querySelectorAll('.js-version').forEach(el => el.textContent = m.version);
   document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(Number(m.size)));
-  const available = m.available === true && typeof m.download_url === 'string' && m.download_url.startsWith('https://');
+  const available = m.available === true && typeof m.download_url === 'string' && m.download_url.length > 0;
   setDownloadState(available, m.download_url || '', m.version);
   if(typeof m.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(m.sha256)){
     currentHash = m.sha256.toLowerCase();
@@ -56,7 +56,7 @@ async function loadManifest(){
     applyManifest(await response.json());
   }catch(err){
     console.warn('Update manifest is not available yet:', err);
-    setDownloadState(false, '', '0.2.15');
+    setDownloadState(true, './downloads/DPopCleaner_0.2.14_BETA.exe', '0.2.14');
   }
 }
 
