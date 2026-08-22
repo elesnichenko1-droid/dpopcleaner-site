@@ -146,6 +146,8 @@ Source: "setup.ps1"; DestDir: "{app}"; DestName: "DPopCleaner.exe"
     foreach ($file in $allowedSiteFiles) {
         Set-Content -LiteralPath (Join-Path $siteFixture $file) -Value $file -Encoding utf8
     }
+    New-Item -ItemType Directory -Path (Join-Path $siteFixture 'assets') | Out-Null
+    Set-Content -LiteralPath (Join-Path $siteFixture 'assets/dpopcleaner-0.3.1-r3.png') -Value 'real screenshot fixture' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $siteFixture 'update/beta.json') -Value '{}' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $siteFixture 'update/stable.json') -Value '{}' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $siteFixture 'secret.exe') -Value 'must not deploy' -Encoding utf8
@@ -162,6 +164,7 @@ Source: "setup.ps1"; DestDir: "{app}"; DestName: "DPopCleaner.exe"
     $expectedFiles = @(
         '.nojekyll',
         'dpopcleaner-icon.png',
+        'assets/dpopcleaner-0.3.1-r3.png',
         'index.html',
         'release-manifest.js',
         'script.js',

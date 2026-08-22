@@ -8,7 +8,7 @@ function formatBytes(bytes){
   return `${mb.toFixed(mb >= 10 ? 1 : 2)} МБ`;
 }
 
-function setDownloadState(available, url, version){
+function setDownloadState(available, url, labelText, isR3){
   document.querySelectorAll('.js-download').forEach(el => {
     const label = el.querySelector('.js-download-label');
     if(available && url){
@@ -16,7 +16,7 @@ function setDownloadState(available, url, version){
       el.classList.remove('is-disabled');
       el.removeAttribute('aria-disabled');
       el.removeAttribute('data-disabled');
-      if(label) label.textContent = el.classList.contains('button-small') ? 'Скачать' : `Скачать ${version} BETA`;
+      if(label) label.textContent = el.classList.contains('button-small') ? 'Скачать' : `Скачать ${labelText}`;
     }else{
       el.href = '#release-status';
       el.classList.add('is-disabled');
@@ -27,25 +27,30 @@ function setDownloadState(available, url, version){
   });
   const status=document.getElementById('releaseStatus');
   if(status){
-    status.textContent = available ? `Чистая сборка DPopCleaner ${version} BETA R1 опубликована и готова к загрузке.` : `Чистая сборка DPopCleaner ${version} BETA R1 готовится на GitHub. Кнопка скачивания включится автоматически после проверки и публикации релиза.`;
+    status.textContent = isR3
+      ? 'DPopCleaner 0.3.1 BETA R3 опубликован, проверен и готов к загрузке.'
+      : 'DPopCleaner 0.3.1 BETA R3 проходит сборку и проверки. Пока доступен последний проверенный установщик 0.2.14 CLEAN R1.';
     status.classList.toggle('ready', !!available);
   }
 }
 
 function applyManifest(m){
-  const available = globalThis.DPopReleaseManifest?.isUsableManifest(m) === true;
-  const version = '0.2.14';
-  document.querySelectorAll('.js-version').forEach(el => el.textContent = version);
-  document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(available ? Number(m.size) : 0));
-  setDownloadState(available, available ? m.download_url : '', version);
+  const api = globalThis.DPopReleaseManifest;
+  const isR3 = api?.isUsableR3Manifest(m) === true;
+  const selected = api?.resolveDownloadManifest(m);
+  const available = Boolean(selected?.download_url);
+  const labelText = isR3 ? '0.3.1 BETA R3' : '0.2.14 CLEAN R1';
+  document.querySelectorAll('.js-download-version').forEach(el => el.textContent = labelText);
+  document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(available ? Number(selected.size) : 0));
+  setDownloadState(available, available ? selected.download_url : '', labelText, isR3);
   if(available){
-    currentHash = m.sha256.toLowerCase();
+    currentHash = selected.sha256.toLowerCase();
     const hv = document.getElementById('hashValue');
     if(hv) hv.textContent = currentHash;
   }else{
     currentHash='';
     const hv = document.getElementById('hashValue');
-    if(hv) hv.textContent = 'появится автоматически после сборки';
+    if(hv) hv.textContent = 'недоступен — релизный манифест не прошёл проверку';
   }
 }
 

@@ -39,6 +39,13 @@ foreach ($relativePath in $requiredFiles) {
     Copy-Item -LiteralPath $source -Destination $target -Force
 }
 
+$screenshot = Join-Path $rootPath 'assets/dpopcleaner-0.3.1-r3.png'
+if (Test-Path -LiteralPath $screenshot -PathType Leaf) {
+    $assetDirectory = Join-Path $destinationPath 'assets'
+    New-Item -ItemType Directory -Path $assetDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $screenshot -Destination (Join-Path $assetDirectory 'dpopcleaner-0.3.1-r3.png') -Force
+}
+
 $stableManifest = Join-Path $rootPath 'update/stable.json'
 if (Test-Path -LiteralPath $stableManifest -PathType Leaf) {
     Copy-Item -LiteralPath $stableManifest -Destination (Join-Path $destinationPath 'update/stable.json') -Force
