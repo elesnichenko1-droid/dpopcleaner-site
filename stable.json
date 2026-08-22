@@ -3,11 +3,5 @@
   "channel": "stable",
   "version": "0.0.0",
   "version_code": 0,
-  "mandatory": false,
-  "download_url": "",
-  "sha256": "",
-  "size": 0,
-  "signed": false,
-  "notes_url": "",
-  "install_args": ""
+  "available": false
 }
