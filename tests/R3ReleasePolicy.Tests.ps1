@@ -175,6 +175,30 @@ inline constexpr int kRevision = 3;
         Assert-R3InstallerDefinition -Path $autoStartInstaller
     } 'must not start Zapret'
 
+    $installerFixture = Join-Path $tempRoot 'DPopCleaner_Setup_0.3.1_BETA_R3.exe'
+    [IO.File]::WriteAllBytes($installerFixture, [Text.Encoding]::UTF8.GetBytes('r3-installer-fixture'))
+    $releaseManifest = New-R3ReleaseManifest -InstallerPath $installerFixture -Signed:$false
+    if ($releaseManifest.version -ne '0.3.1' -or $releaseManifest.version_code -ne 3013 -or $releaseManifest.revision -ne 3) {
+        throw 'creates exact R3 release identity: wrong version fields.'
+    }
+    if ($releaseManifest.download_url -ne 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.3.1-beta-r3/DPopCleaner_Setup_0.3.1_BETA_R3.exe') {
+        throw 'creates exact R3 release identity: wrong URL.'
+    }
+    if ($releaseManifest.sha256 -ne 'd586b65e3788f8d9a1267e4f3955c6ebe29d25e542703069048ff299de677f8f' -or $releaseManifest.size -ne 20) {
+        throw 'creates exact R3 artifact metadata: wrong hash or size.'
+    }
+    Assert-R3ReleaseManifest -Manifest $releaseManifest -Published
+    Write-Host 'PASS: creates and accepts exact published R3 manifest'
+
+    $badRelease = [pscustomobject][ordered]@{}
+    foreach ($property in $releaseManifest.PSObject.Properties) {
+        $badRelease | Add-Member -NotePropertyName $property.Name -NotePropertyValue $property.Value
+    }
+    $badRelease.revision = 2
+    Assert-Throws 'rejects wrong R3 release revision' {
+        Assert-R3ReleaseManifest -Manifest $badRelease -Published
+    } 'Invalid R3 release manifest'
+
     & (Join-Path $root 'scripts/Prepare-R3Source.ps1') -RepositoryRoot $root -Destination $destination
 
     $inventoryPath = Join-Path $destination 'source-inventory.json'

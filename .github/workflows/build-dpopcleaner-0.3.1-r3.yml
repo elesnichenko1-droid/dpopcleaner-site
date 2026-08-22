@@ -1,16 +1,44 @@
-name: Verify DPopCleaner 0.3.1 R3 branch
+name: Build, verify and release DPopCleaner 0.3.1 R3
 
 on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - codex/dpopcleaner-0.3.1-r3
+    paths:
+      - "*.cpp"
+      - "*.h"
+      - "*.rc"
+      - "*.manifest"
+      - "*.ico"
+      - "CMakeLists.txt"
+      - "version.rc.in"
+      - "release/DPopCleaner_0.3.1_R3.iss"
+      - "scripts/R3ReleasePolicy.psm1"
+      - "scripts/Prepare-R3Source.ps1"
+      - "scripts/Stage-R3Payload.ps1"
+      - "scripts/Capture-AppScreenshot.ps1"
+      - "tests/**"
+      - ".github/workflows/build-dpopcleaner-0.3.1-r3.yml"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: dpopcleaner-0-3-1-r3-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  R3_TAG: v0.3.1-beta-r3
+  R3_ASSET: DPopCleaner_Setup_0.3.1_BETA_R3.exe
+  ZAPRET_ARCHIVE_URL: https://github.com/Flowseal/zapret-discord-youtube/releases/download/1.10.1/zapret-discord-youtube-1.10.1.zip
+  ZAPRET_ARCHIVE_SHA256: F748D61FEC75E4EDC992CB5B09D554E914197C68C690384ACEB61F143D8F76C9
+  ZAPRET_LICENSE_URL: https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/1.10.1/LICENSE.txt
+  ZAPRET_LICENSE_SHA256: FE3983A1E91206AD1A530BCFAE01FAD207020CB61882EDD62C1E3CB5F8D5D430
 
 jobs:
-  verify:
+  build-verify:
     runs-on: windows-2022
     steps:
       - name: Checkout branch
@@ -21,6 +49,19 @@ jobs:
         run: |
           ./tests/CleanReleasePolicy.Tests.ps1
           ./tests/R3ReleasePolicy.Tests.ps1
+          ./tests/R3WorkflowPolicy.Tests.ps1
+          node --test tests/release-manifest.test.cjs tests/release-manifest-r3.test.cjs
+
+      - name: Download and verify Zapret 1.10.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path inputs | Out-Null
+          Invoke-WebRequest -Uri $env:ZAPRET_ARCHIVE_URL -OutFile inputs/zapret-1.10.1.zip
+          Invoke-WebRequest -Uri $env:ZAPRET_LICENSE_URL -OutFile inputs/zapret-LICENSE.txt
+          Import-Module ./scripts/R3ReleasePolicy.psm1 -Force
+          Assert-R3FileHash -Path inputs/zapret-1.10.1.zip -ExpectedSha256 'F748D61FEC75E4EDC992CB5B09D554E914197C68C690384ACEB61F143D8F76C9' -Description 'Zapret archive'
+          Assert-R3FileHash -Path inputs/zapret-LICENSE.txt -ExpectedSha256 'FE3983A1E91206AD1A530BCFAE01FAD207020CB61882EDD62C1E3CB5F8D5D430' -Description 'Zapret license'
 
       - name: Prepare tracked source tree
         shell: pwsh
@@ -37,3 +78,240 @@ jobs:
       - name: Run C++ tests
         shell: pwsh
         run: ctest --test-dir r3-build -C Release --output-on-failure
+
+      - name: Optionally sign application binaries
+        id: sign-apps
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "signed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
+            Write-Host 'Signing secrets are not configured; producing an unsigned BETA.'
+            exit 0
+          }
+          $certificate = Join-Path $env:RUNNER_TEMP 'dpop-r3-signing.pfx'
+          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -File -Recurse |
+            Where-Object FullName -Match '\\x64\\' | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe was not found.' }
+          foreach ($binary in @('r3-build/bin/Release/DPopCleaner.exe', 'r3-build/bin/Release/DPopUpdater.exe')) {
+            & $signtool.FullName sign /fd SHA256 /f $certificate /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $binary
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $binary" }
+          }
+          "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verify manifests versions and icons
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path evidence | Out-Null
+          $app = (Resolve-Path 'r3-build/bin/Release/DPopCleaner.exe').Path
+          $updater = (Resolve-Path 'r3-build/bin/Release/DPopUpdater.exe').Path
+          $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter mt.exe -File -Recurse |
+            Where-Object FullName -Match '\\x64\\' | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $mt) { throw 'mt.exe was not found.' }
+          & $mt.FullName "-inputresource:$app;#1" '-out:evidence/DPopCleaner.manifest.xml'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract DPopCleaner manifest.' }
+          & $mt.FullName "-inputresource:$updater;#1" '-out:evidence/DPopUpdater.manifest.xml'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract DPopUpdater manifest.' }
+          if ((Get-Content -Raw evidence/DPopCleaner.manifest.xml) -notmatch 'requireAdministrator') { throw 'DPopCleaner does not require administrator rights.' }
+          if ((Get-Content -Raw evidence/DPopUpdater.manifest.xml) -notmatch 'asInvoker') { throw 'DPopUpdater is not asInvoker.' }
+          foreach ($binary in @($app, $updater)) {
+            $info = (Get-Item -LiteralPath $binary).VersionInfo
+            if ($info.FileVersion -ne '0.3.1.3' -or $info.ProductVersion -ne '0.3.1 BETA R3') {
+              throw "Unexpected version resource in $binary: $($info.FileVersion) / $($info.ProductVersion)"
+            }
+          }
+          Add-Type -AssemblyName System.Drawing
+          function Save-AssociatedIcon([string]$binary, [string]$output) {
+            $icon = [Drawing.Icon]::ExtractAssociatedIcon($binary)
+            if (-not $icon) { throw "No associated icon in $binary" }
+            try { $icon.ToBitmap().Save($output, [Drawing.Imaging.ImageFormat]::Png) } finally { $icon.Dispose() }
+          }
+          Save-AssociatedIcon $app 'evidence/DPopCleaner-icon.png'
+          Save-AssociatedIcon $updater 'evidence/DPopUpdater-icon.png'
+          $appIconHash = (Get-FileHash evidence/DPopCleaner-icon.png -Algorithm SHA256).Hash
+          $updaterIconHash = (Get-FileHash evidence/DPopUpdater-icon.png -Algorithm SHA256).Hash
+          if ($appIconHash -ne $updaterIconHash) { throw 'Application and updater associated icons differ.' }
+          if ((Get-Item evidence/DPopCleaner-icon.png).Length -le 1000) { throw 'Associated icon looks like the generic Windows executable icon.' }
+          [pscustomobject]@{
+            application_sha256 = (Get-FileHash $app -Algorithm SHA256).Hash.ToLowerInvariant()
+            updater_sha256 = (Get-FileHash $updater -Algorithm SHA256).Hash.ToLowerInvariant()
+            icon_sha256 = $appIconHash.ToLowerInvariant()
+            signed = '${{ steps.sign-apps.outputs.signed }}'
+          } | ConvertTo-Json | Set-Content evidence/binary-report.json -Encoding utf8
+
+      - name: Stage complete R3 payload
+        shell: pwsh
+        run: |
+          ./scripts/Stage-R3Payload.ps1 `
+            -ApplicationExe r3-build/bin/Release/DPopCleaner.exe `
+            -UpdaterExe r3-build/bin/Release/DPopUpdater.exe `
+            -ZapretArchive inputs/zapret-1.10.1.zip `
+            -ZapretLicense inputs/zapret-LICENSE.txt `
+            -Destination "$PWD/r3-payload" `
+            -InventoryPath "$PWD/evidence/payload-inventory.json"
+
+      - name: Build R3 installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./scripts/R3ReleasePolicy.psm1 -Force
+          Assert-R3InstallerDefinition -Path release/DPopCleaner_0.3.1_R3.iss
+          New-Item -ItemType Directory -Path artifacts | Out-Null
+          $iscc = @('C:\Program Files (x86)\Inno Setup 6\ISCC.exe', 'C:\Program Files\Inno Setup 6\ISCC.exe') |
+            Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'Inno Setup 6 ISCC.exe was not found on the Windows runner.' }
+          & $iscc "/DSourceDir=$PWD\r3-payload" "/DZapretDir=$PWD\r3-payload\zapret" "/DIconFile=$PWD\dpopcleaner.ico" "/O$PWD\artifacts" release/DPopCleaner_0.3.1_R3.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed.' }
+          if (-not (Test-Path -LiteralPath "artifacts/$env:R3_ASSET" -PathType Leaf)) { throw 'Expected R3 installer was not produced.' }
+
+      - name: Optionally sign R3 installer
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ('${{ steps.sign-apps.outputs.signed }}' -ne 'true') { exit 0 }
+          $certificate = Join-Path $env:RUNNER_TEMP 'dpop-r3-signing.pfx'
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -File -Recurse |
+            Where-Object FullName -Match '\\x64\\' | Sort-Object FullName -Descending | Select-Object -First 1
+          & $signtool.FullName sign /fd SHA256 /f $certificate /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 "artifacts/$env:R3_ASSET"
+          if ($LASTEXITCODE -ne 0) { throw 'Installer signing failed.' }
+
+      - name: Run Defender scans
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $platform = Get-ChildItem "$env:ProgramData\Microsoft\Windows Defender\Platform" -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -First 1
+          $mp = if ($platform) { Join-Path $platform.FullName 'MpCmdRun.exe' } else { "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
+          if (-not (Test-Path -LiteralPath $mp -PathType Leaf)) { throw 'MpCmdRun.exe was not found.' }
+          $log = [Collections.Generic.List[string]]::new()
+          foreach ($target in @('r3-payload', "artifacts/$env:R3_ASSET")) {
+            $log.Add("SCAN TARGET: $target")
+            $output = & $mp -Scan -ScanType 3 -File (Resolve-Path $target).Path 2>&1
+            $exitCode = $LASTEXITCODE
+            foreach ($line in $output) { $log.Add([string]$line) }
+            $log.Add("EXIT CODE: $exitCode")
+            if ($exitCode -ne 0) { throw "Defender scan failed or detected a threat in $target (exit $exitCode)." }
+          }
+          $log | Set-Content evidence/defender-scan.txt -Encoding utf8
+
+      - name: Capture final application screenshot and verify close behavior
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $started = Get-Date
+          $capture = ./scripts/Capture-AppScreenshot.ps1 -ExecutablePath r3-build/bin/Release/DPopCleaner.exe -OutputPath evidence/dpopcleaner-0.3.1-r3.png
+          $capture | ConvertTo-Json | Set-Content evidence/screenshot-report.json -Encoding utf8
+          Start-Sleep -Seconds 7
+          $unexpected = @(Get-Process DPopCleaner,DPopUpdater -ErrorAction SilentlyContinue | Where-Object {
+            try { $_.StartTime -ge $started } catch { $false }
+          })
+          if ($unexpected.Count -gt 0) { throw "DPopCleaner close test left or relaunched processes: $($unexpected.Name -join ', ')" }
+          'PASS: closing DPopCleaner produced no DPopCleaner or DPopUpdater process.' | Set-Content evidence/close-test.txt
+
+      - name: Generate R3 release manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./scripts/R3ReleasePolicy.psm1 -Force
+          $installer = "artifacts/$env:R3_ASSET"
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          $signed = $signature.Status -eq 'Valid'
+          if ('${{ steps.sign-apps.outputs.signed }}' -eq 'true' -and -not $signed) { throw 'Configured signing did not produce a valid installer signature.' }
+          $manifest = New-R3ReleaseManifest -InstallerPath $installer -Signed:$signed
+          Assert-R3ReleaseManifest -Manifest $manifest -Published
+          $manifest | ConvertTo-Json | Set-Content evidence/release-manifest.json -Encoding utf8
+          Compress-Archive -Path evidence/* -DestinationPath artifacts/DPopCleaner_0.3.1_R3_build_evidence.zip
+
+      - name: Upload branch artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.3.1-r3-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/DPopCleaner_Setup_0.3.1_BETA_R3.exe
+            artifacts/DPopCleaner_0.3.1_R3_build_evidence.zip
+            r3-build/bin/Release/DPopCleaner.exe
+            r3-build/bin/Release/DPopUpdater.exe
+            evidence/**
+
+  release:
+    needs: build-verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout verified main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download verified build artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: dpopcleaner-0.3.1-r3-${{ github.run_id }}
+          path: release-bundle
+
+      - name: Publish immutable R3 prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "release-bundle/artifacts/$env:R3_ASSET"
+          $evidence = 'release-bundle/artifacts/DPopCleaner_0.3.1_R3_build_evidence.zip'
+          if (gh release view $env:R3_TAG --repo $env:GITHUB_REPOSITORY 2>$null) {
+            New-Item -ItemType Directory -Path existing-release | Out-Null
+            gh release download $env:R3_TAG --repo $env:GITHUB_REPOSITORY --pattern $env:R3_ASSET --dir existing-release
+            if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne (Get-FileHash "existing-release/$env:R3_ASSET" -Algorithm SHA256).Hash) {
+              throw 'The immutable R3 tag already contains different installer bytes.'
+            }
+          } else {
+            gh release create $env:R3_TAG $installer $evidence --repo $env:GITHUB_REPOSITORY --prerelease --title 'DPopCleaner 0.3.1 BETA R3' --notes 'Полная BETA-сборка: DPopCleaner, DPopUpdater и проверенный официальный Zapret 1.10.1. Служба Zapret устанавливается только вручную через Zapret Center.'
+          }
+
+      - name: Verify fresh release download
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:R3_TAG/$env:R3_ASSET"
+          Invoke-WebRequest -Uri $url -OutFile fresh-r3-installer.exe
+          $expected = Get-Content -Raw release-bundle/evidence/release-manifest.json | ConvertFrom-Json
+          if ((Get-Item fresh-r3-installer.exe).Length -ne [int64]$expected.size) { throw 'Fresh release size does not match the verified manifest.' }
+          if ((Get-FileHash fresh-r3-installer.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected.sha256) {
+            throw 'Fresh release SHA-256 does not match the verified manifest.'
+          }
+
+      - name: Commit verified site metadata
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path assets -Force | Out-Null
+          Copy-Item release-bundle/evidence/release-manifest.json update/beta.json -Force
+          Copy-Item release-bundle/evidence/dpopcleaner-0.3.1-r3.png assets/dpopcleaner-0.3.1-r3.png -Force
+          [pscustomobject][ordered]@{
+            product = 'DPopCleaner'; version = '0.3.1'; version_code = 3013; revision = 3
+            channel = 'beta'; platform = 'windows'; architecture = 'x86-64'; manifest = './update/beta.json'
+          } | ConvertTo-Json | Set-Content version.json -Encoding utf8
+          Import-Module ./scripts/R3ReleasePolicy.psm1 -Force
+          Assert-R3ReleaseManifest -Manifest (Get-Content -Raw update/beta.json | ConvertFrom-Json) -Published
+          node --test tests/release-manifest.test.cjs tests/release-manifest-r3.test.cjs
+          ./scripts/Stage-Site.ps1 -Root $PWD -Destination "$PWD/_site"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add update/beta.json version.json assets/dpopcleaner-0.3.1-r3.png
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host 'Verified R3 site metadata is already committed.'
+          } else {
+            git commit -m 'Publish DPopCleaner 0.3.1 BETA R3 manifest and screenshot'
+            git push origin HEAD:main
+          }

@@ -307,4 +307,144 @@ function Assert-R3InstallerDefinition {
     }
 }
 
-Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader, Assert-R3ResourceDefinitions, Assert-R3FileHash, Assert-R3BundleTree, Assert-R3StagedPayload, Assert-R3InstallerDefinition
+function New-R3ReleaseManifest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$InstallerPath,
+        [Parameter(Mandatory)][bool]$Signed
+    )
+
+    if (-not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) {
+        throw "R3 installer does not exist: $InstallerPath"
+    }
+    if ([IO.Path]::GetFileName($InstallerPath) -ne $script:R3Contract.AssetName) {
+        throw "Unexpected R3 installer filename: $([IO.Path]::GetFileName($InstallerPath))"
+    }
+    $item = Get-Item -LiteralPath $InstallerPath
+    if ($item.Length -le 0) { throw 'R3 installer must not be empty.' }
+
+    [pscustomobject][ordered]@{
+        product = 'DPopCleaner'
+        channel = 'beta'
+        version = '0.3.1'
+        version_code = 3013
+        revision = 3
+        mandatory = $false
+        download_url = $script:R3Contract.ReleaseUrl
+        sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $InstallerPath).Hash.ToLowerInvariant()
+        size = [int64]$item.Length
+        signed = $Signed
+        available = $true
+        notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'
+        install_args = '/SILENT /NORESTART'
+    }
+}
+
+function Assert-R3ReleaseManifest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Manifest,
+        [switch]$Published
+    )
+
+    function Read-Field([string]$Name) {
+        $property = $Manifest.PSObject.Properties[$Name]
+        if ($null -eq $property) { return $null }
+        return $property.Value
+    }
+
+    $valid =
+        (Read-Field 'product') -eq 'DPopCleaner' -and
+        (Read-Field 'channel') -eq 'beta' -and
+        (Read-Field 'version') -eq '0.3.1' -and
+        [int](Read-Field 'version_code') -eq 3013 -and
+        [int](Read-Field 'revision') -eq 3 -and
+        (Read-Field 'install_args') -eq '/SILENT /NORESTART'
+
+    if ($Published) {
+        $valid = $valid -and
+            (Read-Field 'available') -eq $true -and
+            (Read-Field 'download_url') -eq $script:R3Contract.ReleaseUrl -and
+            (Read-Field 'sha256') -is [string] -and
+            (Read-Field 'sha256') -match '^[a-f0-9]{64}$' -and
+            [int64](Read-Field 'size') -gt 0 -and
+            (Read-Field 'signed') -is [bool]
+    } else {
+        $valid = $valid -and (Read-Field 'available') -eq $false
+    }
+    if (-not $valid) { throw 'Invalid R3 release manifest.' }
+}
+
+function Assert-R3WorkflowDefinition {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "R3 workflow does not exist: $Path"
+    }
+    $content = Get-Content -Raw -LiteralPath $Path
+    if ($content -notmatch 'F748D61FEC75E4EDC992CB5B09D554E914197C68C690384ACEB61F143D8F76C9') {
+        throw 'Workflow must use the pinned Zapret archive hash.'
+    }
+    if ($content -notmatch 'FE3983A1E91206AD1A530BCFAE01FAD207020CB61882EDD62C1E3CB5F8D5D430') {
+        throw 'Workflow must use the pinned Zapret license hash.'
+    }
+    if ($content -match '(?im)Set-Content[^\r\n]*(?:\.cpp|\.h|\.rc)(?:\s|$)') {
+        throw 'Workflow must not generate C++ source or resource files.'
+    }
+
+    $requiredGates = @(
+        'Run release policy tests',
+        'Download and verify Zapret 1.10.1',
+        'Prepare tracked source tree',
+        'Build Release',
+        'Run C++ tests',
+        'Verify manifests versions and icons',
+        'Stage complete R3 payload',
+        'Build R3 installer',
+        'Run Defender scans',
+        'Generate R3 release manifest',
+        'Upload branch artifacts',
+        'Publish immutable R3 prerelease',
+        'Verify fresh release download',
+        'Commit verified site metadata'
+    )
+    $previous = -1
+    foreach ($gate in $requiredGates) {
+        $index = $content.IndexOf("name: $gate", [StringComparison]::Ordinal)
+        if ($index -lt 0) { throw "Workflow is missing required gate: $gate" }
+        if ($index -le $previous) { throw "Workflow gates are out of order at: $gate" }
+        $previous = $index
+    }
+    foreach ($required in @(
+        "if: github.ref == 'refs/heads/main'",
+        'DPopCleaner_Setup_0.3.1_BETA_R3.exe',
+        'v0.3.1-beta-r3',
+        'WINDOWS_CERT_PFX_BASE64',
+        'WINDOWS_CERT_PASSWORD',
+        'MpCmdRun.exe',
+        'scripts/Capture-AppScreenshot.ps1'
+    )) {
+        if (-not $content.Contains($required)) {
+            throw "Workflow is missing required release policy text: $required"
+        }
+    }
+}
+
+function Assert-LegacyReleaseWorkflowsManualOnly {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string[]]$Paths)
+
+    foreach ($path in $Paths) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Legacy workflow does not exist: $path"
+        }
+        $content = Get-Content -Raw -LiteralPath $path
+        if ($content -notmatch '(?m)^\s{2}workflow_dispatch:\s*$' -or
+            $content -match '(?m)^\s{2}(?:push|pull_request|schedule):\s*$') {
+            throw "Legacy release workflow must be manual-only: $path"
+        }
+    }
+}
+
+Export-ModuleMember -Function Get-R3ReleaseContract, Get-R3ZapretContract, Get-R3SourceMap, Assert-R3SourceMap, Assert-R3VersionHeader, Assert-R3ResourceDefinitions, Assert-R3FileHash, Assert-R3BundleTree, Assert-R3StagedPayload, Assert-R3InstallerDefinition, New-R3ReleaseManifest, Assert-R3ReleaseManifest, Assert-R3WorkflowDefinition, Assert-LegacyReleaseWorkflowsManualOnly

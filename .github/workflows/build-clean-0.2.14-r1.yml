@@ -2,18 +2,6 @@ name: Build CLEAN DPopCleaner 0.2.14 R1
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/build-clean-0.2.14-r1.yml
-      - release/DPopCleaner_CLEAN_R1.iss
-      - downloads/DPopCleaner_0.2.14_BETA.exe
-      - scripts/CleanReleasePolicy.psm1
-      - scripts/Stage-Site.ps1
-      - tests/CleanReleasePolicy.Tests.ps1
-      - tests/release-manifest.test.cjs
-      - release-manifest.js
 
 permissions:
   contents: write
