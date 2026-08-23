@@ -1,0 +1,237 @@
+name: Apply DPopCleaner 0.3.2 Task 8 development visual gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  task8:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify Task 7 baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          foreach ($path in @(
+            'v032/ui/pages/OverviewPage.h',
+            'v032/ui/pages/OverviewPage.cpp',
+            'v032/tests/OverviewModelTests.cpp',
+            'v032/ui/Shell.cpp'
+          )) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "Task 7 baseline missing: $path"
+            }
+          }
+
+          if (Test-Path -LiteralPath '.github/workflows/build-dpopcleaner-0.3.2-dev.yml') {
+            throw 'Task 8 dev workflow already exists.'
+          }
+
+      - name: RED - add Task 8 policy and prove dev workflow is missing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $policyPath = 'v032/tests/Ui032Policy.Tests.ps1'
+          $policy = Get-Content -Raw -LiteralPath $policyPath
+
+          if (-not $policy.Contains('# Task 8 development visual gate policy.')) {
+              $append = [Text.Encoding]::UTF8.GetString(
+                  [Convert]::FromBase64String('IyBUYXNrIDggZGV2ZWxvcG1lbnQgdmlzdWFsIGdhdGUgcG9saWN5LgokcmVwb1Jvb3QgPSBTcGxpdC1QYXRoIC1QYXJlbnQgJHJvb3QKJGRldldvcmtmbG93UGF0aCA9IEpvaW4tUGF0aCAkcmVwb1Jvb3QgJy5naXRodWIvd29ya2Zsb3dzL2J1aWxkLWRwb3BjbGVhbmVyLTAuMy4yLWRldi55bWwnCiRjYXB0dXJlMDMyUGF0aCA9IEpvaW4tUGF0aCAkcmVwb1Jvb3QgJ3NjcmlwdHMvQ2FwdHVyZS0wMzJTaGVsbC5wczEnCgppZiAoLW5vdCAoVGVzdC1QYXRoIC1MaXRlcmFsUGF0aCAkZGV2V29ya2Zsb3dQYXRoIC1QYXRoVHlwZSBMZWFmKSkgewogICAgdGhyb3cgJzAuMy4yIGRldiB3b3JrZmxvdyBpcyBtaXNzaW5nLicKfQppZiAoLW5vdCAoVGVzdC1QYXRoIC1MaXRlcmFsUGF0aCAkY2FwdHVyZTAzMlBhdGggLVBhdGhUeXBlIExlYWYpKSB7CiAgICB0aHJvdyAnMC4zLjIgc2hlbGwgY2FwdHVyZSBzY3JpcHQgaXMgbWlzc2luZy4nCn0KCiRkZXZXb3JrZmxvdyA9IEdldC1Db250ZW50IC1SYXcgLUxpdGVyYWxQYXRoICRkZXZXb3JrZmxvd1BhdGgKCmZvcmVhY2ggKCRmb3JiaWRkZW4gaW4gQCgKICAgICdnaCByZWxlYXNlIGNyZWF0ZScsCiAgICAndXBkYXRlL2JldGEuanNvbicsCiAgICAnZGVwbG95LXBhZ2VzJywKICAgICdnaXQgcHVzaCcsCiAgICAnSW5ubyBTZXR1cCcsCiAgICAnSVNDQy5leGUnLAogICAgJ1N0YXJ0LU1wU2NhbicsCiAgICAnSW52b2tlLVdlYlJlcXVlc3QnCikpIHsKICAgIGlmICgkZGV2V29ya2Zsb3cuQ29udGFpbnMoJGZvcmJpZGRlbikpIHsKICAgICAgICB0aHJvdyAiRGV2IHdvcmtmbG93IG11c3Qgbm90IHB1Ymxpc2gvZG93bmxvYWQvcGFja2FnZTogJGZvcmJpZGRlbiIKICAgIH0KfQoKZm9yZWFjaCAoJHJlcXVpcmVkIGluIEAoCiAgICAnd29ya2Zsb3dfZGlzcGF0Y2gnLAogICAgJ3dpbmRvd3MtMjAyMicsCiAgICAnUHJlcGFyZS0wMzJTb3VyY2UucHMxJywKICAgICdjdGVzdCcsCiAgICAnQ2FwdHVyZS0wMzJTaGVsbC5wczEnLAogICAgJ0RQb3BDbGVhbmVyLmV4ZScsCiAgICAnRFBvcFVwZGF0ZXIuZXhlJywKICAgICdkZWZhdWx0LTEyMDB4ODUwLnBuZycsCiAgICAnbWluaW11bS0xMTAweDcwMC5wbmcnLAogICAgJ21heGltaXplZC5wbmcnLAogICAgJ2NhcHR1cmUtcmVwb3J0Lmpzb24nLAogICAgJ3YwMzItb3ZlcmxheS1pbnZlbnRvcnkuanNvbicsCiAgICAnYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAdjQnCikpIHsKICAgIGlmICgtbm90ICRkZXZXb3JrZmxvdy5Db250YWlucygkcmVxdWlyZWQpKSB7CiAgICAgICAgdGhyb3cgIkRldiB3b3JrZmxvdyByZXF1aXJlbWVudCBtaXNzaW5nOiAkcmVxdWlyZWQiCiAgICB9Cn0KCiRjYXB0dXJlMDMyID0gR2V0LUNvbnRlbnQgLVJhdyAtTGl0ZXJhbFBhdGggJGNhcHR1cmUwMzJQYXRoCmZvcmVhY2ggKCRyZXF1aXJlZCBpbiBAKAogICAgJ0NsaWVudFdpZHRoIDEyMDAnLAogICAgJ0NsaWVudEhlaWdodCA4NTAnLAogICAgJ0NsaWVudFdpZHRoIDExMDAnLAogICAgJ0NsaWVudEhlaWdodCA3MDAnLAogICAgJ1NXX01BWElNSVpFJywKICAgICdXTV9DTE9TRScsCiAgICAnZ3JhY2VmdWxfY2xvc2UnLAogICAgJ2NhcHR1cmUtcmVwb3J0Lmpzb24nCikpIHsKICAgIGlmICgtbm90ICRjYXB0dXJlMDMyLkNvbnRhaW5zKCRyZXF1aXJlZCkpIHsKICAgICAgICB0aHJvdyAiQ2FwdHVyZS0wMzJTaGVsbCByZXF1aXJlbWVudCBtaXNzaW5nOiAkcmVxdWlyZWQiCiAgICB9Cn0K')
+              )
+
+              $marker = "'Ui032Policy PASS'"
+              if (-not $policy.Contains($marker)) {
+                  throw 'Ui032Policy PASS marker missing.'
+              }
+
+              $policy = $policy.Replace(
+                  $marker,
+                  $append + "`r`n" + $marker
+              )
+
+              Set-Content `
+                  -LiteralPath $policyPath `
+                  -Value $policy `
+                  -Encoding utf8
+          }
+
+          $failed = $false
+          $failureText = ''
+
+          try {
+              ./v032/tests/Ui032Policy.Tests.ps1
+          } catch {
+              $failed = $true
+              $failureText = $_ | Out-String
+          }
+
+          if (-not $failed) {
+              throw 'RED unexpectedly passed before dev workflow exists.'
+          }
+
+          if ($failureText -notmatch '0\.3\.2 dev workflow is missing') {
+              throw "RED failed for an unrelated reason:`n$failureText"
+          }
+
+          Write-Host 'RED PASS: Task 8 policy correctly requires the missing dev workflow.'
+          exit 0
+
+      - name: GREEN - create capture script and permanent dev workflow
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Write-B64([string]$Path,[string]$Data) {
+              $dir = Split-Path -Parent $Path
+              if ($dir) {
+                  New-Item -ItemType Directory -Path $dir -Force | Out-Null
+              }
+              [IO.File]::WriteAllBytes(
+                  $Path,
+                  [Convert]::FromBase64String($Data)
+              )
+          }
+
+          Write-B64 `
+              'scripts/Capture-032Shell.ps1' `
+              'W0NtZGxldEJpbmRpbmcoKV0KcGFyYW0oCiAgICBbUGFyYW1ldGVyKE1hbmRhdG9yeSldW3N0cmluZ10kRXhlY3V0YWJsZVBhdGgsCiAgICBbUGFyYW1ldGVyKE1hbmRhdG9yeSldW3N0cmluZ10kT3V0cHV0RGlyZWN0b3J5LAogICAgW2ludF0kVGltZW91dFNlY29uZHMgPSAzMAopCgokRXJyb3JBY3Rpb25QcmVmZXJlbmNlID0gJ1N0b3AnClNldC1TdHJpY3RNb2RlIC1WZXJzaW9uIExhdGVzdAoKaWYgKC1ub3QgKFRlc3QtUGF0aCAtTGl0ZXJhbFBhdGggJEV4ZWN1dGFibGVQYXRoIC1QYXRoVHlwZSBMZWFmKSkgewogICAgdGhyb3cgIkFwcGxpY2F0aW9uIGV4ZWN1dGFibGUgZG9lcyBub3QgZXhpc3Q6ICRFeGVjdXRhYmxlUGF0aCIKfQoKJEV4ZWN1dGFibGVQYXRoID0gKFJlc29sdmUtUGF0aCAtTGl0ZXJhbFBhdGggJEV4ZWN1dGFibGVQYXRoKS5QYXRoCk5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggJE91dHB1dERpcmVjdG9yeSAtRm9yY2UgfCBPdXQtTnVsbAokT3V0cHV0RGlyZWN0b3J5ID0gKFJlc29sdmUtUGF0aCAtTGl0ZXJhbFBhdGggJE91dHB1dERpcmVjdG9yeSkuUGF0aAoKQWRkLVR5cGUgLUFzc2VtYmx5TmFtZSBTeXN0ZW0uRHJhd2luZwoKaWYgKC1ub3QgKCdEUG9wMDMyV2luZG93Q2FwdHVyZScgLWFzIFt0eXBlXSkpIHsKICAgIEFkZC1UeXBlIEAnCnVzaW5nIFN5c3RlbTsKdXNpbmcgU3lzdGVtLlJ1bnRpbWUuSW50ZXJvcFNlcnZpY2VzOwoKcHVibGljIHN0YXRpYyBjbGFzcyBEUG9wMDMyV2luZG93Q2FwdHVyZQp7CiAgICBbU3RydWN0TGF5b3V0KExheW91dEtpbmQuU2VxdWVudGlhbCldCiAgICBwdWJsaWMgc3RydWN0IFJFQ1QKICAgIHsKICAgICAgICBwdWJsaWMgaW50IExlZnQ7CiAgICAgICAgcHVibGljIGludCBUb3A7CiAgICAgICAgcHVibGljIGludCBSaWdodDsKICAgICAgICBwdWJsaWMgaW50IEJvdHRvbTsKICAgIH0KCiAgICBbRGxsSW1wb3J0KCJ1c2VyMzIuZGxsIiwgU2V0TGFzdEVycm9yPXRydWUpXQogICAgcHVibGljIHN0YXRpYyBleHRlcm4gYm9vbCBHZXRXaW5kb3dSZWN0KAogICAgICAgIEludFB0ciBoV25kLAogICAgICAgIG91dCBSRUNUIHJlY3QKICAgICk7CgogICAgW0RsbEltcG9ydCgidXNlcjMyLmRsbCIsIFNldExhc3RFcnJvcj10cnVlKV0KICAgIHB1YmxpYyBzdGF0aWMgZXh0ZXJuIGJvb2wgR2V0Q2xpZW50UmVjdCgKICAgICAgICBJbnRQdHIgaFduZCwKICAgICAgICBvdXQgUkVDVCByZWN0CiAgICApOwoKICAgIFtEbGxJbXBvcnQoInVzZXIzMi5kbGwiLCBTZXRMYXN0RXJyb3I9dHJ1ZSldCiAgICBwdWJsaWMgc3RhdGljIGV4dGVybiBib29sIFByaW50V2luZG93KAogICAgICAgIEludFB0ciBoV25kLAogICAgICAgIEludFB0ciBoZGMsCiAgICAgICAgdWludCBmbGFncwogICAgKTsKCiAgICBbRGxsSW1wb3J0KCJ1c2VyMzIuZGxsIiwgU2V0TGFzdEVycm9yPXRydWUpXQogICAgcHVibGljIHN0YXRpYyBleHRlcm4gYm9vbCBNb3ZlV2luZG93KAogICAgICAgIEludFB0ciBoV25kLAogICAgICAgIGludCB4LAogICAgICAgIGludCB5LAogICAgICAgIGludCB3aWR0aCwKICAgICAgICBpbnQgaGVpZ2h0LAogICAgICAgIGJvb2wgcmVwYWludAogICAgKTsKCiAgICBbRGxsSW1wb3J0KCJ1c2VyMzIuZGxsIildCiAgICBwdWJsaWMgc3RhdGljIGV4dGVybiBib29sIFNob3dXaW5kb3coCiAgICAgICAgSW50UHRyIGhXbmQsCiAgICAgICAgaW50IGNvbW1hbmQKICAgICk7CgogICAgW0RsbEltcG9ydCgidXNlcjMyLmRsbCIpXQogICAgcHVibGljIHN0YXRpYyBleHRlcm4gSW50UHRyIFNlbmRNZXNzYWdlKAogICAgICAgIEludFB0ciBoV25kLAogICAgICAgIHVpbnQgbWVzc2FnZSwKICAgICAgICBJbnRQdHIgd1BhcmFtLAogICAgICAgIEludFB0ciBsUGFyYW0KICAgICk7CgogICAgW0RsbEltcG9ydCgidXNlcjMyLmRsbCIpXQogICAgcHVibGljIHN0YXRpYyBleHRlcm4gSW50UHRyIEdldFdpbmRvd0xvbmdQdHIoCiAgICAgICAgSW50UHRyIGhXbmQsCiAgICAgICAgaW50IGluZGV4CiAgICApOwoKICAgIFtEbGxJbXBvcnQoInVzZXIzMi5kbGwiKV0KICAgIHB1YmxpYyBzdGF0aWMgZXh0ZXJuIHVpbnQgR2V0RHBpRm9yV2luZG93KAogICAgICAgIEludFB0ciBoV25kCiAgICApOwoKICAgIFtEbGxJbXBvcnQoInVzZXIzMi5kbGwiLCBTZXRMYXN0RXJyb3I9dHJ1ZSldCiAgICBwdWJsaWMgc3RhdGljIGV4dGVybiBib29sIEFkanVzdFdpbmRvd1JlY3RFeEZvckRwaSgKICAgICAgICByZWYgUkVDVCByZWN0LAogICAgICAgIHVpbnQgc3R5bGUsCiAgICAgICAgYm9vbCBoYXNNZW51LAogICAgICAgIHVpbnQgZXhTdHlsZSwKICAgICAgICB1aW50IGRwaQogICAgKTsKfQonQAp9CgokU1dfUkVTVE9SRSA9IDkKJFNXX01BWElNSVpFID0gMwokR1dMX1NUWUxFID0gLTE2CiRHV0xfRVhTVFlMRSA9IC0yMAokV01fQ0xPU0UgPSAweDAwMTAKCmZ1bmN0aW9uIEdldC1XaW5kb3dNZXRyaWNzIHsKICAgIHBhcmFtKAogICAgICAgIFtQYXJhbWV0ZXIoTWFuZGF0b3J5KV1bSW50UHRyXSRIYW5kbGUKICAgICkKCiAgICAkd2luZG93ID0gTmV3LU9iamVjdCBEUG9wMDMyV2luZG93Q2FwdHVyZStSRUNUCiAgICBpZiAoLW5vdCBbRFBvcDAzMldpbmRvd0NhcHR1cmVdOjpHZXRXaW5kb3dSZWN0KAogICAgICAgICAgICAkSGFuZGxlLAogICAgICAgICAgICBbcmVmXSR3aW5kb3cKICAgICAgICApKSB7CiAgICAgICAgdGhyb3cgJ0dldFdpbmRvd1JlY3QgZmFpbGVkLicKICAgIH0KCiAgICAkY2xpZW50ID0gTmV3LU9iamVjdCBEUG9wMDMyV2luZG93Q2FwdHVyZStSRUNUCiAgICBpZiAoLW5vdCBbRFBvcDAzMldpbmRvd0NhcHR1cmVdOjpHZXRDbGllbnRSZWN0KAogICAgICAgICAgICAkSGFuZGxlLAogICAgICAgICAgICBbcmVmXSRjbGllbnQKICAgICAgICApKSB7CiAgICAgICAgdGhyb3cgJ0dldENsaWVudFJlY3QgZmFpbGVkLicKICAgIH0KCiAgICBbcHNjdXN0b21vYmplY3RdQHsKICAgICAgICBsZWZ0ID0gJHdpbmRvdy5MZWZ0CiAgICAgICAgdG9wID0gJHdpbmRvdy5Ub3AKICAgICAgICB3aWR0aCA9ICR3aW5kb3cuUmlnaHQgLSAkd2luZG93LkxlZnQKICAgICAgICBoZWlnaHQgPSAkd2luZG93LkJvdHRvbSAtICR3aW5kb3cuVG9wCiAgICAgICAgY2xpZW50X3dpZHRoID0gJGNsaWVudC5SaWdodCAtICRjbGllbnQuTGVmdAogICAgICAgIGNsaWVudF9oZWlnaHQgPSAkY2xpZW50LkJvdHRvbSAtICRjbGllbnQuVG9wCiAgICB9Cn0KCmZ1bmN0aW9uIFJlc2l6ZS1DbGllbnRXaW5kb3cgewogICAgcGFyYW0oCiAgICAgICAgW1BhcmFtZXRlcihNYW5kYXRvcnkpXVtJbnRQdHJdJEhhbmRsZSwKICAgICAgICBbUGFyYW1ldGVyKE1hbmRhdG9yeSldW2ludF0kQ2xpZW50V2lkdGgsCiAgICAgICAgW1BhcmFtZXRlcihNYW5kYXRvcnkpXVtpbnRdJENsaWVudEhlaWdodAogICAgKQoKICAgIFtEUG9wMDMyV2luZG93Q2FwdHVyZV06OlNob3dXaW5kb3coCiAgICAgICAgJEhhbmRsZSwKICAgICAgICAkU1dfUkVTVE9SRQogICAgKSB8IE91dC1OdWxsCgogICAgU3RhcnQtU2xlZXAgLU1pbGxpc2Vjb25kcyAzNTAKCiAgICAkY3VycmVudCA9IEdldC1XaW5kb3dNZXRyaWNzIC1IYW5kbGUgJEhhbmRsZQoKICAgICRzdHlsZSA9IFt1aW50MzJdKAogICAgICAgIFtEUG9wMDMyV2luZG93Q2FwdHVyZV06OkdldFdpbmRvd0xvbmdQdHIoCiAgICAgICAgICAgICRIYW5kbGUsCiAgICAgICAgICAgICRHV0xfU1RZTEUKICAgICAgICApLlRvSW50NjQoKSAtYmFuZCAweGZmZmZmZmZmTAogICAgKQoKICAgICRleFN0eWxlID0gW3VpbnQzMl0oCiAgICAgICAgW0RQb3AwMzJXaW5kb3dDYXB0dXJlXTo6R2V0V2luZG93TG9uZ1B0cigKICAgICAgICAgICAgJEhhbmRsZSwKICAgICAgICAgICAgJEdXTF9FWFNUWUxFCiAgICAgICAgKS5Ub0ludDY0KCkgLWJhbmQgMHhmZmZmZmZmZkwKICAgICkKCiAgICAkZHBpID0gW0RQb3AwMzJXaW5kb3dDYXB0dXJlXTo6R2V0RHBpRm9yV2luZG93KCRIYW5kbGUpCiAgICBpZiAoJGRwaSAtZXEgMCkgewogICAgICAgICRkcGkgPSA5NgogICAgfQoKICAgICRyZWN0ID0gTmV3LU9iamVjdCBEUG9wMDMyV2luZG93Q2FwdHVyZStSRUNUCiAgICAkcmVjdC5MZWZ0ID0gMAogICAgJHJlY3QuVG9wID0gMAogICAgJHJlY3QuUmlnaHQgPSAkQ2xpZW50V2lkdGgKICAgICRyZWN0LkJvdHRvbSA9ICRDbGllbnRIZWlnaHQKCiAgICBpZiAoLW5vdCBbRFBvcDAzMldpbmRvd0NhcHR1cmVdOjpBZGp1c3RXaW5kb3dSZWN0RXhGb3JEcGkoCiAgICAgICAgICAgIFtyZWZdJHJlY3QsCiAgICAgICAgICAgICRzdHlsZSwKICAgICAgICAgICAgJGZhbHNlLAogICAgICAgICAgICAkZXhTdHlsZSwKICAgICAgICAgICAgJGRwaQogICAgICAgICkpIHsKICAgICAgICB0aHJvdyAnQWRqdXN0V2luZG93UmVjdEV4Rm9yRHBpIGZhaWxlZC4nCiAgICB9CgogICAgJG91dGVyV2lkdGggPSAkcmVjdC5SaWdodCAtICRyZWN0LkxlZnQKICAgICRvdXRlckhlaWdodCA9ICRyZWN0LkJvdHRvbSAtICRyZWN0LlRvcAoKICAgIGlmICgtbm90IFtEUG9wMDMyV2luZG93Q2FwdHVyZV06Ok1vdmVXaW5kb3coCiAgICAgICAgICAgICRIYW5kbGUsCiAgICAgICAgICAgICRjdXJyZW50LmxlZnQsCiAgICAgICAgICAgICRjdXJyZW50LnRvcCwKICAgICAgICAgICAgJG91dGVyV2lkdGgsCiAgICAgICAgICAgICRvdXRlckhlaWdodCwKICAgICAgICAgICAgJHRydWUKICAgICAgICApKSB7CiAgICAgICAgdGhyb3cgIk1vdmVXaW5kb3cgZmFpbGVkIGZvciAke0NsaWVudFdpZHRofXgke0NsaWVudEhlaWdodH0gY2xpZW50LiIKICAgIH0KCiAgICBTdGFydC1TbGVlcCAtTWlsbGlzZWNvbmRzIDY1MAp9CgpmdW5jdGlvbiBDYXB0dXJlLVdpbmRvdyB7CiAgICBwYXJhbSgKICAgICAgICBbUGFyYW1ldGVyKE1hbmRhdG9yeSldW0ludFB0cl0kSGFuZGxlLAogICAgICAgIFtQYXJhbWV0ZXIoTWFuZGF0b3J5KV1bc3RyaW5nXSROYW1lCiAgICApCgogICAgJG1ldHJpY3MgPSBHZXQtV2luZG93TWV0cmljcyAtSGFuZGxlICRIYW5kbGUKCiAgICBpZiAoJG1ldHJpY3Mud2lkdGggLWx0IDgwMCAtb3IgJG1ldHJpY3MuaGVpZ2h0IC1sdCA1MDApIHsKICAgICAgICB0aHJvdyAiVW5leHBlY3RlZCB3aW5kb3cgc2l6ZSB3aGlsZSBjYXB0dXJpbmcgJHtOYW1lfTogJCgkbWV0cmljcy53aWR0aCl4JCgkbWV0cmljcy5oZWlnaHQpIgogICAgfQoKICAgICRwYXRoID0gSm9pbi1QYXRoICRPdXRwdXREaXJlY3RvcnkgIiR7TmFtZX0ucG5nIgoKICAgICRiaXRtYXAgPSBbRHJhd2luZy5CaXRtYXBdOjpuZXcoCiAgICAgICAgJG1ldHJpY3Mud2lkdGgsCiAgICAgICAgJG1ldHJpY3MuaGVpZ2h0LAogICAgICAgIFtEcmF3aW5nLkltYWdpbmcuUGl4ZWxGb3JtYXRdOjpGb3JtYXQzMmJwcEFyZ2IKICAgICkKCiAgICB0cnkgewogICAgICAgICRncmFwaGljcyA9IFtEcmF3aW5nLkdyYXBoaWNzXTo6RnJvbUltYWdlKCRiaXRtYXApCiAgICAgICAgdHJ5IHsKICAgICAgICAgICAgJGhkYyA9ICRncmFwaGljcy5HZXRIZGMoKQogICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICAgaWYgKC1ub3QgW0RQb3AwMzJXaW5kb3dDYXB0dXJlXTo6UHJpbnRXaW5kb3coCiAgICAgICAgICAgICAgICAgICAgICAgICRIYW5kbGUsCiAgICAgICAgICAgICAgICAgICAgICAgICRoZGMsCiAgICAgICAgICAgICAgICAgICAgICAgIDIKICAgICAgICAgICAgICAgICAgICApKSB7CiAgICAgICAgICAgICAgICAgICAgdGhyb3cgIlByaW50V2luZG93IGZhaWxlZCBmb3IgJHtOYW1lfS4iCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0gZmluYWxseSB7CiAgICAgICAgICAgICAgICAkZ3JhcGhpY3MuUmVsZWFzZUhkYygkaGRjKQogICAgICAgICAgICB9CiAgICAgICAgfSBmaW5hbGx5IHsKICAgICAgICAgICAgJGdyYXBoaWNzLkRpc3Bvc2UoKQogICAgICAgIH0KCiAgICAgICAgJGJpdG1hcC5TYXZlKAogICAgICAgICAgICAkcGF0aCwKICAgICAgICAgICAgW0RyYXdpbmcuSW1hZ2luZy5JbWFnZUZvcm1hdF06OlBuZwogICAgICAgICkKICAgIH0gZmluYWxseSB7CiAgICAgICAgJGJpdG1hcC5EaXNwb3NlKCkKICAgIH0KCiAgICAkZmlsZSA9IEdldC1JdGVtIC1MaXRlcmFsUGF0aCAkcGF0aAogICAgaWYgKCRmaWxlLkxlbmd0aCAtbGUgMTAwMDApIHsKICAgICAgICB0aHJvdyAiQ2FwdHVyZWQgc2NyZWVuc2hvdCBpcyB1bmV4cGVjdGVkbHkgc21hbGw6ICROYW1lIgogICAgfQoKICAgIFtvcmRlcmVkXUB7CiAgICAgICAgZmlsZSA9ICRmaWxlLk5hbWUKICAgICAgICBzaGEyNTYgPSAoCiAgICAgICAgICAgIEdldC1GaWxlSGFzaCAtQWxnb3JpdGhtIFNIQTI1NiAtTGl0ZXJhbFBhdGggJHBhdGgKICAgICAgICApLkhhc2guVG9Mb3dlckludmFyaWFudCgpCiAgICAgICAgd2lkdGggPSAkbWV0cmljcy53aWR0aAogICAgICAgIGhlaWdodCA9ICRtZXRyaWNzLmhlaWdodAogICAgICAgIGNsaWVudF93aWR0aCA9ICRtZXRyaWNzLmNsaWVudF93aWR0aAogICAgICAgIGNsaWVudF9oZWlnaHQgPSAkbWV0cmljcy5jbGllbnRfaGVpZ2h0CiAgICAgICAgYnl0ZXMgPSAkZmlsZS5MZW5ndGgKICAgIH0KfQoKJHByb2Nlc3MgPSAkbnVsbAokcmVwb3J0ID0gW29yZGVyZWRdQHsKICAgIGV4ZWN1dGFibGUgPSAkRXhlY3V0YWJsZVBhdGgKICAgIGV4ZWN1dGFibGVfc2hhMjU2ID0gKAogICAgICAgIEdldC1GaWxlSGFzaCAtQWxnb3JpdGhtIFNIQTI1NiAtTGl0ZXJhbFBhdGggJEV4ZWN1dGFibGVQYXRoCiAgICApLkhhc2guVG9Mb3dlckludmFyaWFudCgpCiAgICBkZWZhdWx0ID0gJG51bGwKICAgIG1pbmltdW0gPSAkbnVsbAogICAgbWF4aW1pemVkID0gJG51bGwKICAgIGdyYWNlZnVsX2Nsb3NlID0gJGZhbHNlCn0KCnRyeSB7CiAgICAkcHJvY2VzcyA9IFN0YXJ0LVByb2Nlc3MgYAogICAgICAgIC1GaWxlUGF0aCAkRXhlY3V0YWJsZVBhdGggYAogICAgICAgIC1QYXNzVGhydQoKICAgICRkZWFkbGluZSA9IChHZXQtRGF0ZSkuQWRkU2Vjb25kcygkVGltZW91dFNlY29uZHMpCgogICAgZG8gewogICAgICAgIFN0YXJ0LVNsZWVwIC1NaWxsaXNlY29uZHMgMjUwCiAgICAgICAgJHByb2Nlc3MuUmVmcmVzaCgpCgogICAgICAgIGlmICgkcHJvY2Vzcy5IYXNFeGl0ZWQpIHsKICAgICAgICAgICAgdGhyb3cgIkRQb3BDbGVhbmVyIGV4aXRlZCBiZWZvcmUgaXRzIHdpbmRvdyBhcHBlYXJlZCAoZXhpdCAkKCRwcm9jZXNzLkV4aXRDb2RlKSkuIgogICAgICAgIH0KICAgIH0gd2hpbGUgKAogICAgICAgICRwcm9jZXNzLk1haW5XaW5kb3dIYW5kbGUgLWVxIDAgLWFuZAogICAgICAgIChHZXQtRGF0ZSkgLWx0ICRkZWFkbGluZQogICAgKQoKICAgIGlmICgkcHJvY2Vzcy5NYWluV2luZG93SGFuZGxlIC1lcSAwKSB7CiAgICAgICAgdGhyb3cgJ1RpbWVkIG91dCB3YWl0aW5nIGZvciBEUG9wQ2xlYW5lciBtYWluIHdpbmRvdy4nCiAgICB9CgogICAgJGhhbmRsZSA9IFtJbnRQdHJdJHByb2Nlc3MuTWFpbldpbmRvd0hhbmRsZQoKICAgIFJlc2l6ZS1DbGllbnRXaW5kb3cgYAogICAgICAgIC1IYW5kbGUgJGhhbmRsZSBgCiAgICAgICAgLUNsaWVudFdpZHRoIDEyMDAgYAogICAgICAgIC1DbGllbnRIZWlnaHQgODUwCgogICAgJHJlcG9ydC5kZWZhdWx0ID0gQ2FwdHVyZS1XaW5kb3cgYAogICAgICAgIC1IYW5kbGUgJGhhbmRsZSBgCiAgICAgICAgLU5hbWUgJ2RlZmF1bHQtMTIwMHg4NTAnCgogICAgUmVzaXplLUNsaWVudFdpbmRvdyBgCiAgICAgICAgLUhhbmRsZSAkaGFuZGxlIGAKICAgICAgICAtQ2xpZW50V2lkdGggMTEwMCBgCiAgICAgICAgLUNsaWVudEhlaWdodCA3MDAKCiAgICAkcmVwb3J0Lm1pbmltdW0gPSBDYXB0dXJlLVdpbmRvdyBgCiAgICAgICAgLUhhbmRsZSAkaGFuZGxlIGAKICAgICAgICAtTmFtZSAnbWluaW11bS0xMTAweDcwMCcKCiAgICBbRFBvcDAzMldpbmRvd0NhcHR1cmVdOjpTaG93V2luZG93KAogICAgICAgICRoYW5kbGUsCiAgICAgICAgJFNXX01BWElNSVpFCiAgICApIHwgT3V0LU51bGwKCiAgICBTdGFydC1TbGVlcCAtTWlsbGlzZWNvbmRzIDc1MAoKICAgICRyZXBvcnQubWF4aW1pemVkID0gQ2FwdHVyZS1XaW5kb3cgYAogICAgICAgIC1IYW5kbGUgJGhhbmRsZSBgCiAgICAgICAgLU5hbWUgJ21heGltaXplZCcKCiAgICBbRFBvcDAzMldpbmRvd0NhcHR1cmVdOjpTZW5kTWVzc2FnZSgKICAgICAgICAkaGFuZGxlLAogICAgICAgICRXTV9DTE9TRSwKICAgICAgICBbSW50UHRyXTo6WmVybywKICAgICAgICBbSW50UHRyXTo6WmVybwogICAgKSB8IE91dC1OdWxsCgogICAgaWYgKC1ub3QgJHByb2Nlc3MuV2FpdEZvckV4aXQoMTAwMDApKSB7CiAgICAgICAgdGhyb3cgJ0RQb3BDbGVhbmVyIGRpZCBub3QgZXhpdCB3aXRoaW4gMTAgc2Vjb25kcyBhZnRlciBXTV9DTE9TRS4nCiAgICB9CgogICAgJHJlcG9ydC5ncmFjZWZ1bF9jbG9zZSA9ICR0cnVlCn0gZmluYWxseSB7CiAgICBpZiAoJG51bGwgLW5lICRwcm9jZXNzIC1hbmQgLW5vdCAkcHJvY2Vzcy5IYXNFeGl0ZWQpIHsKICAgICAgICBTdG9wLVByb2Nlc3MgLUlkICRwcm9jZXNzLklkIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQogICAgfQp9CgokcmVwb3J0UGF0aCA9IEpvaW4tUGF0aCAkT3V0cHV0RGlyZWN0b3J5ICdjYXB0dXJlLXJlcG9ydC5qc29uJwpbcHNjdXN0b21vYmplY3RdJHJlcG9ydCB8CiAgICBDb252ZXJ0VG8tSnNvbiAtRGVwdGggOCB8CiAgICBTZXQtQ29udGVudCAtTGl0ZXJhbFBhdGggJHJlcG9ydFBhdGggLUVuY29kaW5nIHV0ZjgKCltwc2N1c3RvbW9iamVjdF0kcmVwb3J0Cg=='
+
+          Write-B64 `
+              '.github/workflows/build-dpopcleaner-0.3.2-dev.yml' `
+              'bmFtZTogQnVpbGQgRFBvcENsZWFuZXIgMC4zLjIgZGV2ZWxvcG1lbnQgY2FuZGlkYXRlCgpvbjoKICB3b3JrZmxvd19kaXNwYXRjaDoKCnBlcm1pc3Npb25zOgogIGNvbnRlbnRzOiByZWFkCgpjb25jdXJyZW5jeToKICBncm91cDogZHBvcGNsZWFuZXItMC0zLTItZGV2ZWxvcG1lbnQKICBjYW5jZWwtaW4tcHJvZ3Jlc3M6IGZhbHNlCgpqb2JzOgogIGJ1aWxkLXZpc3VhbC1nYXRlOgogICAgcnVucy1vbjogd2luZG93cy0yMDIyCgogICAgc3RlcHM6CiAgICAgIC0gbmFtZTogQ2hlY2tvdXQgbWFpbgogICAgICAgIHVzZXM6IGFjdGlvbnMvY2hlY2tvdXRAdjUKICAgICAgICB3aXRoOgogICAgICAgICAgcmVmOiBtYWluCiAgICAgICAgICBmZXRjaC1kZXB0aDogMAoKICAgICAgLSBuYW1lOiBCYXNlbGluZSBzb3VyY2UgYW5kIHJlbGVhc2UgcG9saWN5IHRlc3RzCiAgICAgICAgc2hlbGw6IHB3c2gKICAgICAgICBydW46IHwKICAgICAgICAgICRFcnJvckFjdGlvblByZWZlcmVuY2UgPSAnU3RvcCcKICAgICAgICAgIC4vdGVzdHMvQ2xlYW5SZWxlYXNlUG9saWN5LlRlc3RzLnBzMQogICAgICAgICAgLi90ZXN0cy9SM1JlbGVhc2VQb2xpY3kuVGVzdHMucHMxCiAgICAgICAgICAuL3Rlc3RzL1IzV29ya2Zsb3dQb2xpY3kuVGVzdHMucHMxCiAgICAgICAgICBub2RlIC0tdGVzdCB0ZXN0cy9yZWxlYXNlLW1hbmlmZXN0LnRlc3QuY2pzIHRlc3RzL3JlbGVhc2UtbWFuaWZlc3QtcjMudGVzdC5janMKCiAgICAgIC0gbmFtZTogVmVyaWZ5IDAuMy4yIFVJIHBvbGljeQogICAgICAgIHNoZWxsOiBwd3NoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICAkRXJyb3JBY3Rpb25QcmVmZXJlbmNlID0gJ1N0b3AnCiAgICAgICAgICAuL3YwMzIvdGVzdHMvVWkwMzJQb2xpY3kuVGVzdHMucHMxCgogICAgICAtIG5hbWU6IFByZXBhcmUgMC4zLjIgc291cmNlIG92ZXJsYXkKICAgICAgICBzaGVsbDogcHdzaAogICAgICAgIHJ1bjogfAogICAgICAgICAgJEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdTdG9wJwogICAgICAgICAgUmVtb3ZlLUl0ZW0gZGV2MDMyLXNyYyxkZXYwMzItYnVpbGQsZGV2MDMyLWV2aWRlbmNlIC1SZWN1cnNlIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQogICAgICAgICAgLi9zY3JpcHRzL1ByZXBhcmUtMDMyU291cmNlLnBzMSBgCiAgICAgICAgICAgIC1SZXBvc2l0b3J5Um9vdCAkUFdEIGAKICAgICAgICAgICAgLURlc3RpbmF0aW9uICIkUFdEL2RldjAzMi1zcmMiCgogICAgICAgICAgaWYgKC1ub3QgKFRlc3QtUGF0aCAnZGV2MDMyLXNyYy92MDMyLW92ZXJsYXktaW52ZW50b3J5Lmpzb24nKSkgewogICAgICAgICAgICB0aHJvdyAndjAzMiBvdmVybGF5IGludmVudG9yeSB3YXMgbm90IGdlbmVyYXRlZC4nCiAgICAgICAgICB9CgogICAgICAtIG5hbWU6IENvbmZpZ3VyZSBDTWFrZSB4NjQKICAgICAgICBzaGVsbDogcHdzaAogICAgICAgIHJ1bjogfAogICAgICAgICAgJEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdTdG9wJwogICAgICAgICAgY21ha2UgLVMgZGV2MDMyLXNyYyAtQiBkZXYwMzItYnVpbGQgLUEgeDY0IC1EQlVJTERfVEVTVElORz1PTgogICAgICAgICAgaWYgKCRMQVNURVhJVENPREUgLW5lIDApIHsKICAgICAgICAgICAgdGhyb3cgJ0NNYWtlIGNvbmZpZ3VyZSBmYWlsZWQuJwogICAgICAgICAgfQoKICAgICAgLSBuYW1lOiBCdWlsZCBSZWxlYXNlCiAgICAgICAgc2hlbGw6IHB3c2gKICAgICAgICBydW46IHwKICAgICAgICAgICRFcnJvckFjdGlvblByZWZlcmVuY2UgPSAnU3RvcCcKICAgICAgICAgIGNtYWtlIC0tYnVpbGQgZGV2MDMyLWJ1aWxkIC0tY29uZmlnIFJlbGVhc2UKICAgICAgICAgIGlmICgkTEFTVEVYSVRDT0RFIC1uZSAwKSB7CiAgICAgICAgICAgIHRocm93ICdSZWxlYXNlIGJ1aWxkIGZhaWxlZC4nCiAgICAgICAgICB9CgogICAgICAtIG5hbWU6IFJ1biBhbGwgQ1Rlc3QgdGVzdHMKICAgICAgICBzaGVsbDogcHdzaAogICAgICAgIHJ1bjogfAogICAgICAgICAgJEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdTdG9wJwogICAgICAgICAgY3Rlc3QgYAogICAgICAgICAgICAtLXRlc3QtZGlyIGRldjAzMi1idWlsZCBgCiAgICAgICAgICAgIC1DIFJlbGVhc2UgYAogICAgICAgICAgICAtLW91dHB1dC1vbi1mYWlsdXJlCiAgICAgICAgICBpZiAoJExBU1RFWElUQ09ERSAtbmUgMCkgewogICAgICAgICAgICB0aHJvdyAnQ1Rlc3QgZmFpbGVkLicKICAgICAgICAgIH0KCiAgICAgIC0gbmFtZTogVmVyaWZ5IGJpbmFyeSBpZGVudGl0eQogICAgICAgIHNoZWxsOiBwd3NoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICAkRXJyb3JBY3Rpb25QcmVmZXJlbmNlID0gJ1N0b3AnCgogICAgICAgICAgJGFwcCA9IEdldC1JdGVtICdkZXYwMzItYnVpbGQvYmluL1JlbGVhc2UvRFBvcENsZWFuZXIuZXhlJwogICAgICAgICAgJHVwZGF0ZXIgPSBHZXQtSXRlbSAnZGV2MDMyLWJ1aWxkL2Jpbi9SZWxlYXNlL0RQb3BVcGRhdGVyLmV4ZScKCiAgICAgICAgICBpZiAoJGFwcC5WZXJzaW9uSW5mby5GaWxlVmVyc2lvbiAtbm90bGlrZSAnMC4zLjIuMSonKSB7CiAgICAgICAgICAgIHRocm93ICJVbmV4cGVjdGVkIGFwcCBGaWxlVmVyc2lvbjogJCgkYXBwLlZlcnNpb25JbmZvLkZpbGVWZXJzaW9uKSIKICAgICAgICAgIH0KICAgICAgICAgIGlmICgkYXBwLlZlcnNpb25JbmZvLlByb2R1Y3RWZXJzaW9uIC1ub3RsaWtlICcwLjMuMiBCRVRBIFIxKicpIHsKICAgICAgICAgICAgdGhyb3cgIlVuZXhwZWN0ZWQgYXBwIFByb2R1Y3RWZXJzaW9uOiAkKCRhcHAuVmVyc2lvbkluZm8uUHJvZHVjdFZlcnNpb24pIgogICAgICAgICAgfQoKICAgICAgICAgIGlmICgkdXBkYXRlci5WZXJzaW9uSW5mby5GaWxlVmVyc2lvbiAtbm90bGlrZSAnMC4zLjIuMSonKSB7CiAgICAgICAgICAgIHRocm93ICJVbmV4cGVjdGVkIHVwZGF0ZXIgRmlsZVZlcnNpb246ICQoJHVwZGF0ZXIuVmVyc2lvbkluZm8uRmlsZVZlcnNpb24pIgogICAgICAgICAgfQoKICAgICAgICAgIFdyaXRlLUhvc3QgIkRQb3BDbGVhbmVyIFNIQTI1Nj0kKChHZXQtRmlsZUhhc2ggJGFwcC5GdWxsTmFtZSAtQWxnb3JpdGhtIFNIQTI1NikuSGFzaC5Ub0xvd2VySW52YXJpYW50KCkpIgogICAgICAgICAgV3JpdGUtSG9zdCAiRFBvcFVwZGF0ZXIgU0hBMjU2PSQoKEdldC1GaWxlSGFzaCAkdXBkYXRlci5GdWxsTmFtZSAtQWxnb3JpdGhtIFNIQTI1NikuSGFzaC5Ub0xvd2VySW52YXJpYW50KCkpIgoKICAgICAgLSBuYW1lOiBDYXB0dXJlIGRlZmF1bHQgbWluaW11bSBhbmQgbWF4aW1pemVkIHNoZWxsCiAgICAgICAgc2hlbGw6IHB3c2gKICAgICAgICBydW46IHwKICAgICAgICAgICRFcnJvckFjdGlvblByZWZlcmVuY2UgPSAnU3RvcCcKCiAgICAgICAgICBOZXctSXRlbSAtSXRlbVR5cGUgRGlyZWN0b3J5IC1QYXRoIGRldjAzMi1ldmlkZW5jZSAtRm9yY2UgfCBPdXQtTnVsbAoKICAgICAgICAgICRyZXBvcnQgPSAuL3NjcmlwdHMvQ2FwdHVyZS0wMzJTaGVsbC5wczEgYAogICAgICAgICAgICAtRXhlY3V0YWJsZVBhdGggJ2RldjAzMi1idWlsZC9iaW4vUmVsZWFzZS9EUG9wQ2xlYW5lci5leGUnIGAKICAgICAgICAgICAgLU91dHB1dERpcmVjdG9yeSAnZGV2MDMyLWV2aWRlbmNlJwoKICAgICAgICAgIGlmICgtbm90ICRyZXBvcnQuZ3JhY2VmdWxfY2xvc2UpIHsKICAgICAgICAgICAgdGhyb3cgJ1Zpc3VhbCBzbW9rZSBkaWQgbm90IGNsb3NlIGdyYWNlZnVsbHkuJwogICAgICAgICAgfQoKICAgICAgLSBuYW1lOiBWaXN1YWwgc2FuaXR5IGdhdGUKICAgICAgICBzaGVsbDogcHdzaAogICAgICAgIHJ1bjogfAogICAgICAgICAgJEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdTdG9wJwogICAgICAgICAgQWRkLVR5cGUgLUFzc2VtYmx5TmFtZSBTeXN0ZW0uRHJhd2luZwoKICAgICAgICAgICRzY3JlZW5zID0gQCgKICAgICAgICAgICAgJ2RldjAzMi1ldmlkZW5jZS9kZWZhdWx0LTEyMDB4ODUwLnBuZycsCiAgICAgICAgICAgICdkZXYwMzItZXZpZGVuY2UvbWluaW11bS0xMTAweDcwMC5wbmcnLAogICAgICAgICAgICAnZGV2MDMyLWV2aWRlbmNlL21heGltaXplZC5wbmcnCiAgICAgICAgICApCgogICAgICAgICAgZm9yZWFjaCAoJHNjcmVlbiBpbiAkc2NyZWVucykgewogICAgICAgICAgICBpZiAoLW5vdCAoVGVzdC1QYXRoIC1MaXRlcmFsUGF0aCAkc2NyZWVuIC1QYXRoVHlwZSBMZWFmKSkgewogICAgICAgICAgICAgIHRocm93ICJNaXNzaW5nIHNjcmVlbnNob3Q6ICRzY3JlZW4iCiAgICAgICAgICAgIH0KCiAgICAgICAgICAgICRiaXRtYXAgPSBbRHJhd2luZy5CaXRtYXBdOjpGcm9tRmlsZSgoUmVzb2x2ZS1QYXRoICRzY3JlZW4pKQogICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICR3aGl0ZSA9IDAKICAgICAgICAgICAgICAkc2FtcGxlZCA9IDAKCiAgICAgICAgICAgICAgZm9yICgkeSA9IDA7ICR5IC1sdCAkYml0bWFwLkhlaWdodDsgJHkgKz0gNCkgewogICAgICAgICAgICAgICAgZm9yICgkeCA9IDA7ICR4IC1sdCAkYml0bWFwLldpZHRoOyAkeCArPSA0KSB7CiAgICAgICAgICAgICAgICAgICRwaXhlbCA9ICRiaXRtYXAuR2V0UGl4ZWwoJHgsICR5KQogICAgICAgICAgICAgICAgICAkc2FtcGxlZCsrCgogICAgICAgICAgICAgICAgICBpZiAoJHBpeGVsLlIgLWdlIDI0MCAtYW5kCiAgICAgICAgICAgICAgICAgICAgICAkcGl4ZWwuRyAtZ2UgMjQwIC1hbmQKICAgICAgICAgICAgICAgICAgICAgICRwaXhlbC5CIC1nZSAyNDApIHsKICAgICAgICAgICAgICAgICAgICAkd2hpdGUrKwogICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAkcmF0aW8gPSBpZiAoJHNhbXBsZWQgLWVxIDApIHsKICAgICAgICAgICAgICAgIDEuMAogICAgICAgICAgICAgIH0gZWxzZSB7CiAgICAgICAgICAgICAgICBbZG91YmxlXSR3aGl0ZSAvIFtkb3VibGVdJHNhbXBsZWQKICAgICAgICAgICAgICB9CgogICAgICAgICAgICAgIFdyaXRlLUhvc3QgIiRzY3JlZW4gbmVhci13aGl0ZSByYXRpbz0kcmF0aW8iCgogICAgICAgICAgICAgIGlmICgkcmF0aW8gLWd0IDAuMDUpIHsKICAgICAgICAgICAgICAgIHRocm93ICJXaGl0ZS1iYWNrZ3JvdW5kIHJlZ3Jlc3Npb24gZGV0ZWN0ZWQgaW4gJHNjcmVlbiIKICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0gZmluYWxseSB7CiAgICAgICAgICAgICAgJGJpdG1hcC5EaXNwb3NlKCkKICAgICAgICAgICAgfQogICAgICAgICAgfQoKICAgICAgLSBuYW1lOiBTdGFnZSBkZXZlbG9wbWVudCBhcnRpZmFjdAogICAgICAgIHNoZWxsOiBwd3NoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICAkRXJyb3JBY3Rpb25QcmVmZXJlbmNlID0gJ1N0b3AnCgogICAgICAgICAgQ29weS1JdGVtIGAKICAgICAgICAgICAgJ2RldjAzMi1idWlsZC9iaW4vUmVsZWFzZS9EUG9wQ2xlYW5lci5leGUnIGAKICAgICAgICAgICAgJ2RldjAzMi1ldmlkZW5jZS9EUG9wQ2xlYW5lci5leGUnIGAKICAgICAgICAgICAgLUZvcmNlCgogICAgICAgICAgQ29weS1JdGVtIGAKICAgICAgICAgICAgJ2RldjAzMi1idWlsZC9iaW4vUmVsZWFzZS9EUG9wVXBkYXRlci5leGUnIGAKICAgICAgICAgICAgJ2RldjAzMi1ldmlkZW5jZS9EUG9wVXBkYXRlci5leGUnIGAKICAgICAgICAgICAgLUZvcmNlCgogICAgICAgICAgQ29weS1JdGVtIGAKICAgICAgICAgICAgJ2RldjAzMi1zcmMvdjAzMi1vdmVybGF5LWludmVudG9yeS5qc29uJyBgCiAgICAgICAgICAgICdkZXYwMzItZXZpZGVuY2UvdjAzMi1vdmVybGF5LWludmVudG9yeS5qc29uJyBgCiAgICAgICAgICAgIC1Gb3JjZQoKICAgICAgLSBuYW1lOiBVcGxvYWQgZGV2ZWxvcG1lbnQgY2FuZGlkYXRlCiAgICAgICAgdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgbmFtZTogZHBvcGNsZWFuZXItMC4zLjItZGV2ZWxvcG1lbnQKICAgICAgICAgIHBhdGg6IGRldjAzMi1ldmlkZW5jZS8qCiAgICAgICAgICBpZi1uby1maWxlcy1mb3VuZDogZXJyb3IK'
+
+      - name: Verify Task 8 UI policy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./v032/tests/Ui032Policy.Tests.ps1
+
+      - name: Run baseline release policy tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./tests/CleanReleasePolicy.Tests.ps1
+          ./tests/R3ReleasePolicy.Tests.ps1
+          ./tests/R3WorkflowPolicy.Tests.ps1
+          node --test tests/release-manifest.test.cjs tests/release-manifest-r3.test.cjs
+
+      - name: Prepare and build Task 8 candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          Remove-Item task8-src,task8-build,task8-evidence `
+              -Recurse -Force -ErrorAction SilentlyContinue
+
+          ./scripts/Prepare-032Source.ps1 `
+              -RepositoryRoot $PWD `
+              -Destination "$PWD/task8-src"
+
+          cmake -S task8-src -B task8-build -A x64 -DBUILD_TESTING=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Task 8 CMake configure failed.' }
+
+          cmake --build task8-build --config Release
+          if ($LASTEXITCODE -ne 0) { throw 'Task 8 Release build failed.' }
+
+          ctest `
+              --test-dir task8-build `
+              -C Release `
+              --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Task 8 CTest failed.' }
+
+      - name: Verify Task 8 binary versions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $app = Get-Item 'task8-build/bin/Release/DPopCleaner.exe'
+          $updater = Get-Item 'task8-build/bin/Release/DPopUpdater.exe'
+
+          if ($app.VersionInfo.FileVersion -notlike '0.3.2.1*') {
+              throw "Unexpected app FileVersion: $($app.VersionInfo.FileVersion)"
+          }
+          if ($app.VersionInfo.ProductVersion -notlike '0.3.2 BETA R1*') {
+              throw "Unexpected app ProductVersion: $($app.VersionInfo.ProductVersion)"
+          }
+          if ($updater.VersionInfo.FileVersion -notlike '0.3.2.1*') {
+              throw "Unexpected updater FileVersion: $($updater.VersionInfo.FileVersion)"
+          }
+
+      - name: Run three-state resize and close smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          New-Item -ItemType Directory -Path task8-evidence -Force | Out-Null
+
+          $report = ./scripts/Capture-032Shell.ps1 `
+              -ExecutablePath 'task8-build/bin/Release/DPopCleaner.exe' `
+              -OutputDirectory 'task8-evidence'
+
+          if (-not $report.graceful_close) {
+              throw 'Task 8 capture report says graceful_close=false.'
+          }
+
+          foreach ($path in @(
+              'task8-evidence/default-1200x850.png',
+              'task8-evidence/minimum-1100x700.png',
+              'task8-evidence/maximized.png',
+              'task8-evidence/capture-report.json'
+          )) {
+              if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                  throw "Task 8 evidence missing: $path"
+              }
+          }
+
+      - name: Confirm no R4 or published site changes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $protectedDiff = git diff -- `
+              r4 `
+              index.html `
+              script.js `
+              update `
+              downloads `
+              release-manifest.js
+
+          if ($protectedDiff) {
+              Write-Host $protectedDiff
+              throw 'Task 8 changed protected R4/site files.'
+          }
+
+      - name: Commit Task 8 permanent development workflow
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          Remove-Item task8-src,task8-build,task8-evidence `
+              -Recurse -Force -ErrorAction SilentlyContinue
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add `
+              '.github/workflows/build-dpopcleaner-0.3.2-dev.yml' `
+              'scripts/Capture-032Shell.ps1' `
+              'v032/tests/Ui032Policy.Tests.ps1'
+
+          if (git diff --cached --quiet) {
+              Write-Host 'Task 8 already matches.'
+              exit 0
+          }
+
+          git commit -m 'ci: add visual gate for DPopCleaner 0.3.2 shell'
+          git push origin HEAD:main
