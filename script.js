@@ -3,91 +3,68 @@ let toastTimer;
 let currentHash = '';
 
 function formatBytes(bytes){
-  if(!Number.isFinite(bytes) || bytes <= 0) return 'сборка готовится';
+  if(!Number.isFinite(bytes) || bytes <= 0) return 'недоступно';
   const mb = bytes / 1024 / 1024;
   return `${mb.toFixed(mb >= 10 ? 1 : 2)} МБ`;
 }
-
-function setDownloadState(available, url, labelText, isR3){
+function setDownloadState(available, url, labelText){
   document.querySelectorAll('.js-download').forEach(el => {
     const label = el.querySelector('.js-download-label');
     if(available && url){
-      el.href = url;
-      el.classList.remove('is-disabled');
-      el.removeAttribute('aria-disabled');
-      el.removeAttribute('data-disabled');
-      if(label) label.textContent = el.classList.contains('button-small') ? 'Скачать' : `Скачать ${labelText}`;
+      el.href=url; el.classList.remove('is-disabled'); el.removeAttribute('aria-disabled'); el.removeAttribute('data-disabled');
+      if(label) label.textContent=el.classList.contains('button-small')?'Скачать':`Скачать ${labelText}`;
     }else{
-      el.href = '#release-status';
-      el.classList.add('is-disabled');
-      el.setAttribute('aria-disabled','true');
-      el.setAttribute('data-disabled','true');
-      if(label) label.textContent = el.classList.contains('button-small') ? 'Скоро' : 'Сборка готовится';
+      el.href='#release-status'; el.classList.add('is-disabled'); el.setAttribute('aria-disabled','true'); el.setAttribute('data-disabled','true');
+      if(label) label.textContent=el.classList.contains('button-small')?'Недоступно':'Релиз недоступен';
     }
   });
   const status=document.getElementById('releaseStatus');
   if(status){
-    status.textContent = isR3
-      ? 'DPopCleaner 0.3.1 BETA R3 опубликован, проверен и готов к загрузке.'
-      : 'DPopCleaner 0.3.1 BETA R3 проходит сборку и проверки. Пока доступен последний проверенный установщик 0.2.14 CLEAN R1.';
-    status.classList.toggle('ready', !!available);
+    status.textContent=available?`DPopCleaner ${labelText} опубликован, проверен и готов к загрузке.`:
+      'Не удалось получить проверенный манифест релиза. Старый установщик автоматически не подставляется.';
+    status.classList.toggle('ready',!!available);
   }
 }
-
 function applyManifest(m){
-  const api = globalThis.DPopReleaseManifest;
-  const isR3 = api?.isUsableR3Manifest(m) === true;
-  const selected = api?.resolveDownloadManifest(m);
-  const available = Boolean(selected?.download_url);
-  const labelText = isR3 ? '0.3.1 BETA R3' : '0.2.14 CLEAN R1';
-  document.querySelectorAll('.js-download-version').forEach(el => el.textContent = labelText);
-  document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(available ? Number(selected.size) : 0));
-  setDownloadState(available, available ? selected.download_url : '', labelText, isR3);
-  if(available){
-    currentHash = selected.sha256.toLowerCase();
-    const hv = document.getElementById('hashValue');
-    if(hv) hv.textContent = currentHash;
-  }else{
-    currentHash='';
-    const hv = document.getElementById('hashValue');
-    if(hv) hv.textContent = 'недоступен — релизный манифест не прошёл проверку';
-  }
+  const api=globalThis.DPopReleaseManifest;
+  const selected=api?.resolveDownloadManifest(m);
+  const available=Boolean(selected?.download_url);
+  const labelText=selected?`${selected.version} BETA R${Number(selected.revision)}`:'0.3.1 BETA R4';
+  document.querySelectorAll('.js-download-version').forEach(el=>el.textContent=labelText);
+  document.querySelectorAll('.js-size').forEach(el=>el.textContent=formatBytes(available?Number(selected.size):0));
+  setDownloadState(available,available?selected.download_url:'',labelText);
+  const hv=document.getElementById('hashValue');
+  if(available){ currentHash=selected.sha256.toLowerCase(); if(hv) hv.textContent=currentHash; }
+  else { currentHash=''; if(hv) hv.textContent='манифест релиза не прошёл проверку'; }
 }
-
 async function loadManifest(){
   try{
-    const response = await fetch(`./update/beta.json?t=${Date.now()}`, {cache:'no-store'});
+    const response=await fetch(`./update/beta.json?t=${Date.now()}`,{cache:'no-store'});
     if(!response.ok) throw new Error(`HTTP ${response.status}`);
     applyManifest(await response.json());
-  }catch(err){
-    console.warn('Update manifest is not available yet:', err);
-    applyManifest(null);
-  }
+  }catch(err){ console.warn('Update manifest is not available:',err); applyManifest(null); }
 }
-
 async function copyHash(){
-  const value = currentHash || document.getElementById('hashValue')?.textContent || '';
+  const value=currentHash||document.getElementById('hashValue')?.textContent||'';
   if(!/^[a-f0-9]{64}$/i.test(value)){
-    if(toast){ toast.textContent='Хеш появится после сборки'; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),1700); }
+    if(toast){toast.textContent='SHA-256 сейчас недоступен';toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),1700);}
     return;
   }
-  try{await navigator.clipboard.writeText(value)}catch{const ta=document.createElement('textarea');ta.value=value;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}
-  if(toast){ toast.textContent='SHA-256 скопирован'; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),1700); }
+  try{await navigator.clipboard.writeText(value);}
+  catch{const ta=document.createElement('textarea');ta.value=value;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
+  if(toast){toast.textContent='SHA-256 скопирован';toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),1700);}
 }
-
-document.querySelectorAll('.js-download').forEach(el => el.addEventListener('click', e => {
-  if(el.dataset.disabled === 'true'){
-    e.preventDefault();
-    document.getElementById('release-status')?.scrollIntoView({behavior:'smooth', block:'center'});
-  }
+document.querySelectorAll('.js-download').forEach(el=>el.addEventListener('click',e=>{
+  if(el.dataset.disabled==='true'){e.preventDefault();document.getElementById('release-status')?.scrollIntoView({behavior:'smooth',block:'center'});}
 }));
 document.getElementById('copyHash')?.addEventListener('click',copyHash);
 document.getElementById('copyHash2')?.addEventListener('click',copyHash);
 const header=document.querySelector('.site-header');
 addEventListener('scroll',()=>header?.classList.toggle('scrolled',scrollY>12),{passive:true});
-const observer=new IntersectionObserver((entries)=>{for(const e of entries){if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}}},{threshold:.12});
+const observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target);}}},{threshold:.12});
 document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
-const menuButton=document.querySelector('.menu-button');const nav=document.querySelector('.nav');
-menuButton?.addEventListener('click',()=>{const open=nav.classList.toggle('open');menuButton.setAttribute('aria-expanded',String(open))});
-nav?.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{nav.classList.remove('open');menuButton?.setAttribute('aria-expanded','false')}));
+const menuButton=document.querySelector('.menu-button');
+const nav=document.querySelector('.nav');
+menuButton?.addEventListener('click',()=>{const open=nav.classList.toggle('open');menuButton.setAttribute('aria-expanded',String(open));});
+nav?.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{nav.classList.remove('open');menuButton?.setAttribute('aria-expanded','false');}));
 loadManifest();
