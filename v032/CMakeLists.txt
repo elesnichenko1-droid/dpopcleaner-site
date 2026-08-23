@@ -29,6 +29,7 @@ add_executable(DPopCleaner WIN32
     src/core/SingleInstance.cpp
     src/app/MainWindow.cpp
     src/ui/ShellModel.cpp
+    src/ui/Layout.cpp
     src/core/Logger.cpp
     src/core/Paths.cpp
     src/modules/SystemInfo.cpp
@@ -129,4 +130,15 @@ if(BUILD_TESTING)
         target_compile_options(ShellModelTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME ShellModelTests COMMAND ShellModelTests)
+
+    add_executable(LayoutTests
+        tests/v032/LayoutTests.cpp
+        src/ui/Layout.cpp
+    )
+    target_include_directories(LayoutTests PRIVATE src)
+    target_compile_definitions(LayoutTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    if(MSVC)
+        target_compile_options(LayoutTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME LayoutTests COMMAND LayoutTests)
 endif()
