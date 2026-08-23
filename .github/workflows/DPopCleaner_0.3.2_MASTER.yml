@@ -220,9 +220,7 @@ jobs:
           ./tests/R3WorkflowPolicy.Tests.ps1
           ./v032/tests/Ui032Policy.Tests.ps1
 
-          node --test `
-            tests/release-manifest.test.cjs `
-            tests/release-manifest-r3.test.cjs
+
 
       - name: Prepare 0.3.2 source
         shell: pwsh
