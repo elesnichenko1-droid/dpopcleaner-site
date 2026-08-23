@@ -65,4 +65,49 @@ foreach ($file in $uiCpp) {
     }
 }
 
+# Task 6 shell recovery policy.
+$shellPath = Join-Path $root 'ui/Shell.cpp'
+$settingsStubPath = Join-Path $root 'ui/pages/SettingsStubPage.cpp'
+
+if (Test-Path -LiteralPath $shellPath) {
+    $shell = Get-Content -Raw $shellPath
+
+    foreach ($token in @(
+        'PrimaryTabs()',
+        'kSettingsCommandId',
+        'L"⚙"',
+        'DwmSetWindowAttribute',
+        'WM_GETMINMAXINFO',
+        'ComputeShellLayout',
+        'StatusBar',
+        'SettingsStubPage',
+        'L"DPopCleaner 0.3.2 запущен."'
+    )) {
+        if (-not $shell.Contains($token)) {
+            throw "0.3.2 shell behavior missing: $token"
+        }
+    }
+
+    if ($shell -match 'SIDEBAR|PaintSunset|SunsetBackground') {
+        throw 'R4 sidebar/sunset concepts are forbidden in the 0.3.2 shell.'
+    }
+}
+
+if (Test-Path -LiteralPath $settingsStubPath) {
+    $settingsStub = Get-Content -Raw $settingsStubPath
+
+    foreach ($token in @(
+        'L"Настройки"',
+        'L"Язык: Русский"',
+        'L"Тема: Midnight"',
+        'L"Бесплатная BETA"',
+        'shell-candidate не сохраняет параметры'
+    )) {
+        if (-not $settingsStub.Contains($token)) {
+            throw "Settings stub policy missing: $token"
+        }
+    }
+}
+
 'Ui032Policy PASS'
+
