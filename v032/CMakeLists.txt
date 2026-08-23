@@ -28,6 +28,7 @@ add_executable(DPopCleaner WIN32
     src/main.cpp
     src/core/SingleInstance.cpp
     src/app/MainWindow.cpp
+    src/ui/ShellModel.cpp
     src/core/Logger.cpp
     src/core/Paths.cpp
     src/modules/SystemInfo.cpp
@@ -117,4 +118,15 @@ if(BUILD_TESTING)
         target_compile_options(ZapretPolicyTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME ZapretPolicyTests COMMAND ZapretPolicyTests)
+
+    add_executable(ShellModelTests
+        tests/v032/ShellModelTests.cpp
+        src/ui/ShellModel.cpp
+    )
+    target_include_directories(ShellModelTests PRIVATE src)
+    target_compile_definitions(ShellModelTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    if(MSVC)
+        target_compile_options(ShellModelTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME ShellModelTests COMMAND ShellModelTests)
 endif()
