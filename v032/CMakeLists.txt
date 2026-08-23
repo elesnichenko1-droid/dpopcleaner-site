@@ -32,6 +32,8 @@ add_executable(DPopCleaner WIN32
     src/ui/Layout.cpp
     src/ui/Theme.cpp
     src/ui/Controls.cpp
+    src/ui/SessionLog.cpp
+    src/ui/StatusBar.cpp
     src/core/Logger.cpp
     src/core/Paths.cpp
     src/modules/SystemInfo.cpp
@@ -168,4 +170,30 @@ if(BUILD_TESTING)
         target_compile_options(ControlsTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME ControlsTests COMMAND ControlsTests)
+
+    add_executable(SessionLogTests
+        tests/v032/SessionLogTests.cpp
+        src/ui/SessionLog.cpp
+    )
+    target_include_directories(SessionLogTests PRIVATE src)
+    target_compile_definitions(SessionLogTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    if(MSVC)
+        target_compile_options(SessionLogTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME SessionLogTests COMMAND SessionLogTests)
+
+    add_executable(StatusBarCompileTests
+        tests/v032/StatusBarCompileTests.cpp
+        src/ui/StatusBar.cpp
+        src/ui/SessionLog.cpp
+        src/ui/Controls.cpp
+        src/ui/Theme.cpp
+    )
+    target_include_directories(StatusBarCompileTests PRIVATE src)
+    target_compile_definitions(StatusBarCompileTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(StatusBarCompileTests PRIVATE user32 gdi32 uxtheme comctl32)
+    if(MSVC)
+        target_compile_options(StatusBarCompileTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME StatusBarCompileTests COMMAND StatusBarCompileTests)
 endif()
