@@ -7,7 +7,7 @@
 #include "ui/StatusBar.h"
 #include "ui/Theme.h"
 #include "ui/pages/OverviewPage.h"
-#include "ui/pages/SettingsStubPage.h"
+#include "ui/pages/WorkspacePage.h"
 
 #include <array>
 #include <string>
@@ -344,7 +344,7 @@ private:
         pageMessage_ = CreateTextLabel(
             pageHost_,
             kPageMessageId,
-            L"Раздел будет подключён в следующем функциональном этапе 0.3.2."
+            L""
         );
 
         if (!pageTitle_ || !pageMessage_) {
@@ -353,10 +353,6 @@ private:
 
         ApplyControlFont(pageTitle_, pageTitleFont_);
         ApplyControlFont(pageMessage_, pageBodyFont_);
-
-        if (!settingsPage_.Create(pageHost_)) {
-            return false;
-        }
 
         if (!statusBar_.Create(hwnd_, sessionLog_)) {
             return false;
@@ -372,6 +368,10 @@ private:
                 pageHost_,
                 sessionLog_,
                 [this](Page page) { ShowPage(page); })) {
+            return false;
+        }
+
+        if (!workspacePage_.Create(pageHost_, sessionLog_)) {
             return false;
         }
 
@@ -484,7 +484,9 @@ private:
         overviewPage_.Layout(
             Box{0, 0, hostWidth, hostHeight}
         );
-        settingsPage_.Layout(hostWidth, hostHeight);
+        workspacePage_.Layout(
+            Box{0, 0, hostWidth, hostHeight}
+        );
         statusBar_.Layout(layout);
     }
 
@@ -492,29 +494,17 @@ private:
         activePage_ = page;
 
         const bool overview = page == Page::Overview;
-        const bool settings = page == Page::Settings;
-        const bool generic = !overview && !settings;
 
         overviewPage_.Show(overview);
-        settingsPage_.Show(settings);
+        workspacePage_.Show(!overview);
+        if (!overview) {
+            workspacePage_.SetPage(page);
+        }
 
-        if (pageTitle_) {
-            ShowWindow(pageTitle_, generic ? SW_SHOW : SW_HIDE);
-        }
-        if (pageMessage_) {
-            ShowWindow(pageMessage_, generic ? SW_SHOW : SW_HIDE);
-        }
+        if (pageTitle_) ShowWindow(pageTitle_, SW_HIDE);
+        if (pageMessage_) ShowWindow(pageMessage_, SW_HIDE);
 
         const std::wstring_view label = LabelForPage(page);
-
-        if (generic) {
-            const std::wstring ownedLabel{label};
-            SetWindowTextW(pageTitle_, ownedLabel.c_str());
-            SetWindowTextW(
-                pageMessage_,
-                L"Раздел будет подключён в следующем функциональном этапе 0.3.2."
-            );
-        }
 
         statusBar_.SetStatus(L"Готово.");
 
@@ -680,6 +670,7 @@ private:
             return 0;
 
         case kOverviewLogChangedMessage:
+        case kWorkspaceLogChangedMessage:
             statusBar_.Refresh();
             return 0;
 
@@ -789,7 +780,7 @@ private:
     SessionLog sessionLog_;
     StatusBar statusBar_;
     OverviewPage overviewPage_;
-    SettingsStubPage settingsPage_;
+    WorkspacePage workspacePage_;
 };
 
 }
