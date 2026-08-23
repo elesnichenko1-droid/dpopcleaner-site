@@ -24,4 +24,45 @@ if (-not $cmake.Contains('project(DPopCleaner VERSION 0.3.2')) {
 if ($cmake.Contains('r4/MainWindow.cpp')) {
     throw '0.3.2 CMake must not compile the R4 UI source.'
 }
+
+$themePath = Join-Path $root 'ui/Theme.cpp'
+$controlsPath = Join-Path $root 'ui/Controls.cpp'
+
+if (Test-Path -LiteralPath $themePath) {
+    $theme = Get-Content -Raw $themePath
+    foreach ($token in @(
+        'RGB(0x0B, 0x10, 0x17)',
+        'RGB(0x1B, 0x1F, 0x25)',
+        'RGB(0x14, 0x1D, 0x28)',
+        'RGB(0x39, 0xD0, 0xA0)',
+        'RGB(0xF6, 0xF7, 0xF9)'
+    )) {
+        if (-not $theme.Contains($token)) {
+            throw "Midnight palette token missing: $token"
+        }
+    }
+}
+
+if (Test-Path -LiteralPath $controlsPath) {
+    $controls = Get-Content -Raw $controlsPath
+    foreach ($token in @(
+        'BS_OWNERDRAW',
+        'DarkMode_Explorer',
+        'ListView_SetBkColor',
+        'DrawOwnerButton'
+    )) {
+        if (-not $controls.Contains($token)) {
+            throw "Reusable control behavior missing: $token"
+        }
+    }
+}
+
+$uiCpp = @(Get-ChildItem (Join-Path $root 'ui') -Filter '*.cpp' -Recurse -ErrorAction SilentlyContinue)
+foreach ($file in $uiCpp) {
+    $text = Get-Content -Raw $file.FullName
+    if ($text -match 'PaintSunset|SunsetBackground|SIDEBAR') {
+        throw "R4 visual concept leaked into 0.3.2 UI: $($file.FullName)"
+    }
+}
+
 'Ui032Policy PASS'

@@ -30,6 +30,8 @@ add_executable(DPopCleaner WIN32
     src/app/MainWindow.cpp
     src/ui/ShellModel.cpp
     src/ui/Layout.cpp
+    src/ui/Theme.cpp
+    src/ui/Controls.cpp
     src/core/Logger.cpp
     src/core/Paths.cpp
     src/modules/SystemInfo.cpp
@@ -141,4 +143,29 @@ if(BUILD_TESTING)
         target_compile_options(LayoutTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME LayoutTests COMMAND LayoutTests)
+
+    add_executable(ThemeTests
+        tests/v032/ThemeTests.cpp
+        src/ui/Theme.cpp
+    )
+    target_include_directories(ThemeTests PRIVATE src)
+    target_compile_definitions(ThemeTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(ThemeTests PRIVATE user32 gdi32)
+    if(MSVC)
+        target_compile_options(ThemeTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME ThemeTests COMMAND ThemeTests)
+
+    add_executable(ControlsTests
+        tests/v032/ControlsTests.cpp
+        src/ui/Theme.cpp
+        src/ui/Controls.cpp
+    )
+    target_include_directories(ControlsTests PRIVATE src)
+    target_compile_definitions(ControlsTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(ControlsTests PRIVATE user32 gdi32 uxtheme comctl32)
+    if(MSVC)
+        target_compile_options(ControlsTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME ControlsTests COMMAND ControlsTests)
 endif()
