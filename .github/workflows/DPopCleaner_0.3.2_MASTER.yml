@@ -1,0 +1,826 @@
+name: DPopCleaner 0.3.2 MASTER
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "verify = build/test only; apply_payload = apply a future ChatGPT payload, verify it, then commit"
+        required: true
+        default: verify
+        type: choice
+        options:
+          - verify
+          - apply_payload
+      payload_b64_gzip:
+        description: "Future update payload from ChatGPT. Leave empty for verify."
+        required: false
+        default: ""
+        type: string
+      commit_message:
+        description: "Commit message used only with apply_payload"
+        required: false
+        default: "feat: advance DPopCleaner 0.3.2"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dpopcleaner-0-3-2-master
+  cancel-in-progress: false
+
+jobs:
+  master:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify clean baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dirty = git status --porcelain
+          if ($dirty) {
+            Write-Host $dirty
+            throw 'Checkout is unexpectedly dirty.'
+          }
+
+          foreach ($path in @(
+            'v032/CMakeLists.txt',
+            'v032/ui/Shell.cpp',
+            'v032/ui/pages/OverviewPage.cpp',
+            'scripts/Prepare-032Source.ps1'
+          )) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Required 0.3.2 baseline file missing: $path"
+            }
+          }
+
+      - name: Apply compressed update payload
+        if: ${{ inputs.mode == 'apply_payload' }}
+        shell: pwsh
+        env:
+          DPOP_PAYLOAD_B64_GZIP: ${{ inputs.payload_b64_gzip }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          if ([string]::IsNullOrWhiteSpace($env:DPOP_PAYLOAD_B64_GZIP)) {
+            throw 'apply_payload selected but payload_b64_gzip is empty.'
+          }
+
+          try {
+            $compressed = [Convert]::FromBase64String(
+              $env:DPOP_PAYLOAD_B64_GZIP.Trim()
+            )
+          } catch {
+            throw 'Payload is not valid base64.'
+          }
+
+          $input = [IO.MemoryStream]::new($compressed)
+          $gzip = [IO.Compression.GZipStream]::new(
+            $input,
+            [IO.Compression.CompressionMode]::Decompress
+          )
+          $reader = [IO.StreamReader]::new(
+            $gzip,
+            [Text.Encoding]::UTF8
+          )
+
+          try {
+            $json = $reader.ReadToEnd()
+          } finally {
+            $reader.Dispose()
+            $gzip.Dispose()
+            $input.Dispose()
+          }
+
+          try {
+            $payload = $json | ConvertFrom-Json -Depth 30
+          } catch {
+            throw 'Payload decompressed but is not valid JSON.'
+          }
+
+          if ($null -eq $payload.files) {
+            throw 'Payload has no files collection.'
+          }
+
+          $repoRoot = [IO.Path]::GetFullPath($PWD)
+          $changed = 0
+
+          foreach ($file in @($payload.files)) {
+            $relative = ([string]$file.path).Replace('\', '/').Trim()
+
+            if ([string]::IsNullOrWhiteSpace($relative)) {
+              throw 'Payload contains an empty path.'
+            }
+
+            if ($relative.StartsWith('/') -or
+                $relative.Contains('../') -or
+                $relative.Contains('..\')) {
+              throw "Unsafe payload path: $relative"
+            }
+
+            $allowed =
+              $relative.StartsWith('v032/') -or
+              $relative.StartsWith('scripts/')
+
+            if (-not $allowed) {
+              throw "MASTER payload may only change v032/ or scripts/: $relative"
+            }
+
+            if ($relative -match '^(r4/|update/|downloads/)' -or
+                $relative -in @(
+                  'index.html',
+                  'script.js',
+                  'release-manifest.js'
+                )) {
+              throw "Protected published path rejected: $relative"
+            }
+
+            if ([string]::IsNullOrWhiteSpace(
+                  [string]$file.content_base64
+                )) {
+              throw "Missing content_base64 for $relative"
+            }
+
+            try {
+              $bytes = [Convert]::FromBase64String(
+                [string]$file.content_base64
+              )
+            } catch {
+              throw "Invalid content_base64 for $relative"
+            }
+
+            $destination = Join-Path $repoRoot $relative
+            $parent = Split-Path -Parent $destination
+            if ($parent) {
+              New-Item -ItemType Directory -Path $parent -Force |
+                Out-Null
+            }
+
+            [IO.File]::WriteAllBytes($destination, $bytes)
+            $changed++
+            Write-Host "Payload wrote: $relative"
+          }
+
+          foreach ($relativeRaw in @($payload.delete)) {
+            $relative = ([string]$relativeRaw).Replace('\', '/').Trim()
+
+            if ([string]::IsNullOrWhiteSpace($relative)) {
+              continue
+            }
+
+            if (-not (
+                $relative.StartsWith('v032/') -or
+                $relative.StartsWith('scripts/')
+              )) {
+              throw "MASTER delete may only touch v032/ or scripts/: $relative"
+            }
+
+            if (Test-Path -LiteralPath $relative) {
+              Remove-Item -LiteralPath $relative -Recurse -Force
+              $changed++
+              Write-Host "Payload deleted: $relative"
+            }
+          }
+
+          if ($changed -eq 0) {
+            throw 'Payload did not change any files.'
+          }
+
+          $protected = git diff -- `
+            r4 `
+            index.html `
+            script.js `
+            update `
+            downloads `
+            release-manifest.js
+
+          if ($protected) {
+            Write-Host $protected
+            throw 'Payload touched a protected R4/site path.'
+          }
+
+          $diff = git status --short
+          Write-Host $diff
+
+      - name: Run source policies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          ./tests/CleanReleasePolicy.Tests.ps1
+          ./tests/R3ReleasePolicy.Tests.ps1
+          ./tests/R3WorkflowPolicy.Tests.ps1
+          ./v032/tests/Ui032Policy.Tests.ps1
+
+          node --test `
+            tests/release-manifest.test.cjs `
+            tests/release-manifest-r3.test.cjs
+
+      - name: Prepare 0.3.2 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          Remove-Item `
+            master-src,master-build,master-evidence `
+            -Recurse -Force -ErrorAction SilentlyContinue
+
+          ./scripts/Prepare-032Source.ps1 `
+            -RepositoryRoot $PWD `
+            -Destination "$PWD/master-src"
+
+          if (-not (
+              Test-Path `
+                -LiteralPath 'master-src/v032-overlay-inventory.json' `
+                -PathType Leaf
+            )) {
+            throw 'Overlay inventory missing.'
+          }
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          cmake `
+            -S master-src `
+            -B master-build `
+            -A x64 `
+            -DBUILD_TESTING=ON
+
+          if ($LASTEXITCODE -ne 0) {
+            throw 'CMake configure failed.'
+          }
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          cmake `
+            --build master-build `
+            --config Release
+
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Release build failed.'
+          }
+
+      - name: Run all CTest tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          ctest `
+            --test-dir master-build `
+            -C Release `
+            --output-on-failure
+
+          if ($LASTEXITCODE -ne 0) {
+            throw 'CTest failed.'
+          }
+
+      - name: Verify binary identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $app = Get-Item `
+            'master-build/bin/Release/DPopCleaner.exe'
+          $updater = Get-Item `
+            'master-build/bin/Release/DPopUpdater.exe'
+
+          if ($app.VersionInfo.FileVersion -notlike '0.3.2.1*') {
+            throw "Bad app FileVersion: $($app.VersionInfo.FileVersion)"
+          }
+
+          if (
+            $app.VersionInfo.ProductVersion -notlike
+              '0.3.2 BETA R1*'
+          ) {
+            throw "Bad app ProductVersion: $($app.VersionInfo.ProductVersion)"
+          }
+
+          if (
+            $updater.VersionInfo.FileVersion -notlike
+              '0.3.2.1*'
+          ) {
+            throw "Bad updater FileVersion: $($updater.VersionInfo.FileVersion)"
+          }
+
+          Write-Host (
+            "DPopCleaner SHA256=" +
+            (Get-FileHash `
+              $app.FullName `
+              -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+          )
+
+      - name: Capture default minimum maximized
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          New-Item `
+            -ItemType Directory `
+            -Path master-evidence `
+            -Force |
+            Out-Null
+
+          Add-Type -AssemblyName System.Drawing
+
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+
+          public static class DPopMasterWin32
+          {
+              [StructLayout(LayoutKind.Sequential)]
+              public struct RECT
+              {
+                  public int Left;
+                  public int Top;
+                  public int Right;
+                  public int Bottom;
+              }
+
+              [DllImport("user32.dll", SetLastError=true)]
+              public static extern bool GetWindowRect(
+                  IntPtr hWnd,
+                  out RECT rect
+              );
+
+              [DllImport("user32.dll", SetLastError=true)]
+              public static extern bool GetClientRect(
+                  IntPtr hWnd,
+                  out RECT rect
+              );
+
+              [DllImport("user32.dll", SetLastError=true)]
+              public static extern bool MoveWindow(
+                  IntPtr hWnd,
+                  int x,
+                  int y,
+                  int width,
+                  int height,
+                  bool repaint
+              );
+
+              [DllImport("user32.dll")]
+              public static extern bool ShowWindow(
+                  IntPtr hWnd,
+                  int command
+              );
+
+              [DllImport("user32.dll", SetLastError=true)]
+              public static extern bool PrintWindow(
+                  IntPtr hWnd,
+                  IntPtr hdc,
+                  uint flags
+              );
+
+              [DllImport("user32.dll")]
+              public static extern IntPtr SendMessage(
+                  IntPtr hWnd,
+                  uint message,
+                  IntPtr wParam,
+                  IntPtr lParam
+              );
+          }
+          '@
+
+          function Get-WindowMetrics {
+            param(
+              [Parameter(Mandatory)][IntPtr]$Handle
+            )
+
+            $window = New-Object DPopMasterWin32+RECT
+            $client = New-Object DPopMasterWin32+RECT
+
+            if (-not [DPopMasterWin32]::GetWindowRect(
+                $Handle,
+                [ref]$window
+              )) {
+              throw 'GetWindowRect failed.'
+            }
+
+            if (-not [DPopMasterWin32]::GetClientRect(
+                $Handle,
+                [ref]$client
+              )) {
+              throw 'GetClientRect failed.'
+            }
+
+            [pscustomobject]@{
+              x = $window.Left
+              y = $window.Top
+              width = $window.Right - $window.Left
+              height = $window.Bottom - $window.Top
+              client_width = $client.Right - $client.Left
+              client_height = $client.Bottom - $client.Top
+            }
+          }
+
+          function Resize-Client {
+            param(
+              [Parameter(Mandatory)][IntPtr]$Handle,
+              [Parameter(Mandatory)][int]$Width,
+              [Parameter(Mandatory)][int]$Height
+            )
+
+            [DPopMasterWin32]::ShowWindow(
+              $Handle,
+              9
+            ) | Out-Null
+
+            Start-Sleep -Milliseconds 350
+
+            $metrics = Get-WindowMetrics -Handle $Handle
+            $extraWidth =
+              $metrics.width - $metrics.client_width
+            $extraHeight =
+              $metrics.height - $metrics.client_height
+
+            if (-not [DPopMasterWin32]::MoveWindow(
+                $Handle,
+                $metrics.x,
+                $metrics.y,
+                $Width + $extraWidth,
+                $Height + $extraHeight,
+                $true
+              )) {
+              throw "MoveWindow failed for ${Width}x${Height}."
+            }
+
+            Start-Sleep -Milliseconds 750
+          }
+
+          function Capture-Window {
+            param(
+              [Parameter(Mandatory)][IntPtr]$Handle,
+              [Parameter(Mandatory)][string]$Name
+            )
+
+            $metrics = Get-WindowMetrics -Handle $Handle
+            $path = Join-Path `
+              'master-evidence' `
+              ($Name + '.png')
+
+            if (
+              $metrics.width -lt 800 -or
+              $metrics.height -lt 500
+            ) {
+              throw (
+                "Unexpected screenshot window size: " +
+                "$($metrics.width)x$($metrics.height)"
+              )
+            }
+
+            $bitmap = [Drawing.Bitmap]::new(
+              $metrics.width,
+              $metrics.height,
+              [Drawing.Imaging.PixelFormat]::Format32bppArgb
+            )
+
+            try {
+              $graphics =
+                [Drawing.Graphics]::FromImage($bitmap)
+
+              try {
+                $hdc = $graphics.GetHdc()
+
+                try {
+                  if (-not [DPopMasterWin32]::PrintWindow(
+                      $Handle,
+                      $hdc,
+                      2
+                    )) {
+                    throw "PrintWindow failed for $Name."
+                  }
+                } finally {
+                  $graphics.ReleaseHdc($hdc)
+                }
+              } finally {
+                $graphics.Dispose()
+              }
+
+              $bitmap.Save(
+                $path,
+                [Drawing.Imaging.ImageFormat]::Png
+              )
+            } finally {
+              $bitmap.Dispose()
+            }
+
+            $file = Get-Item -LiteralPath $path
+
+            if ($file.Length -le 10000) {
+              throw "Screenshot too small: $Name"
+            }
+
+            [ordered]@{
+              file = $file.Name
+              width = $metrics.width
+              height = $metrics.height
+              client_width = $metrics.client_width
+              client_height = $metrics.client_height
+              bytes = $file.Length
+              sha256 = (
+                Get-FileHash `
+                  -LiteralPath $path `
+                  -Algorithm SHA256
+              ).Hash.ToLowerInvariant()
+            }
+          }
+
+          $process = $null
+          $report = [ordered]@{
+            default = $null
+            minimum = $null
+            maximized = $null
+            graceful_close = $false
+          }
+
+          try {
+            $process = Start-Process `
+              -FilePath `
+                'master-build/bin/Release/DPopCleaner.exe' `
+              -PassThru
+
+            $deadline = (Get-Date).AddSeconds(30)
+
+            do {
+              Start-Sleep -Milliseconds 250
+              $process.Refresh()
+
+              if ($process.HasExited) {
+                throw (
+                  'DPopCleaner exited before its window appeared.'
+                )
+              }
+            } while (
+              $process.MainWindowHandle -eq 0 -and
+              (Get-Date) -lt $deadline
+            )
+
+            if ($process.MainWindowHandle -eq 0) {
+              throw 'Timed out waiting for main window.'
+            }
+
+            $handle =
+              [IntPtr]$process.MainWindowHandle
+
+            Resize-Client `
+              -Handle $handle `
+              -Width 1200 `
+              -Height 850
+
+            $report.default = Capture-Window `
+              -Handle $handle `
+              -Name 'default-1200x850'
+
+            Resize-Client `
+              -Handle $handle `
+              -Width 1100 `
+              -Height 700
+
+            $report.minimum = Capture-Window `
+              -Handle $handle `
+              -Name 'minimum-1100x700'
+
+            [DPopMasterWin32]::ShowWindow(
+              $handle,
+              3
+            ) | Out-Null
+
+            Start-Sleep -Milliseconds 900
+
+            $report.maximized = Capture-Window `
+              -Handle $handle `
+              -Name 'maximized'
+
+            [DPopMasterWin32]::SendMessage(
+              $handle,
+              0x0010,
+              [IntPtr]::Zero,
+              [IntPtr]::Zero
+            ) | Out-Null
+
+            if (-not $process.WaitForExit(10000)) {
+              throw (
+                'DPopCleaner did not exit within 10 seconds ' +
+                'after WM_CLOSE.'
+              )
+            }
+
+            $report.graceful_close = $true
+          } finally {
+            if (
+              $null -ne $process -and
+              -not $process.HasExited
+            ) {
+              Stop-Process `
+                -Id $process.Id `
+                -Force `
+                -ErrorAction SilentlyContinue
+            }
+          }
+
+          [pscustomobject]$report |
+            ConvertTo-Json -Depth 8 |
+            Set-Content `
+              -LiteralPath `
+                'master-evidence/capture-report.json' `
+              -Encoding utf8
+
+          if (-not $report.graceful_close) {
+            throw 'Capture report says graceful_close=false.'
+          }
+
+      - name: Visual sanity gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          Add-Type -AssemblyName System.Drawing
+
+          foreach ($screen in @(
+            'master-evidence/default-1200x850.png',
+            'master-evidence/minimum-1100x700.png',
+            'master-evidence/maximized.png'
+          )) {
+            if (-not (
+                Test-Path `
+                  -LiteralPath $screen `
+                  -PathType Leaf
+              )) {
+              throw "Missing screenshot: $screen"
+            }
+
+            $bitmap =
+              [Drawing.Bitmap]::FromFile(
+                (Resolve-Path -LiteralPath $screen)
+              )
+
+            try {
+              $nearWhite = 0
+              $sampled = 0
+
+              for (
+                $y = 0;
+                $y -lt $bitmap.Height;
+                $y += 4
+              ) {
+                for (
+                  $x = 0;
+                  $x -lt $bitmap.Width;
+                  $x += 4
+                ) {
+                  $pixel = $bitmap.GetPixel($x, $y)
+                  $sampled++
+
+                  if (
+                    $pixel.R -ge 240 -and
+                    $pixel.G -ge 240 -and
+                    $pixel.B -ge 240
+                  ) {
+                    $nearWhite++
+                  }
+                }
+              }
+
+              $ratio =
+                if ($sampled -eq 0) {
+                  1.0
+                } else {
+                  [double]$nearWhite /
+                  [double]$sampled
+                }
+
+              Write-Host (
+                "$screen near-white ratio=$ratio"
+              )
+
+              if ($ratio -gt 0.05) {
+                throw (
+                  'White-background regression detected in ' +
+                  $screen
+                )
+              }
+            } finally {
+              $bitmap.Dispose()
+            }
+          }
+
+      - name: Confirm protected paths unchanged
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $protected = git diff -- `
+            r4 `
+            index.html `
+            script.js `
+            update `
+            downloads `
+            release-manifest.js
+
+          if ($protected) {
+            Write-Host $protected
+            throw 'MASTER changed a protected R4/site path.'
+          }
+
+      - name: Commit verified payload
+        if: ${{ inputs.mode == 'apply_payload' }}
+        shell: pwsh
+        env:
+          DPOP_COMMIT_MESSAGE: ${{ inputs.commit_message }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          git config `
+            user.name `
+            'github-actions[bot]'
+
+          git config `
+            user.email `
+            '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add -A -- v032 scripts
+
+          if (git diff --cached --quiet) {
+            throw 'Payload verified but produced no staged changes.'
+          }
+
+          $message =
+            if ([string]::IsNullOrWhiteSpace(
+                $env:DPOP_COMMIT_MESSAGE
+              )) {
+              'feat: advance DPopCleaner 0.3.2'
+            } else {
+              $env:DPOP_COMMIT_MESSAGE.Trim()
+            }
+
+          git commit -m $message
+          if ($LASTEXITCODE -ne 0) {
+            throw 'git commit failed.'
+          }
+
+          git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) {
+            throw 'git push failed.'
+          }
+
+      - name: Stage MASTER artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          Copy-Item `
+            'master-build/bin/Release/DPopCleaner.exe' `
+            'master-evidence/DPopCleaner.exe' `
+            -Force
+
+          Copy-Item `
+            'master-build/bin/Release/DPopUpdater.exe' `
+            'master-evidence/DPopUpdater.exe' `
+            -Force
+
+          Copy-Item `
+            'master-src/v032-overlay-inventory.json' `
+            'master-evidence/v032-overlay-inventory.json' `
+            -Force
+
+          foreach ($file in @(
+            'DPopCleaner.exe',
+            'DPopUpdater.exe',
+            'default-1200x850.png',
+            'minimum-1100x700.png',
+            'maximized.png',
+            'capture-report.json',
+            'v032-overlay-inventory.json'
+          )) {
+            $path = Join-Path 'master-evidence' $file
+
+            if (-not (
+                Test-Path `
+                  -LiteralPath $path `
+                  -PathType Leaf
+              )) {
+              throw "MASTER artifact file missing: $file"
+            }
+          }
+
+      - name: Upload MASTER artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.3.2-master
+          path: master-evidence/*
+          if-no-files-found: error
