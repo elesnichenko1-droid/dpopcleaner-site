@@ -23,6 +23,7 @@ public:
 
     void Layout(const ShellLayout& layout) noexcept;
     void SetStatus(std::wstring_view text) noexcept;
+    void Refresh() noexcept;
 
     void AppendLog(
         std::wstring_view category,

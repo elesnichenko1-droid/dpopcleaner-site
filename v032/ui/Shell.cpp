@@ -6,6 +6,7 @@
 #include "ui/ShellModel.h"
 #include "ui/StatusBar.h"
 #include "ui/Theme.h"
+#include "ui/pages/OverviewPage.h"
 #include "ui/pages/SettingsStubPage.h"
 
 #include <array>
@@ -93,15 +94,20 @@ LRESULT CALLBACK PageHostProc(
 
     case WM_CTLCOLORSTATIC: {
         HDC dc = reinterpret_cast<HDC>(wParam);
-        SetBkMode(dc, TRANSPARENT);
-
         const HWND child = reinterpret_cast<HWND>(lParam);
         const int id = child ? GetDlgCtrlID(child) : 0;
+
+        SetBkMode(dc, OPAQUE);
+        SetBkColor(dc, palette.background);
+        SetDCBrushColor(dc, palette.background);
         SetTextColor(
             dc,
             id == kPageMessageId ? palette.muted : palette.text
         );
-        return reinterpret_cast<LRESULT>(GetStockObject(NULL_BRUSH));
+
+        return reinterpret_cast<LRESULT>(
+            GetStockObject(DC_BRUSH)
+        );
     }
 
     default:
@@ -362,6 +368,13 @@ private:
             L"DPopCleaner 0.3.2 запущен."
         );
 
+        if (!overviewPage_.Create(
+                pageHost_,
+                sessionLog_,
+                [this](Page page) { ShowPage(page); })) {
+            return false;
+        }
+
         ShowPage(Page::Overview, false);
         LayoutChildren();
 
@@ -468,6 +481,9 @@ private:
             );
         }
 
+        overviewPage_.Layout(
+            Box{0, 0, hostWidth, hostHeight}
+        );
         settingsPage_.Layout(hostWidth, hostHeight);
         statusBar_.Layout(layout);
     }
@@ -475,19 +491,23 @@ private:
     void ShowPage(Page page, bool writeLog = true) {
         activePage_ = page;
 
+        const bool overview = page == Page::Overview;
         const bool settings = page == Page::Settings;
+        const bool generic = !overview && !settings;
+
+        overviewPage_.Show(overview);
         settingsPage_.Show(settings);
 
         if (pageTitle_) {
-            ShowWindow(pageTitle_, settings ? SW_HIDE : SW_SHOW);
+            ShowWindow(pageTitle_, generic ? SW_SHOW : SW_HIDE);
         }
         if (pageMessage_) {
-            ShowWindow(pageMessage_, settings ? SW_HIDE : SW_SHOW);
+            ShowWindow(pageMessage_, generic ? SW_SHOW : SW_HIDE);
         }
 
         const std::wstring_view label = LabelForPage(page);
 
-        if (!settings) {
+        if (generic) {
             const std::wstring ownedLabel{label};
             SetWindowTextW(pageTitle_, ownedLabel.c_str());
             SetWindowTextW(
@@ -659,6 +679,10 @@ private:
             InvalidateRect(hwnd_, nullptr, TRUE);
             return 0;
 
+        case kOverviewLogChangedMessage:
+            statusBar_.Refresh();
+            return 0;
+
         case WM_COMMAND: {
             const int id = LOWORD(wParam);
 
@@ -690,16 +714,11 @@ private:
         case WM_CTLCOLORSTATIC: {
             HDC dc = reinterpret_cast<HDC>(wParam);
             HWND child = reinterpret_cast<HWND>(lParam);
-
-            if (child == statusBar_.LogControl()) {
-                SetBkMode(dc, OPAQUE);
-                SetBkColor(dc, palette.control);
-                SetTextColor(dc, palette.text);
-                return reinterpret_cast<LRESULT>(controlBrush_);
-            }
-
             const int id = child ? GetDlgCtrlID(child) : 0;
-            SetBkMode(dc, TRANSPARENT);
+
+            SetBkMode(dc, OPAQUE);
+            SetBkColor(dc, palette.title);
+            SetDCBrushColor(dc, palette.title);
 
             if (id == kSubtitleId) {
                 SetTextColor(dc, palette.muted);
@@ -710,7 +729,7 @@ private:
             }
 
             return reinterpret_cast<LRESULT>(
-                GetStockObject(NULL_BRUSH)
+                GetStockObject(DC_BRUSH)
             );
         }
 
@@ -769,6 +788,7 @@ private:
     Page activePage_{Page::Overview};
     SessionLog sessionLog_;
     StatusBar statusBar_;
+    OverviewPage overviewPage_;
     SettingsStubPage settingsPage_;
 };
 

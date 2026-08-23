@@ -36,6 +36,7 @@ add_executable(DPopCleaner WIN32
     src/ui/StatusBar.cpp
     src/ui/Shell.cpp
     src/ui/pages/SettingsStubPage.cpp
+    src/ui/pages/OverviewPage.cpp
     src/core/Logger.cpp
     src/core/Paths.cpp
     src/modules/SystemInfo.cpp
@@ -208,4 +209,15 @@ if(BUILD_TESTING)
         target_compile_options(ShellContractTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME ShellContractTests COMMAND ShellContractTests)
+
+    add_executable(OverviewModelTests
+        tests/v032/OverviewModelTests.cpp
+    )
+    target_include_directories(OverviewModelTests PRIVATE src)
+    target_compile_definitions(OverviewModelTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    if(MSVC)
+        target_compile_options(OverviewModelTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME OverviewModelTests COMMAND OverviewModelTests)
 endif()
+

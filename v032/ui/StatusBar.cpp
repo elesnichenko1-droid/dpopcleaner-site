@@ -118,6 +118,10 @@ void StatusBar::SetStatus(std::wstring_view text) noexcept {
     SetText(status_, text);
 }
 
+void StatusBar::Refresh() noexcept {
+    RefreshLogControl();
+}
+
 void StatusBar::AppendLog(
     std::wstring_view category,
     EventLevel level,
