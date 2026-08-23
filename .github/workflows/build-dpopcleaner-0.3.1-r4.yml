@@ -111,7 +111,7 @@ jobs:
           $certificate = Join-Path $env:RUNNER_TEMP 'dpop-r4-signing.pfx'
           [IO.File]::WriteAllBytes($certificate,[Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -File -Recurse |
-            Where-Object FullName -Match '\x64\' | Sort-Object FullName -Descending | Select-Object -First 1
+           Where-Object { $_.FullName -like '*\x64\*' } | Sort-Object FullName -Descending | Select-Object -First 1
           if (-not $signtool) { throw 'signtool.exe was not found.' }
           foreach ($binary in @('r4-build/bin/Release/DPopCleaner.exe','r4-build/bin/Release/DPopUpdater.exe')) {
             & $signtool.FullName sign /fd SHA256 /f $certificate /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $binary
@@ -134,7 +134,7 @@ jobs:
             if ($info.InternalName -ne $x.internal -or $info.OriginalFilename -ne $x.internal -or $info.FileDescription -ne $x.description) { throw "Wrong binary identity: $($x.path)" }
           }
           $mt=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter mt.exe -File -Recurse |
-            Where-Object FullName -Match '\x64\' | Sort-Object FullName -Descending | Select-Object -First 1
+           Where-Object { $_.FullName -like '*\x64\*' } | Sort-Object FullName -Descending | Select-Object -First 1
           if (-not $mt) { throw 'mt.exe not found.' }
           & $mt.FullName "-inputresource:$app;#1" '-out:evidence/DPopCleaner.manifest.xml'
           if ($LASTEXITCODE -ne 0) { throw 'Could not extract app manifest.' }
@@ -183,7 +183,7 @@ jobs:
           if ('${{ steps.sign-apps.outputs.signed }}' -ne 'true') { exit 0 }
           $certificate=Join-Path $env:RUNNER_TEMP 'dpop-r4-signing.pfx'
           $signtool=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -File -Recurse |
-            Where-Object FullName -Match '\x64\' | Sort-Object FullName -Descending | Select-Object -First 1
+            Where-Object { $_.FullName -like '*\x64\*' } | Sort-Object FullName -Descending | Select-Object -First 1
           & $signtool.FullName sign /fd SHA256 /f $certificate /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 "artifacts/$env:R4_ASSET"
           if ($LASTEXITCODE -ne 0) { throw 'Installer signing failed.' }
 
