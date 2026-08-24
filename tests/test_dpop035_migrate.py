@@ -48,6 +48,12 @@ class MigrationBoundaryTests(unittest.TestCase):
             self.assertFalse((target / "core").exists())
             self.assertFalse((target / "update").exists())
 
+    def test_modern_zapret_backend_is_linked_into_recovered_cmake(self):
+        m = load_core()
+        donor = """add_executable(DPopCleaner WIN32\n  src/ui/Controls.cpp\n  src/ui/pages/WorkspacePage.cpp\n  src/modules/FullCore.cpp\n  src/modules/ZapretManager.cpp\n)\nif(BUILD_TESTING)\nendif()\n"""
+        transformed = m._transform_cmake_for_disk(donor)
+        self.assertIn("src/modules/ZapretCenterModel.cpp", transformed)
+
     def test_overlay_empty_is_safe(self):
         m = load_core()
         with tempfile.TemporaryDirectory() as temp:
