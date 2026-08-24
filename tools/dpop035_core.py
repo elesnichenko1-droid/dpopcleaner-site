@@ -144,6 +144,17 @@ def _transform_cmake_for_disk(text: str) -> str:
     return _insert_ctest_block(text, "add_executable(DiskAnalyzerTests", block)
 
 
+def _transform_cmake_for_settings(text: str) -> str:
+    if "src/modules/SettingsStore.cpp" not in text:
+        anchor = "  src/modules/FullCore.cpp\n"
+        if anchor not in text:
+            raise ValueError("CMake donor drifted: FullCore source anchor missing for SettingsStore")
+        text = text.replace(anchor, anchor + "  src/modules/SettingsStore.cpp\n", 1)
+
+    block = '''\n  add_executable(SettingsStoreTests tests/v035/SettingsStoreTests.cpp src/modules/SettingsStore.cpp)\n  target_include_directories(SettingsStoreTests PRIVATE src)\n  target_compile_definitions(SettingsStoreTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  target_link_libraries(SettingsStoreTests PRIVATE shell32 advapi32)\n  if(MSVC)\n    target_compile_options(SettingsStoreTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME SettingsStoreTests COMMAND SettingsStoreTests)\n'''
+    return _insert_ctest_block(text, "add_executable(SettingsStoreTests", block)
+
+
 def _overlay_v035_tests(repository: Path, stage: Path) -> list[str]:
     source = repository / "tests" / "v035"
     destination = stage / "tests"
@@ -181,6 +192,7 @@ def _transform_identity(v035: Path) -> dict[str, str]:
         raise ValueError("expected 0.3.3/0.3.4 CMake product identity missing")
     cmake = cmake.replace("tests/v033/", "tests/v035/").replace("tests/v034/", "tests/v035/")
     cmake = _transform_cmake_for_disk(cmake)
+    cmake = _transform_cmake_for_settings(cmake)
 
     header = header_path.read_text(encoding="utf-8")
     for old in ('kVersion[] = L"0.3.3"', 'kVersion[] = L"0.3.4"'):
