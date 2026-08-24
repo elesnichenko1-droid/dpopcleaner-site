@@ -30,6 +30,19 @@ if(BUILD_TESTING)
 endif()
 '''
 
+ZAPRET_CMAKE = r'''add_executable(DPopCleaner WIN32
+  src/modules/DPopGuard.cpp
+  src/modules/ZapretManager.cpp
+  src/modules/ZapretPolicy.cpp
+  src/modules/Applications.cpp
+)
+if(BUILD_TESTING)
+  add_executable(ZapretPolicyTests tests/ZapretPolicyTests.cpp src/modules/ZapretPolicy.cpp)
+  target_include_directories(ZapretPolicyTests PRIVATE src)
+  add_test(NAME ZapretPolicyTests COMMAND ZapretPolicyTests)
+endif()
+'''
+
 
 class CMakeIntegrationTests(unittest.TestCase):
     def test_page_layout_is_compiled_into_app_and_registered_in_ctest(self):
@@ -46,6 +59,16 @@ class CMakeIntegrationTests(unittest.TestCase):
         once = mod.transform_cmake_for_page_layout(DONOR_CMAKE)
         twice = mod.transform_cmake_for_page_layout(once)
         self.assertEqual(once, twice)
+
+    def test_zapret_center_model_is_compiled_into_app_and_ctest(self):
+        mod = load_module()
+        updated = mod.transform_cmake_for_zapret_center(ZAPRET_CMAKE)
+        self.assertIn('src/modules/ZapretCenterModel.cpp', updated)
+        self.assertEqual(updated.count('src/modules/ZapretCenterModel.cpp'), 2)
+        self.assertIn('add_executable(ZapretCenterModelTests', updated)
+        self.assertIn('tests/v034/ZapretCenterModelTests.cpp', updated)
+        self.assertIn('add_test(NAME ZapretCenterModelTests COMMAND ZapretCenterModelTests)', updated)
+        self.assertEqual(updated, mod.transform_cmake_for_zapret_center(updated))
 
 
 class PrepareScriptTests(unittest.TestCase):
