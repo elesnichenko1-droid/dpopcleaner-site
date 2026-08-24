@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publish-dpopcleaner-0.3.3.yml'
+      - '.github/workflows/build-dpopcleaner-0.3.1-r3.yml'
+      - '.github/workflows/static.yml'
+      - '.github/workflows/build-clean-0.2.14-r1.yml'
+      - '.github/workflows/build-dpopcleaner-release.yml'
       - 'release/**'
       - 'tools/dpop033_*'
       - 'tests/test_dpop033_*'
@@ -18,6 +22,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publish-dpopcleaner-0.3.3.yml'
+      - '.github/workflows/build-dpopcleaner-0.3.1-r3.yml'
+      - '.github/workflows/static.yml'
+      - '.github/workflows/build-clean-0.2.14-r1.yml'
+      - '.github/workflows/build-dpopcleaner-release.yml'
       - 'release/**'
       - 'tools/dpop033_*'
       - 'tests/test_dpop033_*'
