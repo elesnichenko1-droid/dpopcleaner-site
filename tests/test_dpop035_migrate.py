@@ -56,12 +56,16 @@ class MigrationBoundaryTests(unittest.TestCase):
 
     def test_settings_store_is_compiled_and_executed_by_ctest(self):
         m = load_core()
-        donor = """add_executable(DPopCleaner WIN32\n  src/modules/FullCore.cpp\n)\nif(BUILD_TESTING)\nendif()\n"""
+        donor = """add_executable(DPopCleaner WIN32\n  src/ui/Shell.cpp\n  src/modules/FullCore.cpp\n)\nif(BUILD_TESTING)\nendif()\n"""
         transformed = m._transform_cmake_for_settings(donor)
         self.assertIn("src/modules/SettingsStore.cpp", transformed)
+        self.assertIn("src/ui/settings/SettingsController.cpp", transformed)
         self.assertIn("add_executable(SettingsStoreTests", transformed)
         self.assertIn("tests/v035/SettingsStoreTests.cpp", transformed)
         self.assertIn("add_test(NAME SettingsStoreTests", transformed)
+        self.assertIn("add_executable(SettingsControllerTests", transformed)
+        self.assertIn("tests/v035/SettingsControllerTests.cpp", transformed)
+        self.assertIn("add_test(NAME SettingsControllerTests", transformed)
 
     def test_overlay_empty_is_safe(self):
         m = load_core()
