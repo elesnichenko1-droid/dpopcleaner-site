@@ -248,16 +248,18 @@ void SettingsPage::OnPaint(HDC dc, const RECT& client) noexcept {
     const int top = ComputePageContentTop(dpiRaw ? static_cast<int>(dpiRaw) : 96);
     const int margin = 18;
     const int gap = 12;
-    const int leftW = std::max(390, (client.right - margin * 2 - gap) * 48 / 100);
+    const int clientWidth = static_cast<int>(client.right - client.left);
+    const int clientHeight = static_cast<int>(client.bottom - client.top);
+    const int leftW = std::max(390, (clientWidth - margin * 2 - gap) * 48 / 100);
     const int rightX = margin + leftW + gap;
-    const int rightW = client.right - margin - rightX;
-    const int usableBottom = client.bottom - margin - 48;
+    const int rightW = clientWidth - margin - rightX;
+    const int usableBottom = clientHeight - margin - 48;
     const int availableH = std::max(320, usableBottom - top);
     const int exclusionPanelH = std::max(240, availableH * 62 / 100);
 
     RECT general{margin, top, margin + leftW, usableBottom};
-    RECT exclusions{rightX, top, client.right - margin, top + exclusionPanelH};
-    RECT thresholds{rightX, top + exclusionPanelH + gap, client.right - margin, usableBottom};
+    RECT exclusions{rightX, top, clientWidth - margin, top + exclusionPanelH};
+    RECT thresholds{rightX, top + exclusionPanelH + gap, clientWidth - margin, usableBottom};
     DrawPanel(dc, general, true);
     DrawPanel(dc, exclusions, false);
     DrawPanel(dc, thresholds, false);
