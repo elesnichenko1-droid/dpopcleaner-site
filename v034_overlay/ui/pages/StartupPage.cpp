@@ -70,10 +70,11 @@ void StartupPage::OnLayout(int width, int height) noexcept {
     const int actionRows = 2;
     const int actionArea = actionRows * actionH + gap;
     const int buttonsTop = std::max(top + 160, height - margin - actionArea);
+    const int countWidth = 300;
 
-    MoveWindow(count_, std::max(margin, width - margin - 180), 18, 180, 24, TRUE);
-    MoveWindow(list_, margin + 10, top + 28, std::max(120, width - margin * 2 - 20),
-        std::max(120, buttonsTop - gap - (top + 28)), TRUE);
+    MoveWindow(count_, std::max(margin, width - margin - countWidth), top + 7, countWidth, 24, TRUE);
+    MoveWindow(list_, margin + 10, top + 38, std::max(120, width - margin * 2 - 20),
+        std::max(120, buttonsTop - gap - (top + 38)), TRUE);
 
     const int innerW = std::max(100, width - margin * 2);
     const int colW = std::max(120, (innerW - gap * 2) / 3);
