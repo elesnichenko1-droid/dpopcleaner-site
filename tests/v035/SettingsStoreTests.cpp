@@ -80,6 +80,18 @@ void TestNormalizeAndExclusions() {
     assert(!IsExcludedPath(L"C:\\Users\\Test\\Other\\child.bin", s));
 }
 
+void TestActiveSettingsAreSessionScoped() {
+    auto first = DefaultSettings();
+    first.largeFileMB = 640;
+    SetActiveSettings(first);
+    assert(ActiveSettings().largeFileMB == 640);
+
+    auto second = first;
+    second.largeFileMB = 960;
+    SetActiveSettings(second);
+    assert(ActiveSettings() == second);
+}
+
 void TestRoundTrip() {
     TempSettingsRoot temp;
     auto s = DefaultSettings();
@@ -108,12 +120,15 @@ void TestRoundTrip() {
     assert(error.empty());
     assert(fs::exists(SettingsPath()));
     assert(!fs::exists(fs::path(SettingsPath().wstring() + L".tmp")));
+    assert(ActiveSettings() == s);
 
+    SetActiveSettings(DefaultSettings());
     const auto loaded = LoadAppSettings();
     assert(!loaded.usedDefaults);
     assert(!loaded.migrated);
     assert(loaded.warning.empty());
     assert(loaded.settings == s);
+    assert(ActiveSettings() == s);
 }
 
 void TestCorruptFallback() {
@@ -123,6 +138,7 @@ void TestCorruptFallback() {
     assert(loaded.usedDefaults);
     assert(!loaded.warning.empty());
     assert(loaded.settings == DefaultSettings());
+    assert(ActiveSettings() == DefaultSettings());
 }
 
 void TestSchemaOneMigrationAndDedup() {
@@ -149,6 +165,7 @@ void TestSchemaOneMigrationAndDedup() {
     assert(loaded.settings.closeBehavior == CloseBehavior::MinimizeToTray);
     assert(loaded.settings.memoryAutoTrimPercent == 86);
     assert(loaded.settings.cleanExclusions.size() == 2);
+    assert(ActiveSettings() == loaded.settings);
 }
 
 } // namespace
@@ -156,6 +173,7 @@ void TestSchemaOneMigrationAndDedup() {
 int main() {
     TestDefaultsAndValidation();
     TestNormalizeAndExclusions();
+    TestActiveSettingsAreSessionScoped();
     TestRoundTrip();
     TestCorruptFallback();
     TestSchemaOneMigrationAndDedup();
