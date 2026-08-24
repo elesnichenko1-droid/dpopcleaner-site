@@ -26,6 +26,23 @@ def transform_cmake_for_page_layout(text: str) -> str:
     return text
 
 
+def transform_cmake_for_zapret_center(text: str) -> str:
+    """Compile safe strategy discovery into the app and execute its behavior test."""
+    if 'src/modules/ZapretCenterModel.cpp' not in text:
+        anchor = '  src/modules/ZapretManager.cpp\n'
+        if anchor not in text:
+            raise ValueError('CMake donor drifted: src/modules/ZapretManager.cpp anchor missing')
+        text = text.replace(anchor, anchor + '  src/modules/ZapretCenterModel.cpp\n', 1)
+
+    if 'add_executable(ZapretCenterModelTests' not in text:
+        test_block = '''\n  add_executable(ZapretCenterModelTests tests/v034/ZapretCenterModelTests.cpp src/modules/ZapretCenterModel.cpp)\n  target_include_directories(ZapretCenterModelTests PRIVATE src)\n  target_compile_definitions(ZapretCenterModelTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  if(MSVC)\n    target_compile_options(ZapretCenterModelTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME ZapretCenterModelTests COMMAND ZapretCenterModelTests)\n'''
+        closing = text.rfind('endif()')
+        if closing < 0:
+            raise ValueError('CMake donor drifted: BUILD_TESTING endif() missing')
+        text = text[:closing] + test_block + text[closing:]
+    return text
+
+
 def _prepare_034_script_text() -> str:
     return r'''[CmdletBinding()]
 param(
