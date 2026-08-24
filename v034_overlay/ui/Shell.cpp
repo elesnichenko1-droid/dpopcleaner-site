@@ -7,6 +7,7 @@
 #include "ui/ShellModel.h"
 #include "ui/StatusBar.h"
 #include "ui/Theme.h"
+#include "modules/FullCore.h"
 #include "ui/pages/ApplicationsPage.h"
 #include "ui/pages/CleaningPage.h"
 #include "ui/pages/DiskPage.h"
@@ -38,6 +39,7 @@ constexpr int kBetaId = 1302;
 constexpr int kPageHostId = 1303;
 constexpr int kMinClientWidth = 1100;
 constexpr int kMinClientHeight = 700;
+constexpr UINT kRunStartupActionsMessage = WM_APP + 0x72;
 
 std::wstring WindowText(HWND hwnd) {
     const int length = GetWindowTextLengthW(hwnd);
@@ -193,6 +195,7 @@ private:
 
         ShowPage(Page::Overview, false);
         LayoutChildren();
+        PostMessageW(hwnd_, kRunStartupActionsMessage, 0, 0);
         return true;
     }
 
@@ -305,6 +308,13 @@ private:
         case WM_CREATE: return CreateChildren() ? 0 : -1;
         case WM_GETMINMAXINFO: ApplyMinimumTrackSize(reinterpret_cast<MINMAXINFO*>(lParam)); return 0;
         case WM_SIZE: LayoutChildren(); InvalidateRect(hwnd_, nullptr, TRUE); return 0;
+        case kRunStartupActionsMessage: {
+            const auto settings = dpop::full::LoadSettings();
+            if (settings.quickGuardAtStartup) guardPage_.RunQuickScanAtStartup();
+            if (settings.checkUpdateCacheAtStartup) windowsPage_.CheckUpdateCacheAtStartup();
+            if (settings.checkUpdatesAtStartup) updatesPage_.CheckAtStartup();
+            return 0;
+        }
         case kOverviewLogChangedMessage:
         case kPageLogChangedMessage: statusBar_.Refresh(); return 0;
         case kPageStatusChangedMessage: {
