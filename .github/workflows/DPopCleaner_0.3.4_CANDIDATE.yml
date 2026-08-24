@@ -52,6 +52,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 Disk/Applications parity contract failed.' }
           python tests/test_dpop034_duplicates_parity.py -v
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 duplicate safety contract failed.' }
+          python tests/test_dpop034_startup_hooks.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 startup hooks contract failed.' }
 
       - name: Build and CTest DPopCleaner 0.3.4
         shell: pwsh
