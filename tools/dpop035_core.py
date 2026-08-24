@@ -110,6 +110,16 @@ def _insert_ctest_block(text: str, marker: str, block: str) -> str:
 
 
 def _transform_cmake_for_disk(text: str) -> str:
+    # ZapretManager from the modern 0.3.4 backend calls helpers implemented in
+    # ZapretCenterModel. The recovered 0.3.3/0.2.14-style CMake never knew
+    # about that translation unit, so explicitly link the backend dependency
+    # without importing the 0.3.4 UI shell.
+    if "src/modules/ZapretCenterModel.cpp" not in text:
+        anchor = "  src/modules/ZapretManager.cpp\n"
+        if anchor not in text:
+            raise ValueError("CMake donor drifted: ZapretManager source anchor missing")
+        text = text.replace(anchor, anchor + "  src/modules/ZapretCenterModel.cpp\n", 1)
+
     if "src/modules/DiskAnalyzer.cpp" not in text:
         anchor = "  src/modules/FullCore.cpp\n"
         if anchor not in text:
