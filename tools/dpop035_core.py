@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """DPopCleaner 0.3.5 migration core.
 
-0.3.5 intentionally keeps the recovered 0.2.14-style v033 UX host and copies
-only modern backend roots from the verified v034 donor.  UI overlays specific
-to 0.3.5 are applied afterwards.
+The recovered v033 tree is the user-visible 0.2.14-style UX host. Only the
+allow-listed backend roots from verified v034 are copied into it; 0.3.4 UI
+files are deliberately excluded. 0.3.5-specific overlays are applied last.
 """
 from __future__ import annotations
 
@@ -90,6 +90,60 @@ def _find_generated(root: Path, version_dir: str) -> Path:
     return matches[0]
 
 
+def _insert_ctest_block(text: str, marker: str, block: str) -> str:
+    if marker in text:
+        return text
+    closing = text.rfind("endif()")
+    if closing < 0:
+        raise ValueError("CMake donor drifted: BUILD_TESTING endif() missing")
+    return text[:closing] + block + text[closing:]
+
+
+def _transform_cmake_for_disk(text: str) -> str:
+    if "src/modules/DiskAnalyzer.cpp" not in text:
+        anchor = "  src/modules/FullCore.cpp\n"
+        if anchor not in text:
+            raise ValueError("CMake donor drifted: FullCore source anchor missing")
+        text = text.replace(anchor, anchor + "  src/modules/DiskAnalyzer.cpp\n", 1)
+
+    if "src/ui/controls/DiskTreeList.cpp" not in text:
+        anchor = "  src/ui/Controls.cpp\n"
+        if anchor not in text:
+            raise ValueError("CMake donor drifted: Controls source anchor missing")
+        text = text.replace(anchor, anchor + "  src/ui/controls/DiskTreeList.cpp\n", 1)
+
+    if "src/ui/pages/DiskPage.cpp" not in text:
+        for anchor in ("  src/ui/pages/WorkspacePage.cpp\n", "  src/ui/pages/OverviewPage.cpp\n"):
+            if anchor in text:
+                text = text.replace(anchor, anchor + "  src/ui/pages/DiskPage.cpp\n", 1)
+                break
+        else:
+            raise ValueError("CMake donor drifted: DiskPage source anchor missing")
+
+    block = '''\n  add_executable(DiskAnalyzerTests tests/v035/DiskAnalyzerTests.cpp src/modules/DiskAnalyzer.cpp)\n  target_include_directories(DiskAnalyzerTests PRIVATE src)\n  target_compile_definitions(DiskAnalyzerTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  target_link_libraries(DiskAnalyzerTests PRIVATE kernel32)\n  if(MSVC)\n    target_compile_options(DiskAnalyzerTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME DiskAnalyzerTests COMMAND DiskAnalyzerTests)\n'''
+    return _insert_ctest_block(text, "add_executable(DiskAnalyzerTests", block)
+
+
+def _overlay_v035_tests(repository: Path, stage: Path) -> list[str]:
+    source = repository / "tests" / "v035"
+    destination = stage / "tests"
+    if not source.is_dir():
+        return []
+    destination.mkdir(parents=True, exist_ok=True)
+    changed: list[str] = []
+    for path in sorted(source.rglob("*")):
+        if path.is_symlink():
+            raise ValueError(f"test symlinks are forbidden: {path}")
+        if not path.is_file():
+            continue
+        relative = path.relative_to(source)
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+        changed.append(relative.as_posix())
+    return changed
+
+
 def _transform_identity(v035: Path) -> dict[str, str]:
     cmake_path = v035 / "CMakeLists.txt"
     header_path = v035 / "Version.h"
@@ -106,6 +160,7 @@ def _transform_identity(v035: Path) -> dict[str, str]:
     else:
         raise ValueError("expected 0.3.3/0.3.4 CMake product identity missing")
     cmake = cmake.replace("tests/v033/", "tests/v035/").replace("tests/v034/", "tests/v035/")
+    cmake = _transform_cmake_for_disk(cmake)
 
     header = header_path.read_text(encoding="utf-8")
     for old in ('kVersion[] = L"0.3.3"', 'kVersion[] = L"0.3.4"'):
@@ -130,17 +185,20 @@ def _transform_identity(v035: Path) -> dict[str, str]:
             break
 
     resource = resource_path.read_text(encoding="utf-8")
-    resource_pairs = (
+    for old, new in (
         ("FILEVERSION 0,3,3,1", "FILEVERSION 0,3,5,1"),
         ("PRODUCTVERSION 0,3,3,1", "PRODUCTVERSION 0,3,5,1"),
         ('"0.3.3.1\\0"', '"0.3.5.1\\0"'),
         ('"0.3.3 BETA R1\\0"', '"0.3.5 BETA R1\\0"'),
+        ("FILEVERSION 0,3,4,1", "FILEVERSION 0,3,5,1"),
+        ("PRODUCTVERSION 0,3,4,1", "PRODUCTVERSION 0,3,5,1"),
+        ('"0.3.4.1\\0"', '"0.3.5.1\\0"'),
+        ('"0.3.4 BETA R1\\0"', '"0.3.5 BETA R1\\0"'),
         ("FILEVERSION 0,3,4,2", "FILEVERSION 0,3,5,1"),
         ("PRODUCTVERSION 0,3,4,2", "PRODUCTVERSION 0,3,5,1"),
         ('"0.3.4.2\\0"', '"0.3.5.1\\0"'),
         ('"0.3.4 BETA R2\\0"', '"0.3.5 BETA R1\\0"'),
-    )
-    for old, new in resource_pairs:
+    ):
         resource = resource.replace(old, new)
     if "0.3.5.1" not in resource and "0,3,5,1" not in resource:
         raise ValueError("resource identity transformation failed")
@@ -188,6 +246,7 @@ def prepare_v035(repository: Path, output: Path, workspace: Path, *, build: bool
     shutil.copytree(v033, stage)
     copied_backend = copy_modern_backend(v034, stage)
     overlay_files = apply_overlay(repository / "v035_overlay", stage)
+    test_files = _overlay_v035_tests(repository, stage)
     identity = _transform_identity(stage)
 
     export_root = output / "source-overlay"
@@ -204,9 +263,14 @@ def prepare_v035(repository: Path, output: Path, workspace: Path, *, build: bool
         "backend_donor": backend_report,
         "modern_backend_roots": list(copied_backend),
         "overlay_files": overlay_files,
+        "v035_test_files": test_files,
         "build": {"requested": build, "completed": False, "tests_passed": False},
     }
-    (output / "migration-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
     if build:
-        raise RuntimeError("0.3.5 Windows build orchestration is introduced by the candidate workflow task")
+        builder = _load_tool(repository, "dpop035_build")
+        report["build"] = {"requested": True, **builder.run_windows_build(repository, output, workspace)}
+
+    (output / "migration-report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return report
