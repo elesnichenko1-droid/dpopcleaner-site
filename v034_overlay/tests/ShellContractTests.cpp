@@ -11,7 +11,7 @@ int main() {
     using namespace dpop::ui;
     using namespace dpop::ui::shell;
     const auto& identity = Identity();
-    if (!Check(identity.windowTitle == L"DPopCleaner 0.3.4 BETA R1", "window title mismatch")) return 1;
+    if (!Check(identity.windowTitle == L"DPopCleaner 0.3.4 BETA R2", "window title mismatch")) return 1;
     if (!Check(identity.productName == L"DPopCleaner", "product name mismatch")) return 2;
     if (!Check(identity.subtitle == L"Windows под контролем", "0.2.14-style subtitle mismatch")) return 3;
     if (!Check(identity.betaLabel == L"BETA", "BETA label mismatch")) return 4;

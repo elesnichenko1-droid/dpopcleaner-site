@@ -17,7 +17,7 @@ struct ZapretPageRegions {
     ZapretRect strategyLabel{};
     ZapretRect strategyCombo{};
     ZapretRect diagnostic{};
-    std::array<ZapretRect, 6> actions{};
+    std::array<ZapretRect, 8> actions{};
 };
 
 ZapretPageRegions ComputeZapretPageLayout(int width, int height, int dpi) noexcept;

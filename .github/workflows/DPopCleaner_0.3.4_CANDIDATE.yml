@@ -40,6 +40,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 Zapret UI contract failed.' }
           python tests/test_dpop034_shell_parity.py -v
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 shell parity contract failed.' }
+          python tests/test_dpop034_page_content_layout.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 shared page content layout contract failed.' }
+          python tests/test_dpop034_settings_parity.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 settings parity contract failed.' }
+          python tests/test_dpop034_startup_parity.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 startup parity contract failed.' }
+          python tests/test_dpop034_guard_parity.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 DPopGuard parity contract failed.' }
+          python tests/test_dpop034_storage_apps_parity.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 Disk/Applications parity contract failed.' }
+          python tests/test_dpop034_duplicates_parity.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 duplicate safety contract failed.' }
+          python tests/test_dpop034_startup_hooks.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 startup hooks contract failed.' }
+          python tests/test_dpop034_r2_identity.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 R2 identity contract failed.' }
 
       - name: Build and CTest DPopCleaner 0.3.4
         shell: pwsh

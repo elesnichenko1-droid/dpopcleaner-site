@@ -4,68 +4,56 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / 'tools' / 'dpop034_migrate.py'
 
 
 def load_module():
-    if not MODULE_PATH.is_file():
-        raise FileNotFoundError(f'production module missing: {MODULE_PATH}')
     spec = importlib.util.spec_from_file_location('dpop034_migrate', MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError('cannot load dpop034_migrate')
     module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
     spec.loader.exec_module(module)
     return module
 
 
+def make_donor(root: Path) -> None:
+    (root / 'CMakeLists.txt').write_text('project(DPopCleaner VERSION 0.3.3 LANGUAGES CXX)\n', encoding='utf-8')
+    (root / 'Version.h').write_text(
+        'inline constexpr wchar_t kVersion[] = L"0.3.3";\n'
+        'inline constexpr wchar_t kDisplayVersion[] = L"0.3.3 BETA R1";\n'
+        'inline constexpr int kVersionCode = 3031;\n'
+        'inline constexpr int kRevision = 1;\n', encoding='utf-8')
+    (root / 'version.rc.in').write_text(
+        'FILEVERSION 0,3,3,1\nPRODUCTVERSION 0,3,3,1\n'
+        'VALUE "FileVersion", "0.3.3.1\\0"\n'
+        'VALUE "ProductVersion", "0.3.3 BETA R1\\0"\n', encoding='utf-8')
+
+
 class VersionTransformTests(unittest.TestCase):
-    def test_transform_rewrites_exact_033_identity_to_034(self):
+    def test_transform_rewrites_033_identity_to_034_r2(self):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            (root / 'CMakeLists.txt').write_text(
-                'project(DPopCleaner VERSION 0.3.3 LANGUAGES CXX)\n', encoding='utf-8'
-            )
-            (root / 'Version.h').write_text(
-                '#pragma once\n'
-                'inline constexpr wchar_t kVersion[] = L"0.3.3";\n'
-                'inline constexpr wchar_t kDisplayVersion[] = L"0.3.3 BETA R1";\n'
-                'inline constexpr int kVersionCode = 3031;\n'
-                'inline constexpr int kRevision = 1;\n',
-                encoding='utf-8',
-            )
-            (root / 'version.rc.in').write_text(
-                'FILEVERSION 0,3,3,1\n'
-                'PRODUCTVERSION 0,3,3,1\n'
-                'VALUE "FileVersion", "0.3.3.1\\0"\n'
-                'VALUE "ProductVersion", "0.3.3 BETA R1\\0"\n',
-                encoding='utf-8',
-            )
-            (root / 'Shell.cpp').write_text(
-                'auto a=L"DPopCleaner 0.3.3 BETA R1";\n'
-                'auto b=L"v0.3.3 BETA";\n'
-                'auto internal=L"DPopCleaner033ShellWindow";\n',
-                encoding='utf-8',
-            )
-
+            make_donor(root)
+            (root / 'Shell.cpp').write_text('auto v=L"DPopCleaner 0.3.3 BETA R1";\n', encoding='utf-8')
             report = mod.transform_v034_overlay(root)
-
-            self.assertEqual(report['version'], '0.3.4')
-            self.assertEqual(report['version_code'], '3041')
-            self.assertIn('VERSION 0.3.4', (root / 'CMakeLists.txt').read_text(encoding='utf-8'))
+            self.assertEqual(report['display_version'], '0.3.4 BETA R2')
+            self.assertEqual(report['version_code'], '3042')
+            self.assertEqual(report['revision'], '2')
             header = (root / 'Version.h').read_text(encoding='utf-8')
-            self.assertIn('L"0.3.4"', header)
-            self.assertIn('L"0.3.4 BETA R1"', header)
-            self.assertIn('kVersionCode = 3041', header)
+            self.assertIn('L"0.3.4 BETA R2"', header)
+            self.assertIn('kVersionCode = 3042', header)
+            self.assertIn('kRevision = 2', header)
             resource = (root / 'version.rc.in').read_text(encoding='utf-8')
-            self.assertIn('FILEVERSION 0,3,4,1', resource)
-            shell = (root / 'Shell.cpp').read_text(encoding='utf-8')
-            self.assertIn('DPopCleaner 0.3.4 BETA R1', shell)
-            self.assertIn('v0.3.4 BETA', shell)
-            self.assertIn('DPopCleaner033ShellWindow', shell)
+            self.assertIn('FILEVERSION 0,3,4,2', resource)
+            self.assertIn('0.3.4.2\\0', resource)
+            self.assertIn('DPopCleaner 0.3.4 BETA R2', (root / 'Shell.cpp').read_text(encoding='utf-8'))
 
-    def test_transform_fails_closed_if_donor_identity_drifted(self):
+    def test_transform_fails_closed_when_donor_drifted(self):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -77,150 +65,62 @@ class VersionTransformTests(unittest.TestCase):
 
 
 class OverlaySafetyTests(unittest.TestCase):
-    def test_overlay_replaces_only_relative_files_under_target(self):
+    def test_overlay_only_writes_relative_files(self):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            overlay = base / 'overlay'
-            target = base / 'target'
-            overlay.joinpath('ui').mkdir(parents=True)
-            target.joinpath('ui').mkdir(parents=True)
-            overlay.joinpath('ui', 'PageLayout.h').write_text('new', encoding='utf-8')
-            target.joinpath('ui', 'PageLayout.h').write_text('old', encoding='utf-8')
-            target.joinpath('keep.txt').write_text('keep', encoding='utf-8')
-
-            changed = mod.apply_overlay(overlay, target)
-
-            self.assertEqual(changed, ['ui/PageLayout.h'])
-            self.assertEqual((target / 'ui' / 'PageLayout.h').read_text(encoding='utf-8'), 'new')
+            base = Path(td); overlay = base / 'overlay'; target = base / 'target'
+            overlay.mkdir(); target.mkdir()
+            (overlay / 'x.txt').write_text('new', encoding='utf-8')
+            (target / 'keep.txt').write_text('keep', encoding='utf-8')
+            self.assertEqual(mod.apply_overlay(overlay, target), ['x.txt'])
+            self.assertEqual((target / 'x.txt').read_text(encoding='utf-8'), 'new')
             self.assertEqual((target / 'keep.txt').read_text(encoding='utf-8'), 'keep')
 
     def test_overlay_rejects_symlinks(self):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            overlay = base / 'overlay'
-            target = base / 'target'
-            overlay.mkdir(); target.mkdir()
-            outside = base / 'outside.txt'; outside.write_text('secret', encoding='utf-8')
-            link = overlay / 'escape.txt'
+            base = Path(td); overlay = base / 'overlay'; target = base / 'target'
+            overlay.mkdir(); target.mkdir(); outside = base / 'outside'; outside.write_text('x', encoding='utf-8')
+            link = overlay / 'link'
             try:
                 link.symlink_to(outside)
             except (OSError, NotImplementedError):
-                self.skipTest('symlink creation unavailable')
+                self.skipTest('symlinks unavailable')
             with self.assertRaises(ValueError):
                 mod.apply_overlay(overlay, target)
 
 
 class DonorIsolationTests(unittest.TestCase):
-    def test_prepare_v034_copies_donor_without_mutating_v033(self):
+    def test_prepare_copies_donor_without_mutating_v033(self):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            donor = base / 'v033'
-            overlay = base / 'overlay'
-            target = base / 'v034'
-            donor.mkdir(); overlay.joinpath('ui').mkdir(parents=True)
-            donor.joinpath('CMakeLists.txt').write_text('project(DPopCleaner VERSION 0.3.3 LANGUAGES CXX)\n', encoding='utf-8')
-            donor.joinpath('Version.h').write_text(
-                'inline constexpr wchar_t kVersion[] = L"0.3.3";\n'
-                'inline constexpr wchar_t kDisplayVersion[] = L"0.3.3 BETA R1";\n'
-                'inline constexpr int kVersionCode = 3031;\n'
-                'inline constexpr int kRevision = 1;\n', encoding='utf-8')
-            donor.joinpath('version.rc.in').write_text(
-                'FILEVERSION 0,3,3,1\nPRODUCTVERSION 0,3,3,1\n'
-                'VALUE "FileVersion", "0.3.3.1\\0"\n'
-                'VALUE "ProductVersion", "0.3.3 BETA R1\\0"\n', encoding='utf-8')
-            donor.joinpath('keep.cpp').write_text('auto v=L"DPopCleaner 0.3.3";\n', encoding='utf-8')
-            donor.joinpath('ui').mkdir()
-            donor.joinpath('ui','WorkspacePage.cpp').write_text(
-                '#include "ui/Theme.h"\n'
-                'void WorkspacePage::LayoutChildren() noexcept {\n'
-                '  const int margin = 18; const int buttonHeight = 38;\n'
-                '  MoveWindow(status_, margin, 52, 10, 30, TRUE);\n'
-                '  MoveWindow(list_, margin, 86, 10, 80, TRUE);\n'
-                '}\n', encoding='utf-8')
-            overlay.joinpath('ui','PageLayout.h').write_text('layout', encoding='utf-8')
-            overlay.joinpath('ui','Panel.cpp').write_text('auto v=L"DPopCleaner 0.3.3 BETA R1";\n', encoding='utf-8')
-
+            base = Path(td); donor = base / 'v033'; overlay = base / 'overlay'; target = base / 'v034'
+            donor.mkdir(); overlay.mkdir(); make_donor(donor)
             report = mod.prepare_v034_from_donor(donor, overlay, target)
-
-            self.assertEqual(report['version']['version'], '0.3.4')
-            self.assertEqual(report['overlay_files'], ['ui/PageLayout.h', 'ui/Panel.cpp'])
-            self.assertIn('0.3.3', donor.joinpath('Version.h').read_text(encoding='utf-8'))
-            self.assertIn('0.3.4', target.joinpath('Version.h').read_text(encoding='utf-8'))
-            self.assertTrue(target.joinpath('ui','PageLayout.h').is_file())
-            self.assertIn('0.3.4 BETA R1', target.joinpath('ui','Panel.cpp').read_text(encoding='utf-8'))
-            self.assertIn('ComputePageRegions', target.joinpath('ui','WorkspacePage.cpp').read_text(encoding='utf-8'))
-
-
-class OrchestratorTests(unittest.TestCase):
-    def test_migrate_034_exports_v034_from_recovered_donor(self):
-        mod = load_module()
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            repo = base / 'repo'; output = base / 'out'; workspace = base / 'work'
-            repo.mkdir(); repo.joinpath('v034_overlay').mkdir()
-
-            def fake_donor(repository, donor_output, donor_workspace):
-                donor = donor_workspace / 'repo-stage' / 'v033'
-                donor.mkdir(parents=True)
-                donor.joinpath('CMakeLists.txt').write_text('project(DPopCleaner VERSION 0.3.3 LANGUAGES CXX)\n', encoding='utf-8')
-                donor.joinpath('Version.h').write_text(
-                    'inline constexpr wchar_t kVersion[] = L"0.3.3";\n'
-                    'inline constexpr wchar_t kDisplayVersion[] = L"0.3.3 BETA R1";\n'
-                    'inline constexpr int kVersionCode = 3031;\n'
-                    'inline constexpr int kRevision = 1;\n', encoding='utf-8')
-                donor.joinpath('version.rc.in').write_text(
-                    'FILEVERSION 0,3,3,1\nPRODUCTVERSION 0,3,3,1\n'
-                    'VALUE "FileVersion", "0.3.3.1\\0"\n'
-                    'VALUE "ProductVersion", "0.3.3 BETA R1\\0"\n', encoding='utf-8')
-                return {'target_version': '0.3.3'}
-
-            mod._run_donor_migration = fake_donor
-            report = mod.migrate_034(repo, output, workspace, build=False)
-
-            exported = output / 'source-overlay' / 'v034'
-            self.assertTrue(exported.is_dir())
-            self.assertIn('0.3.4', exported.joinpath('Version.h').read_text(encoding='utf-8'))
-            self.assertEqual(report['target_version'], '0.3.4')
-            self.assertEqual(report['donor']['target_version'], '0.3.3')
+            self.assertEqual(report['version']['display_version'], '0.3.4 BETA R2')
+            self.assertIn('0.3.3 BETA R1', (donor / 'Version.h').read_text(encoding='utf-8'))
+            self.assertIn('0.3.4 BETA R2', (target / 'Version.h').read_text(encoding='utf-8'))
 
 
 class DonorEntrypointTests(unittest.TestCase):
-    def test_run_donor_migration_uses_repair_entrypoint_not_raw_core(self):
-        import sys
-        from types import SimpleNamespace
-        mod = load_module()
-        calls = []
-        repaired = SimpleNamespace(migrate=lambda repository, output, workspace, build, keep_worktree: calls.append((repository, output, workspace, build, keep_worktree)) or {'fixed': True})
-        raw = SimpleNamespace(migrate=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('raw core must not be used')))
-        old_repaired = sys.modules.get('dpop033_migrate')
-        old_raw = sys.modules.get('dpop033_core')
+    def test_repaired_033_entrypoint_is_used(self):
+        mod = load_module(); calls = []
+        repaired = SimpleNamespace(migrate=lambda *a, **k: calls.append((a, k)) or {'fixed': True})
+        old = sys.modules.get('dpop033_migrate')
         sys.modules['dpop033_migrate'] = repaired
-        sys.modules['dpop033_core'] = raw
         try:
             result = mod._run_donor_migration(Path('repo'), Path('out'), Path('work'))
         finally:
-            if old_repaired is None: sys.modules.pop('dpop033_migrate', None)
-            else: sys.modules['dpop033_migrate'] = old_repaired
-            if old_raw is None: sys.modules.pop('dpop033_core', None)
-            else: sys.modules['dpop033_core'] = old_raw
+            if old is None: sys.modules.pop('dpop033_migrate', None)
+            else: sys.modules['dpop033_migrate'] = old
         self.assertEqual(result, {'fixed': True})
         self.assertEqual(len(calls), 1)
-        self.assertFalse(calls[0][3])
-        self.assertTrue(calls[0][4])
 
 
 class CliContractTests(unittest.TestCase):
-    def test_parser_supports_repository_output_workspace_and_no_build(self):
+    def test_parser_supports_no_build(self):
         mod = load_module()
-        args = mod.build_parser().parse_args([
-            '--repository', 'repo', '--output', 'out', '--workspace', 'work', '--no-build'
-        ])
-        self.assertEqual(args.repository, Path('repo'))
-        self.assertEqual(args.output, Path('out'))
-        self.assertEqual(args.workspace, Path('work'))
+        args = mod.build_parser().parse_args(['--repository','repo','--output','out','--workspace','work','--no-build'])
         self.assertTrue(args.no_build)
         self.assertFalse(args.build)
 

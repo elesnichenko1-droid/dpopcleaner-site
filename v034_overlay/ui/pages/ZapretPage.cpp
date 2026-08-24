@@ -17,7 +17,7 @@ constexpr int kButtonBase = 2820;
 
 ButtonVisual ButtonStyle(int index) noexcept {
     if (index == 2) return ButtonVisual::Danger;
-    if (index <= 1) return ButtonVisual::Accent;
+    if (index == 1 || index == 6 || index == 7) return ButtonVisual::Accent;
     return ButtonVisual::Normal;
 }
 }
@@ -39,13 +39,15 @@ bool ZapretPage::OnCreate() {
     ApplyControlFont(strategyLabel_, fonts_.body);
     ApplyControlFont(strategyCombo_, fonts_.body);
 
-    const std::array<std::wstring_view, 6> labels = {
+    const std::array<std::wstring_view, 8> labels = {
         L"Обновить статус",
         L"Запустить выбранную",
         L"Остановить bundled winws",
         L"Service Manager",
         L"Default strategy",
-        L"Открыть bundle"
+        L"Открыть bundle",
+        L"Исправление трансляций",
+        L"Проверить / обновить Zapret"
     };
     for (std::size_t index = 0; index < buttons_.size(); ++index) {
         buttons_[index] = CreatePushButton(
@@ -96,7 +98,7 @@ void ZapretPage::OnPaint(HDC dc, const RECT& client) noexcept {
     DrawPageHeading(
         dc, 18, 4,
         L"Zapret Center",
-        L"Выбор реальной bundled-стратегии, состояние службы/winws и безопасные ручные действия.",
+        L"Bundled-стратегии, диагностика, проверяемое обновление Zapret и безопасное восстановление Discord/RTC.",
         fonts_.title, fonts_.body);
 
     const int width = client.right - client.left;
@@ -150,8 +152,7 @@ void ZapretPage::OnPaint(HDC dc, const RECT& client) noexcept {
         diagnostic.right - 16,
         diagnostic.bottom - 10};
     std::wstring owned = diagnostic_;
-    DrawTextW(
-        dc, owned.data(), static_cast<int>(owned.size()), &text,
+    DrawTextW(dc, owned.data(), static_cast<int>(owned.size()), &text,
         DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX);
     SelectObject(dc, old);
 }
@@ -166,15 +167,15 @@ void ZapretPage::ReloadStrategies() {
         const wchar_t* empty = L"general*.bat стратегии не найдены";
         SendMessageW(strategyCombo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(empty));
         EnableWindow(buttons_[1], FALSE);
+        EnableWindow(buttons_[6], FALSE);
     } else {
         for (std::size_t index = 0; index < strategies_.size(); ++index) {
             const auto& strategy = strategies_[index];
-            SendMessageW(
-                strategyCombo_, CB_ADDSTRING, 0,
-                reinterpret_cast<LPARAM>(strategy.displayName.c_str()));
+            SendMessageW(strategyCombo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(strategy.displayName.c_str()));
             if (strategy.isDefault) selected = static_cast<int>(index);
         }
         EnableWindow(buttons_[1], TRUE);
+        EnableWindow(buttons_[6], TRUE);
     }
     SendMessageW(strategyCombo_, CB_SETCURSEL, static_cast<WPARAM>(selected), 0);
 }
@@ -190,64 +191,63 @@ void ZapretPage::RefreshStatus() {
     const auto status = dpop::zapret::QueryStatus();
     ReloadStrategies();
 
-    SetControlText(
-        statusLabels_[0],
-        status.serviceInstalled
-            ? (status.serviceRunning ? L"Установлена • работает" : L"Установлена • остановлена")
-            : L"Не установлена");
-    SetControlText(
-        statusLabels_[1],
-        status.serviceInstalled ? L"Состояние читается из Windows SCM" : L"Сервис Zapret отсутствует");
+    SetControlText(statusLabels_[0], status.serviceInstalled
+        ? (status.serviceRunning ? L"Установлена • работает" : L"Установлена • остановлена")
+        : L"Не установлена");
+    SetControlText(statusLabels_[1], status.serviceInstalled ? L"Состояние читается из Windows SCM" : L"Сервис Zapret отсутствует");
     SetControlText(statusLabels_[2], status.winwsRunning ? L"Работает" : L"Не запущен");
-    SetControlText(
-        statusLabels_[3],
-        status.winwsRunning ? L"Запущен именно bundled winws.exe" : L"Bundled winws.exe не найден");
+    SetControlText(statusLabels_[3], status.winwsRunning ? L"Запущен именно bundled winws.exe" : L"Bundled winws.exe не найден");
     SetControlText(statusLabels_[4], status.bundleValid ? L"Готов" : L"Неполный");
-    SetControlText(
-        statusLabels_[5],
-        status.bundleFolder.empty() ? L"Папка не найдена" : status.bundleFolder.wstring());
+    SetControlText(statusLabels_[5], status.bundleFolder.empty() ? L"Папка не найдена" : status.bundleFolder.wstring());
 
-    diagnostic_ = L"Папка bundle: " +
-        (status.bundleFolder.empty() ? std::wstring(L"не найдена") : status.bundleFolder.wstring());
-    if (!status.missingBundleFile.empty()) {
-        diagnostic_ += L"\nНе хватает обязательного файла: " + status.missingBundleFile.wstring();
-    } else if (status.bundleValid) {
-        diagnostic_ += L"\nОбязательные bundled-файлы проверены.";
-    }
+    diagnostic_ = L"Папка bundle: " + (status.bundleFolder.empty() ? std::wstring(L"не найдена") : status.bundleFolder.wstring());
+    if (!status.missingBundleFile.empty()) diagnostic_ += L"\nНе хватает обязательного файла: " + status.missingBundleFile.wstring();
+    else if (status.bundleValid) diagnostic_ += L"\nОбязательные bundled-файлы проверены.";
     diagnostic_ += L"\nНайдено стратегий general*.bat: " + std::to_wstring(strategies_.size()) + L".";
-    if (const auto* selected = SelectedStrategy()) {
-        diagnostic_ += L" Выбрана: " + selected->displayName + L".";
-    }
+    if (const auto* selected = SelectedStrategy()) diagnostic_ += L" Выбрана: " + selected->displayName + L".";
     diagnostic_ +=
-        L"\n\nDPopCleaner запускает только скрипты из своего bundle. Остановка standalone winws "
-        L"затрагивает только процесс с точным bundled-путём. Если Zapret работает как служба, "
-        L"используй Service Manager.";
+        L"\n\nОбновление Zapret принимает только официальный HTTPS release asset, сверяет размер и SHA-256 digest GitHub, "
+        L"ставит его через staging и откатывается при ошибке. «Исправление трансляций» работает только с нашим standalone winws, "
+        L"очищает DNS-кэш и перезапускает выбранную стратегию; Firewall/Defender не отключаются.";
 
-    SetStatus(
-        L"Zapret: " + std::wstring(status.bundleValid ? L"bundle готов" : L"bundle неполный") +
+    SetStatus(L"Zapret: " + std::wstring(status.bundleValid ? L"bundle готов" : L"bundle неполный") +
         (status.serviceRunning ? L" • service ON" : L" • service OFF") +
         (status.winwsRunning ? L" • winws ON" : L" • winws OFF"));
     InvalidateRect(Hwnd(), nullptr, TRUE);
+}
+
+void ZapretPage::UpdateZapret() {
+    if (!ConfirmAction(Hwnd(),
+        L"Проверить официальный latest release Zapret и, если версия отличается, скачать и установить его? Архив будет принят только при совпадении размера и SHA-256 digest GitHub. Активная Windows-служба обновляться не будет.",
+        true)) return;
+
+    StartAsync(L"Проверяем и обновляем bundled Zapret…", [this](std::stop_token) {
+        std::wstring report;
+        const bool ok = dpop::zapret::UpdateBundledZapret(report);
+        QueueApply([this, ok, report = std::move(report)]() mutable {
+            SetStatus(report);
+            Log(ok ? EventLevel::Info : EventLevel::Warning, report);
+            RefreshStatus();
+        });
+    });
 }
 
 bool ZapretPage::RunAction(int buttonIndex, std::wstring& error) {
     switch (buttonIndex) {
     case 1: {
         const auto* strategy = SelectedStrategy();
-        if (!strategy) {
-            error = L"Сначала выбери найденную bundled-стратегию.";
-            return false;
-        }
+        if (!strategy) { error = L"Сначала выбери найденную bundled-стратегию."; return false; }
         return dpop::zapret::LaunchStrategy(strategy->relativeScript, error);
     }
-    case 2:
-        return dpop::zapret::StopBundledWinws(error);
-    case 3:
-        return dpop::zapret::OpenServiceManager(error);
-    case 4:
-        return dpop::zapret::LaunchDefaultStrategy(error);
-    case 5:
-        return dpop::zapret::OpenBundledFolder(error);
+    case 2: return dpop::zapret::StopBundledWinws(error);
+    case 3: return dpop::zapret::OpenServiceManager(error);
+    case 4: return dpop::zapret::LaunchDefaultStrategy(error);
+    case 5: return dpop::zapret::OpenBundledFolder(error);
+    case 6: {
+        const auto* strategy = SelectedStrategy();
+        if (!strategy) { error = L"Сначала выбери стратегию для RTC repair."; return false; }
+        return dpop::zapret::RepairRtc(strategy->relativeScript, error);
+    }
     default:
         error = L"Неизвестное действие Zapret.";
         return false;
@@ -259,9 +259,7 @@ LRESULT ZapretPage::OnMessage(UINT message, WPARAM wParam, LPARAM lParam, bool& 
         const int id = LOWORD(wParam);
         const int notification = HIWORD(wParam);
         if (id == kStrategyComboId && notification == CBN_SELCHANGE) {
-            if (const auto* selected = SelectedStrategy()) {
-                SetStatus(L"Выбрана стратегия: " + selected->displayName);
-            }
+            if (const auto* selected = SelectedStrategy()) SetStatus(L"Выбрана стратегия: " + selected->displayName);
             handled = true;
             return 0;
         }
@@ -270,13 +268,18 @@ LRESULT ZapretPage::OnMessage(UINT message, WPARAM wParam, LPARAM lParam, bool& 
             handled = true;
             return 0;
         }
+        if (id == kButtonBase + 7) {
+            UpdateZapret();
+            handled = true;
+            return 0;
+        }
         if (id >= kButtonBase + 1 && id < kButtonBase + static_cast<int>(buttons_.size())) {
             const int buttonIndex = id - kButtonBase;
             std::wstring error;
             const bool ok = RunAction(buttonIndex, error);
             if (ok) {
-                SetStatus(L"Действие Zapret выполнено/открыто.");
-                Log(EventLevel::Info, L"Действие Zapret выполнено.");
+                SetStatus(error.empty() ? L"Действие Zapret выполнено/открыто." : error);
+                Log(EventLevel::Info, error.empty() ? L"Действие Zapret выполнено." : error);
                 if (buttonIndex != 5) RefreshStatus();
             } else {
                 SetStatus(error);
@@ -289,12 +292,9 @@ LRESULT ZapretPage::OnMessage(UINT message, WPARAM wParam, LPARAM lParam, bool& 
 
     if (message == WM_DRAWITEM) {
         const auto* draw = reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
-        if (draw && draw->CtlType == ODT_BUTTON &&
-            draw->CtlID >= kButtonBase &&
-            draw->CtlID < kButtonBase + static_cast<int>(buttons_.size())) {
+        if (draw && draw->CtlType == ODT_BUTTON && draw->CtlID >= kButtonBase && draw->CtlID < kButtonBase + static_cast<int>(buttons_.size())) {
             const int index = static_cast<int>(draw->CtlID) - kButtonBase;
-            handled = DrawOwnerButton(
-                *draw, GetControlText(draw->hwndItem), ButtonStyle(index));
+            handled = DrawOwnerButton(*draw, GetControlText(draw->hwndItem), ButtonStyle(index));
             return handled ? TRUE : 0;
         }
     }

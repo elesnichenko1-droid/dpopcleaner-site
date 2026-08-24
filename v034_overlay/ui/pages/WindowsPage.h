@@ -1,19 +1,20 @@
 #pragma once
 #include "ui/PageBase.h"
 #include "ui/RecoveryControls.h"
-#include "update/UpdateClient.h"
+#include "modules/FullCore.h"
 
 #include <array>
 
 namespace dpop::ui {
 
-class UpdatesPage final : public PageBase {
+class WindowsPage final : public PageBase {
 public:
-    ~UpdatesPage() override { Destroy(); }
+    ~WindowsPage() override { Destroy(); }
+
     bool Create(HWND parent, SessionLog& log) {
-        return PageBase::Create(parent, log, L"Обновления");
+        return PageBase::Create(parent, log, L"Windows");
     }
-    void CheckAtStartup();
+    void CheckUpdateCacheAtStartup();
 
 protected:
     bool OnCreate() override;
@@ -23,16 +24,13 @@ protected:
     void OnVisibilityChanged(bool visible) noexcept override;
 
 private:
-    void Check(bool promptWhenAvailable = false);
-    void Install(bool startupApproved = false);
-    void OpenRelease();
-    void RefreshText();
+    void Run(dpop::full::MaintenanceAction action);
+    void AppendResult(std::wstring_view text);
 
     RecoveryFonts fonts_;
-    std::array<HWND, 5> labels_{};
-    std::array<HWND, 3> buttons_{};
-    dpop::update::CheckResult lastCheck_{};
-    bool checked_{false};
+    std::array<HWND, 6> buttons_{};
+    HWND output_{};
+    dpop::full::Settings settings_{};
 };
 
 }

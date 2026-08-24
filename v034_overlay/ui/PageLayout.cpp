@@ -16,6 +16,14 @@ int NonNegative(int value) noexcept {
 
 }
 
+int ComputePageContentTop(int dpi) noexcept {
+    const int headingTop = ScaleLogical(12, dpi);
+    const int headingHeight = ScaleLogical(34, dpi);
+    const int gap = ScaleLogical(8, dpi);
+    const int descriptionHeight = ScaleLogical(44, dpi);
+    return headingTop + headingHeight + gap + descriptionHeight + gap;
+}
+
 PageRegions ComputePageRegions(int width, int height, int dpi, int actionCount) noexcept {
     PageRegions out{};
     out.margin = ScaleLogical(18, dpi);
@@ -43,7 +51,7 @@ PageRegions ComputePageRegions(int width, int height, int dpi, int actionCount) 
         actionHeight,
     };
 
-    const int contentTop = out.description.y + out.description.height + out.gap;
+    const int contentTop = ComputePageContentTop(dpi);
     const int contentBottom = out.actions.y - out.gap;
     out.content = {
         out.margin,

@@ -16,7 +16,7 @@ struct ShellIdentity {
 };
 
 inline constexpr ShellIdentity kShellIdentity{
-    L"DPopCleaner 0.3.4 BETA R1",
+    L"DPopCleaner 0.3.4 BETA R2",
     L"DPopCleaner",
     L"Windows под контролем",
     L"BETA"

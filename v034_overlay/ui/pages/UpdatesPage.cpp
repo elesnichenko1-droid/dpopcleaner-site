@@ -2,6 +2,7 @@
 
 #include "core/Version.h"
 #include "ui/Controls.h"
+#include "ui/PageLayout.h"
 #include "ui/Theme.h"
 
 #include <shellapi.h>
@@ -41,6 +42,11 @@ void UpdatesPage::OnVisibilityChanged(bool visible) noexcept {
     RefreshText();
 }
 
+void UpdatesPage::CheckAtStartup() {
+    if (IsBusy()) return;
+    Check(true);
+}
+
 void UpdatesPage::RefreshText() {
     SetControlText(labels_[0], L"DPopCleaner " + std::wstring(dpop::version::kDisplayVersion));
     SetControlText(labels_[1], L"Канал: BETA • внутренний код: " + std::to_wstring(dpop::version::kVersionCode));
@@ -73,10 +79,10 @@ void UpdatesPage::RefreshText() {
     EnableWindow(buttons_[1], TRUE);
 }
 
-void UpdatesPage::Check() {
-    StartAsync(L"Проверяем BETA-канал обновлений…", [this](std::stop_token) {
+void UpdatesPage::Check(bool promptWhenAvailable) {
+    StartAsync(promptWhenAvailable ? L"Проверяем обновления при запуске…" : L"Проверяем BETA-канал обновлений…", [this, promptWhenAvailable](std::stop_token) {
         auto result = dpop::update::CheckForUpdates();
-        QueueApply([this, result = std::move(result)]() mutable {
+        QueueApply([this, promptWhenAvailable, result = std::move(result)]() mutable {
             lastCheck_ = std::move(result);
             checked_ = true;
             RefreshText();
@@ -86,6 +92,12 @@ void UpdatesPage::Check() {
             } else if (lastCheck_.updateAvailable) {
                 SetStatus(L"Доступно обновление: " + lastCheck_.manifest.version);
                 Log(EventLevel::Info, L"Найдена новая версия в BETA-канале.");
+                if (promptWhenAvailable) {
+                    std::wstring prompt = L"Доступно обновление DPopCleaner: " + lastCheck_.manifest.version +
+                        L".\n\nСкачать, проверить SHA-256/подпись и установить сейчас?\n\nВы всегда можете выбрать «Нет» и обновиться позже из раздела «Обновления».";
+                    const int answer = MessageBoxW(Hwnd(), prompt.c_str(), L"Обновление DPopCleaner", MB_YESNO | MB_ICONINFORMATION | MB_DEFBUTTON2);
+                    if (answer == IDYES) Install(true);
+                }
             } else {
                 SetStatus(L"Установлена актуальная версия.");
                 Log(EventLevel::Info, L"Новых обновлений нет.");
@@ -95,7 +107,7 @@ void UpdatesPage::Check() {
     });
 }
 
-void UpdatesPage::Install() {
+void UpdatesPage::Install(bool startupApproved) {
     if (!checked_ || !lastCheck_.success || !lastCheck_.updateAvailable) {
         SetStatus(L"Сначала выполните проверку и выберите доступное обновление.");
         return;
@@ -110,7 +122,7 @@ void UpdatesPage::Install() {
             return;
         }
         allowUnsigned = true;
-    } else if (!ConfirmAction(Hwnd(), L"Скачать проверенное обновление и запустить DPopUpdater?", true)) {
+    } else if (!startupApproved && !ConfirmAction(Hwnd(), L"Скачать проверенное обновление и запустить DPopUpdater?", true)) {
         return;
     }
 
@@ -150,10 +162,11 @@ void UpdatesPage::OpenRelease() {
 }
 
 void UpdatesPage::OnLayout(int width, int height) noexcept {
+    const UINT dpiRaw = GetDpiForWindow(Hwnd());
+    const int top = ComputePageContentTop(dpiRaw ? static_cast<int>(dpiRaw) : 96);
     const int margin = 18;
-    const int top = 68;
-    const int panelBottom = std::max(top + 220, height - 76);
-    int y = top + 38;
+    const int panelBottom = std::max(top + 260, height - 76);
+    int y = top + 42;
     MoveWindow(labels_[0], margin + 18, y, width - margin * 2 - 36, 30, TRUE); y += 34;
     MoveWindow(labels_[1], margin + 18, y, width - margin * 2 - 36, 26, TRUE); y += 42;
     for (int i = 2; i < 5; ++i) {
@@ -173,9 +186,11 @@ void UpdatesPage::OnPaint(HDC dc, const RECT& client) noexcept {
     DrawPageHeading(
         dc, 18, 4,
         L"Обновления",
-        L"HTTPS-манифест, SHA-256, Authenticode для подписанных пакетов и безопасная передача DPopUpdater.",
+        L"Автопроверка при запуске настраивается в «Настройках». HTTPS-манифест, SHA-256 и Authenticode проверяются до передачи DPopUpdater.",
         fonts_.title, fonts_.body);
-    RECT panel{18, 58, client.right - 18, client.bottom - 18};
+    const UINT dpiRaw = GetDpiForWindow(Hwnd());
+    const int top = ComputePageContentTop(dpiRaw ? static_cast<int>(dpiRaw) : 96);
+    RECT panel{18, top, client.right - 18, client.bottom - 18};
     DrawPanel(dc, panel, true);
     DrawPanelTitle(dc, panel, L"BETA-канал DPopCleaner", fonts_.section);
 }
@@ -183,8 +198,8 @@ void UpdatesPage::OnPaint(HDC dc, const RECT& client) noexcept {
 LRESULT UpdatesPage::OnMessage(UINT message, WPARAM wParam, LPARAM lParam, bool& handled) {
     if (message == WM_COMMAND) {
         const int id = LOWORD(wParam);
-        if (id == kButtonBase) { Check(); handled = true; return 0; }
-        if (id == kButtonBase + 1) { Install(); handled = true; return 0; }
+        if (id == kButtonBase) { Check(false); handled = true; return 0; }
+        if (id == kButtonBase + 1) { Install(false); handled = true; return 0; }
         if (id == kButtonBase + 2) { OpenRelease(); handled = true; return 0; }
     }
     if (message == WM_DRAWITEM) {
