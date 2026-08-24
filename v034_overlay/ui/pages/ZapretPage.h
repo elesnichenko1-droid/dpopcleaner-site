@@ -33,7 +33,7 @@ private:
     std::array<HWND, 6> statusLabels_{};
     HWND strategyLabel_{};
     HWND strategyCombo_{};
-    std::array<HWND, 6> buttons_{};
+    std::array<HWND, 8> buttons_{};
     std::vector<dpop::zapret::StrategyEntry> strategies_;
     std::wstring diagnostic_{L"Состояние bundled Zapret ещё не проверено."};
 };
