@@ -206,14 +206,14 @@ void ApplicationsPage::OnLayout(int width, int height) noexcept {
     const UINT dpiRaw = GetDpiForWindow(Hwnd());
     const int top = ComputePageContentTop(dpiRaw ? static_cast<int>(dpiRaw) : 96);
     const int margin = 18;
-    const int searchH = 48;
+    const int searchPanelH = 72;
     const int gap = 12;
     const int detailW = std::min(350, std::max(300, width / 3));
     const int listRight = width - margin - detailW - gap;
 
-    MoveWindow(search_, margin + 12, top + 20, std::max(220, listRight - margin - 150), 30, TRUE);
-    MoveWindow(count_, listRight - 130, top + 22, 120, 26, TRUE);
-    MoveWindow(list_, margin + 10, top + searchH + 12, std::max(260, listRight - margin - 10), std::max(160, height - margin - (top + searchH + 22)), TRUE);
+    MoveWindow(search_, margin + 12, top + 34, std::max(220, listRight - margin - 150), 30, TRUE);
+    MoveWindow(count_, listRight - 130, top + 36, 120, 26, TRUE);
+    MoveWindow(list_, margin + 10, top + searchPanelH + 2, std::max(260, listRight - margin - 10), std::max(160, height - margin - (top + searchPanelH + 2)), TRUE);
 
     const int x = listRight + gap + 14;
     const int w = detailW - 28;
@@ -241,9 +241,10 @@ void ApplicationsPage::OnPaint(HDC dc, const RECT& client) noexcept {
     const int margin = 18;
     const int detailW = std::min(350, std::max(300, width / 3));
     const int gap = 12;
+    const int searchPanelH = 72;
     const int listRight = width - margin - detailW - gap;
-    RECT search{margin, top, listRight, top + 58};
-    RECT list{margin, top + 60, listRight, height - margin};
+    RECT search{margin, top, listRight, top + searchPanelH};
+    RECT list{margin, top + searchPanelH + 2, listRight, height - margin};
     RECT detail{listRight + gap, top, width - margin, height - margin};
     DrawPanel(dc, search, true);
     DrawPanel(dc, list, false);
