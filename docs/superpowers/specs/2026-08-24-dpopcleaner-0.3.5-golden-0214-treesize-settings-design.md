@@ -29,19 +29,26 @@ Product identity:
 - Tag: `v0.3.5-beta-r1`
 - Installer: `DPopCleaner_Setup_0.3.5_BETA_R1.exe`
 
-## Source of truth
+## Exact source mapping
 
-### UX reference
+The exact historical 0.2.14 executable is a behavioral/visual reference, not editable C++ source. Therefore 0.3.5 uses the repository's maintainable recovered 0.2.14-style host rather than the current 0.3.4 shell.
 
-The historical 0.2.14 series remains the visual and interaction reference. The exact old executable is not patched or reverse-engineered into source. The maintainable reconstruction and previous recovery work are the implementation base.
+The source mapping is explicit:
 
-### Technical donor
+- **shell/interaction host:** the 0.3.3 reverse-migration/recovery source that reproduces the 0.2.14-style shell;
+- **functional donor:** verified 0.3.4 R2 backend/module improvements that do not require retaining the 0.3.4 presentation;
+- **new 0.3.5 work:** Disk model/scanner/UI, Settings model/storage/UI, runtime settings integration, identity/tests/release candidate plumbing;
+- **target maintained overlay:** `v035_overlay/`;
+- **target migration/preparation tool:** `tools/dpop035_migrate.py`;
+- **target tests:** `tests/test_dpop035_*.py` plus C++ tests in the prepared 0.3.5 source.
 
-The modern donor is the verified 0.3.x code line already present in the repository, including safe async execution, diagnostics, logging, updater/release plumbing and functional modules that have real backend behavior.
+The migration/preparation step starts from the maintainable recovered 0.2.14-style host, then selectively imports verified backend functionality. It must **not** copy the 0.3.4 shell wholesale and then attempt to restyle it.
 
-### Existing design continuity
+Existing 0.3.3 and 0.3.4 source/release artifacts remain unchanged and serve as donor/reference/rollback points.
 
-This design supersedes the direction of merely improving the current 0.3.4 presentation. It preserves the useful rules already established by the earlier 0.3.2/0.3.3/0.3.4 recovery designs:
+## Existing design continuity
+
+This design preserves the useful rules already established by the earlier recovery work:
 
 - compact native Win32 UI;
 - horizontal top navigation;
@@ -60,7 +67,7 @@ Implementation work is isolated on:
 
 `main` is not changed while the candidate is being developed and verified.
 
-The 0.3.5 implementation should use an explicit version-specific overlay or source directory rather than silently rewriting the already-published 0.3.4 source. Existing 0.3.3 and 0.3.4 release artifacts remain immutable rollback/reference points.
+The 0.3.5 implementation uses version-specific overlays/preparation instead of silently rewriting the already-published 0.3.4 source.
 
 ## Shell and navigation
 
@@ -110,6 +117,14 @@ Required columns:
 - `% родителя`
 - `Изменено`
 
+Column semantics are fixed:
+
+- `Размер` = recursively accumulated logical file length in bytes;
+- `Занято` = recursively accumulated allocated/on-disk bytes when Windows allocation information can be obtained safely;
+- when allocation size cannot be determined for an entry, `Занято` displays `—` for that incomplete value rather than pretending logical size equals physical allocation;
+- aggregate allocated totals are marked incomplete when one or more children lack allocation data;
+- `% родителя` is based on logical `Размер`, so percentages remain deterministic even where allocation data is unavailable.
+
 `Имя` supports real tree expansion/collapse. Directories display recursively accumulated size instead of `—`.
 
 ### Green parent-relative bar
@@ -118,7 +133,7 @@ The `% родителя` column contains a green usage bar and a readable numeri
 
 For child node `n` with parent `p`:
 
-`percent = p.size > 0 ? 100 * n.size / p.size : 0`
+`percent = p.logicalSize > 0 ? 100 * n.logicalSize / p.logicalSize : 0`
 
 Rules:
 
@@ -143,8 +158,7 @@ Required behavior:
 - inaccessible paths are skipped and counted/logged rather than aborting the scan;
 - directory sizes are accumulated bottom-up;
 - file and subdirectory counts are tracked;
-- junction/reparse-point behavior is explicit and loop-safe;
-- the scanner never follows a path pattern that can create recursive cycles;
+- reparse points are not recursively followed by default in R1; they are represented as entries where visible, preventing junction/symlink cycles;
 - scan state survives list repaints and sorting;
 - cancellation leaves the UI in a consistent partial-results state.
 
@@ -160,12 +174,13 @@ Each node stores at minimum:
 - display name;
 - directory/file flag;
 - logical file size total;
-- allocated/on-disk size when available;
+- allocated/on-disk total plus completeness state;
 - descendant file count;
 - descendant directory count;
 - last modification time;
 - access-denied/incomplete flag;
 - protected/system path hint;
+- reparse-point flag;
 - scan status.
 
 The UI reads from this model and can rebuild/sort visible rows without rescanning.
@@ -216,31 +231,31 @@ The section selector is horizontal/compact to remain consistent with the 0.2.14 
 
 ### Основное
 
-Real settings only:
+Only real settings are shown:
 
 - run DPopCleaner with Windows;
-- minimize/continue in tray;
+- minimize/continue in tray when the tray backend is present;
 - check DPopCleaner updates at startup;
 - behavior when closing the main window;
-- optional startup elevation behavior only when backed by the existing safe mechanism.
+- startup elevation preference only through the existing safe mechanism.
 
-Language/theme controls are shown only if changing them actually changes application behavior. A static label such as `Язык: Русский • Тема: Midnight` is not considered a setting.
+Language/theme controls are shown only if changing them actually changes application behavior. A static label such as `Язык: Русский • Тема: Midnight` is not considered a setting and is removed.
 
 ### Очистка
 
 - confirm destructive cleanup actions;
-- background junk monitoring, if real background scheduling is implemented;
+- background junk monitoring only if a real background scheduler/consumer is present;
 - large-file threshold;
 - duplicate minimum-size threshold;
-- cleanup-related startup checks that have a real backend.
+- cleanup-related startup checks only when consumed by a real backend.
 
 Values have explicit ranges and inline validation.
 
 ### Память
 
-- automatic RAM cleanup enabled/disabled;
+- automatic RAM cleanup enabled/disabled when the existing memory automation backend can consume it;
 - threshold percentage;
-- interval when interval-based automation is supported;
+- interval only if interval-based automation is implemented and consumed;
 - safe/advanced scope where backed by the existing memory backend;
 - aggressive/undocumented operations remain off by default and clearly separated.
 
@@ -248,10 +263,10 @@ Values have explicit ranges and inline validation.
 
 - Quick DPopGuard scan at application startup;
 - notification behavior for Guard findings where supported;
-- Windows Update cache startup check where it belongs operationally;
-- administrator-mode preference only through the existing supported mechanism.
+- Windows Update cache startup check where consumed by the existing startup flow;
+- administrator-mode preference only through the supported mechanism.
 
-No setting may silently delete, quarantine or change system state at startup unless the user has explicitly enabled that exact behavior and it is within the existing safety policy.
+No setting may silently delete, quarantine or change system state at startup unless the user explicitly enabled that exact backed behavior and it is within the existing safety policy.
 
 ### Исключения
 
@@ -320,9 +335,9 @@ Controls that fail condition 4 are omitted from 0.3.5 R1 rather than displayed a
 
 ## Async and threading
 
-The existing principle remains mandatory: heavy operations never execute synchronously on the UI thread.
+Heavy operations never execute synchronously on the UI thread.
 
-For the Disk analyzer specifically:
+For the Disk analyzer:
 
 - scanning worker owns filesystem traversal;
 - UI receives throttled batches/progress notifications;
@@ -356,12 +371,13 @@ Settings log events include:
 
 Unit tests cover:
 
-- bottom-up directory accumulation;
+- bottom-up logical-size accumulation;
+- allocated-size completeness propagation;
 - parent percentages;
 - empty directories;
 - access-denied/incomplete nodes;
 - cancellation;
-- reparse/junction loop avoidance;
+- reparse-point non-traversal and loop avoidance;
 - file/subdirectory counts;
 - deterministic sorting independent of rendered strings.
 
@@ -376,7 +392,8 @@ Unit tests cover:
 - schema migration;
 - validation ranges;
 - path exclusion normalization;
-- dirty/apply/cancel/default semantics at the model/controller boundary.
+- dirty/apply/cancel/default semantics at the model/controller boundary;
+- visible-setting-to-runtime-consumer contract.
 
 ### UI contract tests
 
@@ -406,39 +423,42 @@ Before publication:
 
 ## Implementation boundaries
 
-0.3.5 R1 does not attempt to rewrite every DPopCleaner subsystem at once.
+0.3.5 R1 does not rewrite every DPopCleaner subsystem at once.
 
-The shell is adjusted only as needed to restore the 0.2.14 interaction model and host the corrected pages. Existing working modules are retained unless a concrete test shows incompatibility.
+The recovered 0.2.14-style shell is the interaction host. Existing working backend modules are retained/imported unless a concrete test shows incompatibility. The current 0.3.4 Disk and Settings presentation is not carried forward as the baseline.
 
 Primary implementation order:
 
-1. establish 0.3.5 isolated source/identity and regression tests;
-2. recover/lock the 0.2.14-style shell behavior needed by 0.3.5;
-3. implement the Disk data model and scanner tests;
-4. implement TreeSize-style Disk UI including green parent bars;
-5. implement typed Settings model/storage/migration tests;
-6. implement the new Settings UI and connect every visible control to backend behavior;
-7. integrate runtime consumers of settings;
-8. run layout, CTest and Windows smoke verification;
-9. produce candidate screenshots/evidence;
-10. only after approval, publish release/site/update metadata.
+1. establish 0.3.5 isolated preparation/identity and regression tests;
+2. lock the recovered 0.2.14-style shell as the 0.3.5 host;
+3. selectively import verified 0.3.4 R2 backend improvements required by the host;
+4. implement the Disk data model and scanner tests;
+5. implement TreeSize-style Disk UI including green parent bars;
+6. implement typed Settings model/storage/migration tests;
+7. implement the new Settings UI and connect every visible control to backend behavior;
+8. integrate runtime consumers of settings;
+9. run layout, CTest and Windows smoke verification;
+10. produce candidate screenshots/evidence;
+11. only after approval, publish release/site/update metadata.
 
 ## Definition of Done
 
 0.3.5 BETA R1 is candidate-ready only when all of the following are true:
 
 1. the application is recognizably based on the compact 0.2.14 interaction model rather than the current generic 0.3.4 presentation;
-2. Disk defaults to a hierarchical size analyzer, not a normal file browser;
-3. folder sizes are real recursive totals;
-4. `% родителя` displays a green proportional bar plus numeric percentage;
-5. scanning is asynchronous, progressive and cancellable;
-6. access failures and reparse points cannot crash or loop the scanner;
-7. Settings has the five approved horizontal sections;
-8. no static fake language/theme setting is shown;
-9. Apply/Save/Cancel/Defaults have distinct real semantics;
-10. every visible setting is persisted and consumed by a real subsystem;
-11. exclusions affect actual cleanup behavior;
-12. supported sizes/DPI do not overlap controls;
-13. MSVC build and CTest are green;
-14. candidate Disk/Settings screenshots are reviewed before release;
-15. `main` and published 0.3.4 artifacts remain rollback-safe until the 0.3.5 candidate is approved.
+2. the migration source starts from the recovered 0.2.14-style host and does not wholesale reuse the 0.3.4 shell;
+3. Disk defaults to a hierarchical size analyzer, not a normal file browser;
+4. folder `Размер` values are real recursive logical totals;
+5. `Занято` represents real allocation data or explicitly reports unavailable/incomplete data;
+6. `% родителя` displays a green proportional bar plus numeric percentage;
+7. scanning is asynchronous, progressive and cancellable;
+8. access failures and reparse points cannot crash or loop the scanner;
+9. Settings has the five approved horizontal sections;
+10. no static fake language/theme setting is shown;
+11. Apply/Save/Cancel/Defaults have distinct real semantics;
+12. every visible setting is persisted and consumed by a real subsystem;
+13. exclusions affect actual cleanup behavior;
+14. supported sizes/DPI do not overlap controls;
+15. MSVC build and CTest are green;
+16. candidate Disk/Settings screenshots are reviewed before release;
+17. `main` and published 0.3.4 artifacts remain rollback-safe until the 0.3.5 candidate is approved.
