@@ -117,8 +117,19 @@ def prepare_v034_from_donor(donor_root: Path, overlay_root: Path, target_root: P
         shutil.rmtree(target_root)
     shutil.copytree(donor_root, target_root)
     overlay_files = apply_overlay(overlay_root, target_root)
+    layout_path = None
+    for relative in (Path('ui/pages/WorkspacePage.cpp'), Path('ui/WorkspacePage.cpp')):
+        candidate = target_root / relative
+        if candidate.is_file():
+            candidate.write_text(
+                transform_workspace_layout_text(candidate.read_text(encoding='utf-8')),
+                encoding='utf-8',
+                newline='\n',
+            )
+            layout_path = relative.as_posix()
+            break
     version = transform_v034_overlay(target_root)
-    return {'version': version, 'overlay_files': overlay_files}
+    return {'version': version, 'overlay_files': overlay_files, 'layout_transformed': layout_path}
 
 
 def _run_donor_migration(repository: Path, donor_output: Path, donor_workspace: Path) -> dict:
@@ -166,6 +177,85 @@ def migrate_034(repository: Path, output: Path, workspace: Path, *, build: bool 
         'overlay': prepared_report,
         'build': {'requested': build, 'completed': False, 'tests_passed': False},
     }
+
+
+def _function_span(text: str, signature: str) -> tuple[int, int]:
+    start = text.find(signature)
+    if start < 0:
+        raise ValueError(f'expected function signature missing: {signature}')
+    brace = text.find('{', start + len(signature))
+    if brace < 0:
+        raise ValueError(f'opening brace missing for: {signature}')
+    depth = 0
+    for index in range(brace, len(text)):
+        ch = text[index]
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return start, index + 1
+    raise ValueError(f'unbalanced function body: {signature}')
+
+
+def transform_workspace_layout_text(text: str) -> str:
+    signature = 'void WorkspacePage::LayoutChildren() noexcept'
+    start, end = _function_span(text, signature)
+    old_function = text[start:end]
+    required_markers = (
+        'MoveWindow(status_, margin, 52',
+        'MoveWindow(list_, margin, 86',
+        'const int buttonHeight = 38',
+    )
+    missing = [marker for marker in required_markers if marker not in old_function]
+    if missing:
+        raise ValueError('workspace layout donor drifted; missing: ' + ', '.join(missing))
+
+    if '#include "ui/PageLayout.h"' not in text:
+        include_marker = '#include "ui/Theme.h"'
+        if include_marker not in text:
+            raise ValueError('WorkspacePage include anchor missing: ui/Theme.h')
+        text = text.replace(include_marker, include_marker + '\n#include "ui/PageLayout.h"', 1)
+        start, end = _function_span(text, signature)
+
+    replacement = '''void WorkspacePage::LayoutChildren() noexcept {
+    if (!hwnd_) return;
+    RECT rc{};
+    GetClientRect(hwnd_, &rc);
+    const int width = std::max(0, rc.right - rc.left);
+    const int height = std::max(0, rc.bottom - rc.top);
+    const int visibleButtons = static_cast<int>(std::count_if(
+        buttons_.begin(), buttons_.end(), [](HWND h) { return h && IsWindowVisible(h); }));
+    const UINT windowDpi = GetDpiForWindow(hwnd_);
+    const PageRegions regions = ComputePageRegions(
+        width, height, windowDpi ? static_cast<int>(windowDpi) : 96, visibleButtons);
+
+    MoveWindow(
+        heading_, regions.heading.x, regions.heading.y,
+        regions.heading.width, regions.heading.height, TRUE);
+    MoveWindow(
+        status_, regions.description.x, regions.description.y,
+        regions.description.width, regions.description.height, TRUE);
+    MoveWindow(
+        list_, regions.content.x, regions.content.y,
+        regions.content.width, regions.content.height, TRUE);
+
+    if (visibleButtons <= 0) return;
+    const int columns = (visibleButtons + regions.actionRows - 1) / regions.actionRows;
+    const int buttonWidth = std::max(
+        1, (regions.actions.width - regions.gap * (columns - 1)) / columns);
+    int visibleIndex = 0;
+    for (HWND button : buttons_) {
+        if (!button || !IsWindowVisible(button)) continue;
+        const int row = visibleIndex / columns;
+        const int column = visibleIndex % columns;
+        const int x = regions.actions.x + column * (buttonWidth + regions.gap);
+        const int y = regions.actions.y + row * (regions.actionRowHeight + regions.gap);
+        MoveWindow(button, x, y, buttonWidth, regions.actionRowHeight, TRUE);
+        ++visibleIndex;
+    }
+}'''
+    return text[:start] + replacement + text[end:]
 
 
 def build_parser() -> argparse.ArgumentParser:
