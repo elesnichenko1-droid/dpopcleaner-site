@@ -13,6 +13,7 @@ public:
     bool Create(HWND parent, SessionLog& log) {
         return PageBase::Create(parent, log, L"Обновления");
     }
+    void CheckAtStartup();
 
 protected:
     bool OnCreate() override;
@@ -22,8 +23,8 @@ protected:
     void OnVisibilityChanged(bool visible) noexcept override;
 
 private:
-    void Check();
-    void Install();
+    void Check(bool promptWhenAvailable = false);
+    void Install(bool startupApproved = false);
     void OpenRelease();
     void RefreshText();
 
