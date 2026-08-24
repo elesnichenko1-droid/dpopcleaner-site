@@ -95,11 +95,8 @@ void StartupPage::OpenSelected() {
     }
     const auto& entry = entries_[static_cast<std::size_t>(row)];
     if (!entry.location.empty()) {
-        if (!OpenPathInExplorer(Hwnd(), entry.location)) {
-            SetStatus(L"Не удалось открыть расположение выбранной записи.");
-        } else {
-            SetStatus(L"Открыто расположение выбранной записи.");
-        }
+        OpenPathInExplorer(Hwnd(), entry.location);
+        SetStatus(L"Открыто расположение выбранной записи.");
         return;
     }
     OpenWindowsStartup();
