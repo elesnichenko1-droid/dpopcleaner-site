@@ -24,14 +24,19 @@ protected:
 
 private:
     void Refresh();
+    void ToggleSelected();
     void OpenSelected();
     void OpenWindowsStartup();
+    void ShowAdaptation();
+    void UpdateActionState();
+    int IconIndexFor(const dpop::startup::Entry& entry);
 
     RecoveryFonts fonts_;
     HWND count_{};
     HWND list_{};
-    std::array<HWND, 3> buttons_{};
+    std::array<HWND, 5> buttons_{};
     std::vector<dpop::startup::Entry> entries_;
+    HIMAGELIST systemImages_{};
     bool loaded_{false};
 };
 
