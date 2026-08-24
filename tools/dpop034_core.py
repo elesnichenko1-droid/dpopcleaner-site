@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Sequence
 
 TARGET_VERSION = '0.3.4'
-TARGET_DISPLAY_VERSION = '0.3.4 BETA R1'
-TARGET_VERSION_CODE = '3041'
-TARGET_REVISION = '1'
-TARGET_RESOURCE_VERSION = '0.3.4.1'
+TARGET_DISPLAY_VERSION = '0.3.4 BETA R2'
+TARGET_VERSION_CODE = '3042'
+TARGET_REVISION = '2'
+TARGET_RESOURCE_VERSION = '0.3.4.2'
 DONOR_VERSION = '0.3.3'
 DONOR_DISPLAY_VERSION = '0.3.3 BETA R1'
 DONOR_VERSION_CODE = '3031'
@@ -63,19 +63,18 @@ def transform_v034_overlay(v034_root: Path) -> dict[str, str]:
     cmake = cmake.replace('tests/v033/', 'tests/v034/')
 
     header = _guarded_replace(header, 'kVersion[] = L"0.3.3"', 'kVersion[] = L"0.3.4"', 'Version.h')
-    header = _guarded_replace(header, 'kDisplayVersion[] = L"0.3.3 BETA R1"', 'kDisplayVersion[] = L"0.3.4 BETA R1"', 'Version.h')
-    header = _guarded_replace(header, 'kVersionCode = 3031', 'kVersionCode = 3041', 'Version.h')
-    if 'kRevision = 1' not in header:
-        raise ValueError('expected marker missing in Version.h: kRevision = 1')
+    header = _guarded_replace(header, 'kDisplayVersion[] = L"0.3.3 BETA R1"', 'kDisplayVersion[] = L"0.3.4 BETA R2"', 'Version.h')
+    header = _guarded_replace(header, 'kVersionCode = 3031', 'kVersionCode = 3042', 'Version.h')
+    header = _guarded_replace(header, 'kRevision = 1', 'kRevision = 2', 'Version.h')
 
-    resource = _guarded_replace(resource, 'FILEVERSION 0,3,3,1', 'FILEVERSION 0,3,4,1', 'version.rc.in')
-    resource = _guarded_replace(resource, 'PRODUCTVERSION 0,3,3,1', 'PRODUCTVERSION 0,3,4,1', 'version.rc.in')
-    resource = _guarded_replace(resource, '"0.3.3.1\\0"', '"0.3.4.1\\0"', 'version.rc.in')
-    resource = _guarded_replace(resource, '"0.3.3 BETA R1\\0"', '"0.3.4 BETA R1\\0"', 'version.rc.in')
+    resource = _guarded_replace(resource, 'FILEVERSION 0,3,3,1', 'FILEVERSION 0,3,4,2', 'version.rc.in')
+    resource = _guarded_replace(resource, 'PRODUCTVERSION 0,3,3,1', 'PRODUCTVERSION 0,3,4,2', 'version.rc.in')
+    resource = _guarded_replace(resource, '"0.3.3.1\\0"', '"0.3.4.2\\0"', 'version.rc.in')
+    resource = _guarded_replace(resource, '"0.3.3 BETA R1\\0"', '"0.3.4 BETA R2\\0"', 'version.rc.in')
 
     source_updates: dict[Path, str] = {}
     identity_pairs = (
-        ('DPopCleaner 0.3.3 BETA R1', 'DPopCleaner 0.3.4 BETA R1'),
+        ('DPopCleaner 0.3.3 BETA R1', 'DPopCleaner 0.3.4 BETA R2'),
         ('v0.3.3 BETA', 'v0.3.4 BETA'),
         ('DPopCleaner 0.3.3', 'DPopCleaner 0.3.4'),
     )
