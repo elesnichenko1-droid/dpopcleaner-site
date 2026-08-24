@@ -2,6 +2,8 @@
 
 #include "ui/Theme.h"
 
+#include <uxtheme.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cwchar>
