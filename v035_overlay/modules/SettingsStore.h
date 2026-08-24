@@ -54,4 +54,9 @@ bool ValidateSettings(const AppSettings& settings, std::wstring& error) noexcept
 std::wstring NormalizeExclusionPath(const std::filesystem::path& path);
 bool IsExcludedPath(const std::filesystem::path& path, const AppSettings& settings);
 
+// ActiveSettings is process-local committed state. "Применить" updates it
+// without touching disk; SaveAppSettings updates both disk and this state.
+AppSettings ActiveSettings();
+void SetActiveSettings(const AppSettings& settings);
+
 } // namespace dpop::settings
