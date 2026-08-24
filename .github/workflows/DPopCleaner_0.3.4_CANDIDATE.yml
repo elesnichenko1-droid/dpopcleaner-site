@@ -1,0 +1,61 @@
+name: DPopCleaner 0.3.4 Candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dpopcleaner-0-3-4-candidate-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run 0.3.4 migration and layout contract tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tests/test_dpop034_migrate.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 migration tests failed.' }
+          python tests/test_dpop034_layout_contract.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 layout tests failed.' }
+          python tests/test_dpop034_build_contract.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 build contract tests failed.' }
+
+      - name: Build and CTest DPopCleaner 0.3.4
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'dpop034-output'
+          $workspace = Join-Path $env:RUNNER_TEMP 'dpop034-workspace'
+          python tools/dpop034_migrate.py --repository $PWD --output $output --workspace $workspace --build
+          if ($LASTEXITCODE -ne 0) { throw 'DPopCleaner 0.3.4 migration/build failed.' }
+          "DPOP034_OUTPUT=$output" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Capture 0.3.4 UI evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./tools/dpop033_ui_smoke.ps1 -ExePath (Join-Path $env:DPOP034_OUTPUT 'artifacts/DPopCleaner.exe') -OutputDir (Join-Path $env:DPOP034_OUTPUT 'evidence')
+
+      - name: Upload 0.3.4 candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.3.4-candidate
+          path: ${{ runner.temp }}/dpop034-output/*
+          if-no-files-found: error
