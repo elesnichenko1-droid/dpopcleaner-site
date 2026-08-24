@@ -8,10 +8,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class SettingsParityTests(unittest.TestCase):
-    def test_fullcore_persists_real_legacy_preferences(self):
-        header = (ROOT / 'v034_overlay/modules/FullCore.h').read_text(encoding='utf-8')
-        source = (ROOT / 'v034_overlay/modules/FullCore.cpp').read_text(encoding='utf-8')
+    def test_migrator_generates_real_legacy_settings_backend(self):
+        source = (ROOT / 'tools/dpop034_migrate.py').read_text(encoding='utf-8')
         for marker in (
+            'transform_fullcore_header',
+            'transform_fullcore_source',
             'alwaysRunAsAdmin',
             'checkUpdatesAtStartup',
             'quickGuardAtStartup',
@@ -23,10 +24,10 @@ class SettingsParityTests(unittest.TestCase):
             'cleanExclusions',
             'SetAlwaysRunAsAdmin',
             'IsPathExcluded',
+            'clean_exclusions',
+            'RUNASADMIN',
         ):
-            self.assertIn(marker, header + source)
-        self.assertIn('clean_exclusions', source)
-        self.assertIn('RUNASADMIN', source)
+            self.assertIn(marker, source)
 
     def test_settings_page_restores_legacy_controls_and_exclusions(self):
         page = (ROOT / 'v034_overlay/ui/pages/SettingsPage.cpp').read_text(encoding='utf-8')
@@ -45,6 +46,8 @@ class SettingsParityTests(unittest.TestCase):
         ):
             self.assertIn(label, page)
         self.assertIn('ComputePageContentTop', page)
+        self.assertIn('SetAlwaysRunAsAdmin', page)
+        self.assertIn('SetRunAtStartup', page)
         self.assertNotIn('const int top = 54;', page)
 
 
