@@ -17,7 +17,7 @@ constexpr int kButtonBase = 2820;
 
 ButtonVisual ButtonStyle(int index) noexcept {
     if (index == 2) return ButtonVisual::Danger;
-    if (index <= 1) return ButtonVisual::Accent;
+    if (index == 1 || index == 6) return ButtonVisual::Accent;
     return ButtonVisual::Normal;
 }
 }
@@ -39,13 +39,15 @@ bool ZapretPage::OnCreate() {
     ApplyControlFont(strategyLabel_, fonts_.body);
     ApplyControlFont(strategyCombo_, fonts_.body);
 
-    const std::array<std::wstring_view, 6> labels = {
+    const std::array<std::wstring_view, 8> labels = {
         L"Обновить статус",
         L"Запустить выбранную",
         L"Остановить bundled winws",
         L"Service Manager",
         L"Default strategy",
-        L"Открыть bundle"
+        L"Открыть bundle",
+        L"Исправление трансляций",
+        L"Проверить обновление Zapret"
     };
     for (std::size_t index = 0; index < buttons_.size(); ++index) {
         buttons_[index] = CreatePushButton(
@@ -96,7 +98,7 @@ void ZapretPage::OnPaint(HDC dc, const RECT& client) noexcept {
     DrawPageHeading(
         dc, 18, 4,
         L"Zapret Center",
-        L"Выбор реальной bundled-стратегии, состояние службы/winws и безопасные ручные действия.",
+        L"Выбор bundled-стратегии, диагностика службы/winws и безопасные действия для Discord/RTC.",
         fonts_.title, fonts_.body);
 
     const int width = client.right - client.left;
@@ -166,6 +168,7 @@ void ZapretPage::ReloadStrategies() {
         const wchar_t* empty = L"general*.bat стратегии не найдены";
         SendMessageW(strategyCombo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(empty));
         EnableWindow(buttons_[1], FALSE);
+        EnableWindow(buttons_[6], FALSE);
     } else {
         for (std::size_t index = 0; index < strategies_.size(); ++index) {
             const auto& strategy = strategies_[index];
@@ -175,6 +178,7 @@ void ZapretPage::ReloadStrategies() {
             if (strategy.isDefault) selected = static_cast<int>(index);
         }
         EnableWindow(buttons_[1], TRUE);
+        EnableWindow(buttons_[6], TRUE);
     }
     SendMessageW(strategyCombo_, CB_SETCURSEL, static_cast<WPARAM>(selected), 0);
 }
@@ -221,7 +225,8 @@ void ZapretPage::RefreshStatus() {
     diagnostic_ +=
         L"\n\nDPopCleaner запускает только скрипты из своего bundle. Остановка standalone winws "
         L"затрагивает только процесс с точным bundled-путём. Если Zapret работает как служба, "
-        L"используй Service Manager.";
+        L"используй Service Manager. «Исправление трансляций» безопасно перезапускает только standalone bundle, "
+        L"очищает DNS-кэш и повторно запускает выбранную стратегию; Windows Firewall/Defender не отключаются.";
 
     SetStatus(
         L"Zapret: " + std::wstring(status.bundleValid ? L"bundle готов" : L"bundle неполный") +
@@ -248,6 +253,16 @@ bool ZapretPage::RunAction(int buttonIndex, std::wstring& error) {
         return dpop::zapret::LaunchDefaultStrategy(error);
     case 5:
         return dpop::zapret::OpenBundledFolder(error);
+    case 6: {
+        const auto* strategy = SelectedStrategy();
+        if (!strategy) {
+            error = L"Сначала выбери стратегию для RTC repair.";
+            return false;
+        }
+        return dpop::zapret::RepairRtc(strategy->relativeScript, error);
+    }
+    case 7:
+        return dpop::zapret::OpenZapretUpdatePage(error);
     default:
         error = L"Неизвестное действие Zapret.";
         return false;
@@ -275,9 +290,9 @@ LRESULT ZapretPage::OnMessage(UINT message, WPARAM wParam, LPARAM lParam, bool& 
             std::wstring error;
             const bool ok = RunAction(buttonIndex, error);
             if (ok) {
-                SetStatus(L"Действие Zapret выполнено/открыто.");
-                Log(EventLevel::Info, L"Действие Zapret выполнено.");
-                if (buttonIndex != 5) RefreshStatus();
+                SetStatus(error.empty() ? L"Действие Zapret выполнено/открыто." : error);
+                Log(EventLevel::Info, error.empty() ? L"Действие Zapret выполнено." : error);
+                if (buttonIndex != 5 && buttonIndex != 7) RefreshStatus();
             } else {
                 SetStatus(error);
                 Log(EventLevel::Warning, error);
