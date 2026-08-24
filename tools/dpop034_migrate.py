@@ -48,6 +48,33 @@ transform_cmake_for_shell_parity = _build.transform_cmake_for_shell_parity
 _prepare_034_script_text = _build._prepare_034_script_text
 
 
+def _insert_page_layout_include(text: str) -> str:
+    include = '#include "ui/PageLayout.h"'
+    if include in text:
+        return text
+    lines = text.splitlines()
+    include_indexes = [i for i, line in enumerate(lines) if line.startswith('#include ')]
+    if include_indexes:
+        lines.insert(include_indexes[-1] + 1, include)
+    else:
+        lines.insert(0, include)
+    suffix = '\n' if text.endswith('\n') else ''
+    return '\n'.join(lines) + suffix
+
+
+def transform_page_content_top(text: str) -> str:
+    """Replace the recovered hard-coded content origin with the shared DPI boundary."""
+    legacy = 'const int top = 54;'
+    if legacy not in text:
+        return text
+    updated = _insert_page_layout_include(text)
+    updated = updated.replace(
+        legacy,
+        'const int top = dpop::ui::ComputePageContentTop(GetDpiForWindow(Hwnd()));',
+    )
+    return updated
+
+
 def transform_v034_overlay(v034_root: Path) -> dict[str, str]:
     summary = _original_transform_v034_overlay(v034_root)
     cmake_path = v034_root / 'CMakeLists.txt'
@@ -85,6 +112,28 @@ def transform_v034_overlay(v034_root: Path) -> dict[str, str]:
 
     if updated != original:
         cmake_path.write_text(updated, encoding='utf-8', newline='\n')
+
+    legacy_pages = (
+        'MemoryPage.cpp',
+        'GuardPage.cpp',
+        'DiskPage.cpp',
+        'ApplicationsPage.cpp',
+        'WindowsPage.cpp',
+        'DuplicatesPage.cpp',
+        'ToolsPage.cpp',
+        'SettingsPage.cpp',
+    )
+    migrated_pages = 0
+    for name in legacy_pages:
+        path = v034_root / 'ui' / 'pages' / name
+        if not path.is_file():
+            continue
+        page_text = path.read_text(encoding='utf-8')
+        page_updated = transform_page_content_top(page_text)
+        if page_updated != page_text:
+            path.write_text(page_updated, encoding='utf-8', newline='\n')
+            migrated_pages += 1
+    summary['shared_page_layout_migrated'] = str(migrated_pages)
     return summary
 
 
