@@ -20,6 +20,7 @@ struct PageRegions {
     int actionRowHeight{};
 };
 
+int ComputePageContentTop(int dpi) noexcept;
 PageRegions ComputePageRegions(int width, int height, int dpi, int actionCount) noexcept;
 
 }
