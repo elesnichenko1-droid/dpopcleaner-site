@@ -52,16 +52,17 @@ class PrepareScriptTests(unittest.TestCase):
     def test_prepare_034_script_copies_identity_ui_modules_and_tests(self):
         mod = load_module()
         script = mod._prepare_034_script_text()
+        self.assertIn("scripts/Prepare-R3Source.ps1", script)
+        self.assertIn("$resolvedV034", script)
         for marker in (
-            "scripts/Prepare-R3Source.ps1",
-            "v034/CMakeLists.txt",
-            "v034/MainWindow.cpp",
-            "v034/Version.h",
-            "v034/version.rc.in",
-            "v034/ui",
-            "v034/modules",
-            "v034/tests",
-            "tests/v034",
+            "'CMakeLists.txt'",
+            "'MainWindow.cpp'",
+            "'Version.h'",
+            "'version.rc.in'",
+            "'ui'",
+            "'modules'",
+            "'tests'",
+            "'tests/v034'",
         ):
             self.assertIn(marker, script)
         self.assertIn('Prepared DPopCleaner 0.3.4 source', script)
