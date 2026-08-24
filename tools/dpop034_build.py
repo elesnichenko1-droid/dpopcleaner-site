@@ -9,21 +9,24 @@ from pathlib import Path
 from typing import Sequence
 
 
+def _insert_ctest_block(text: str, marker: str, block: str) -> str:
+    if marker in text:
+        return text
+    closing = text.rfind('endif()')
+    if closing < 0:
+        raise ValueError('CMake donor drifted: BUILD_TESTING endif() missing')
+    return text[:closing] + block + text[closing:]
+
+
 def transform_cmake_for_page_layout(text: str) -> str:
-    """Register the 0.3.4 page layout source and its CTest target."""
+    """Register the 0.3.4 shared page layout source and its CTest target."""
     if 'src/ui/PageLayout.cpp' not in text:
         anchor = '  src/ui/Layout.cpp\n'
         if anchor not in text:
             raise ValueError('CMake donor drifted: src/ui/Layout.cpp anchor missing')
         text = text.replace(anchor, anchor + '  src/ui/PageLayout.cpp\n', 1)
-
-    if 'add_executable(PageLayoutTests' not in text:
-        test_block = '''\n  add_executable(PageLayoutTests tests/v034/PageLayoutTests.cpp src/ui/PageLayout.cpp)\n  target_include_directories(PageLayoutTests PRIVATE src)\n  target_compile_definitions(PageLayoutTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  if(MSVC)\n    target_compile_options(PageLayoutTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME PageLayoutTests COMMAND PageLayoutTests)\n'''
-        closing = text.rfind('endif()')
-        if closing < 0:
-            raise ValueError('CMake donor drifted: BUILD_TESTING endif() missing')
-        text = text[:closing] + test_block + text[closing:]
-    return text
+    block = '''\n  add_executable(PageLayoutTests tests/v034/PageLayoutTests.cpp src/ui/PageLayout.cpp)\n  target_include_directories(PageLayoutTests PRIVATE src)\n  target_compile_definitions(PageLayoutTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  if(MSVC)\n    target_compile_options(PageLayoutTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME PageLayoutTests COMMAND PageLayoutTests)\n'''
+    return _insert_ctest_block(text, 'add_executable(PageLayoutTests', block)
 
 
 def transform_cmake_for_zapret_center(text: str) -> str:
@@ -33,14 +36,19 @@ def transform_cmake_for_zapret_center(text: str) -> str:
         if anchor not in text:
             raise ValueError('CMake donor drifted: src/modules/ZapretManager.cpp anchor missing')
         text = text.replace(anchor, anchor + '  src/modules/ZapretCenterModel.cpp\n', 1)
+    block = '''\n  add_executable(ZapretCenterModelTests tests/v034/ZapretCenterModelTests.cpp src/modules/ZapretCenterModel.cpp)\n  target_include_directories(ZapretCenterModelTests PRIVATE src)\n  target_compile_definitions(ZapretCenterModelTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  if(MSVC)\n    target_compile_options(ZapretCenterModelTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME ZapretCenterModelTests COMMAND ZapretCenterModelTests)\n'''
+    return _insert_ctest_block(text, 'add_executable(ZapretCenterModelTests', block)
 
-    if 'add_executable(ZapretCenterModelTests' not in text:
-        test_block = '''\n  add_executable(ZapretCenterModelTests tests/v034/ZapretCenterModelTests.cpp src/modules/ZapretCenterModel.cpp)\n  target_include_directories(ZapretCenterModelTests PRIVATE src)\n  target_compile_definitions(ZapretCenterModelTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  if(MSVC)\n    target_compile_options(ZapretCenterModelTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME ZapretCenterModelTests COMMAND ZapretCenterModelTests)\n'''
-        closing = text.rfind('endif()')
-        if closing < 0:
-            raise ValueError('CMake donor drifted: BUILD_TESTING endif() missing')
-        text = text[:closing] + test_block + text[closing:]
-    return text
+
+def transform_cmake_for_zapret_page_layout(text: str) -> str:
+    """Compile the non-overlapping Zapret page geometry and its regression test."""
+    if 'src/ui/pages/ZapretPageLayout.cpp' not in text:
+        anchor = '  src/ui/pages/ZapretPage.cpp\n'
+        if anchor not in text:
+            raise ValueError('CMake donor drifted: src/ui/pages/ZapretPage.cpp anchor missing')
+        text = text.replace(anchor, anchor + '  src/ui/pages/ZapretPageLayout.cpp\n', 1)
+    block = '''\n  add_executable(ZapretPageLayoutTests tests/v034/ZapretPageLayoutTests.cpp src/ui/pages/ZapretPageLayout.cpp)\n  target_include_directories(ZapretPageLayoutTests PRIVATE src)\n  target_compile_definitions(ZapretPageLayoutTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  if(MSVC)\n    target_compile_options(ZapretPageLayoutTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME ZapretPageLayoutTests COMMAND ZapretPageLayoutTests)\n'''
+    return _insert_ctest_block(text, 'add_executable(ZapretPageLayoutTests', block)
 
 
 def _prepare_034_script_text() -> str:
