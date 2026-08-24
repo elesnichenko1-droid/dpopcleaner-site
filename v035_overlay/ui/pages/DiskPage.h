@@ -7,6 +7,7 @@
 #include "ui/controls/DiskTreeList.h"
 
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -55,6 +56,7 @@ private:
     std::unordered_map<std::wstring, dpop::disk::DiskScanSnapshot> cache_;
     std::vector<std::filesystem::path> history_;
     int historyIndex_{-1};
+    std::uint64_t scanGeneration_{};
 
     dpop::full::Settings settings_{};
     bool scanning_{false};
