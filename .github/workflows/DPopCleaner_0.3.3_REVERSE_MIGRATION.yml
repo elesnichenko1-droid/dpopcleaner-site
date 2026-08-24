@@ -75,7 +75,8 @@ jobs:
           python tools/dpop033_migrate.py `
             --repository $PWD `
             --output $diagOutput `
-            --workspace $diagWorkspace
+            --workspace $diagWorkspace `
+            --no-build
 
           if ($LASTEXITCODE -ne 0) {
             throw 'Diagnostic migration failed.'
