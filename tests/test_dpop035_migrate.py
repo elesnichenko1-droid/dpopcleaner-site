@@ -33,6 +33,21 @@ class MigrationBoundaryTests(unittest.TestCase):
         self.assertNotIn("ui", m.MODERN_BACKEND_ROOTS)
         self.assertNotIn("MainWindow.cpp", m.MODERN_BACKEND_ROOTS)
 
+    def test_version_overlay_may_inherit_core_and_update_from_prepared_baseline(self):
+        m = load_core()
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            donor = base / "v034"
+            target = base / "v035"
+            (donor / "modules").mkdir(parents=True)
+            target.mkdir()
+            (donor / "modules" / "FullCore.cpp").write_text("modern", encoding="utf-8")
+            copied = m.copy_modern_backend(donor, target)
+            self.assertEqual(copied, ["modules"])
+            self.assertEqual((target / "modules" / "FullCore.cpp").read_text(encoding="utf-8"), "modern")
+            self.assertFalse((target / "core").exists())
+            self.assertFalse((target / "update").exists())
+
     def test_overlay_empty_is_safe(self):
         m = load_core()
         with tempfile.TemporaryDirectory() as temp:
