@@ -237,10 +237,10 @@ void DrawPageHeading(
     int right = x + 320;
     RECT client{};
     if (HWND hwnd = WindowFromDC(dc); hwnd && GetClientRect(hwnd, &client)) {
-        right = std::max(x + 120, client.right - 18);
+        right = std::max(x + 120, static_cast<int>(client.right) - 18);
     } else {
         RECT clip{};
-        if (GetClipBox(dc, &clip) != ERROR) right = std::max(x + 120, clip.right - 18);
+        if (GetClipBox(dc, &clip) != ERROR) right = std::max(x + 120, static_cast<int>(clip.right) - 18);
     }
     RECT a{x, y, right, y + 34};
     RECT b{x, y + 32, right, y + 82};
