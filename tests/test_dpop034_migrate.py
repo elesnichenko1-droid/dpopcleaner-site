@@ -132,6 +132,14 @@ class DonorIsolationTests(unittest.TestCase):
                 'VALUE "FileVersion", "0.3.3.1\\0"\n'
                 'VALUE "ProductVersion", "0.3.3 BETA R1\\0"\n', encoding='utf-8')
             donor.joinpath('keep.cpp').write_text('auto v=L"DPopCleaner 0.3.3";\n', encoding='utf-8')
+            donor.joinpath('ui').mkdir()
+            donor.joinpath('ui','WorkspacePage.cpp').write_text(
+                '#include "ui/Theme.h"\n'
+                'void WorkspacePage::LayoutChildren() noexcept {\n'
+                '  const int margin = 18; const int buttonHeight = 38;\n'
+                '  MoveWindow(status_, margin, 52, 10, 30, TRUE);\n'
+                '  MoveWindow(list_, margin, 86, 10, 80, TRUE);\n'
+                '}\n', encoding='utf-8')
             overlay.joinpath('ui','PageLayout.h').write_text('layout', encoding='utf-8')
             overlay.joinpath('ui','Panel.cpp').write_text('auto v=L"DPopCleaner 0.3.3 BETA R1";\n', encoding='utf-8')
 
@@ -143,6 +151,7 @@ class DonorIsolationTests(unittest.TestCase):
             self.assertIn('0.3.4', target.joinpath('Version.h').read_text(encoding='utf-8'))
             self.assertTrue(target.joinpath('ui','PageLayout.h').is_file())
             self.assertIn('0.3.4 BETA R1', target.joinpath('ui','Panel.cpp').read_text(encoding='utf-8'))
+            self.assertIn('ComputePageRegions', target.joinpath('ui','WorkspacePage.cpp').read_text(encoding='utf-8'))
 
 
 class OrchestratorTests(unittest.TestCase):
