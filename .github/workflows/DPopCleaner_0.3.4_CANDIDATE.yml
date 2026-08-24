@@ -53,7 +53,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          ./tools/dpop033_ui_smoke.ps1 -ExePath (Join-Path $env:DPOP034_OUTPUT 'artifacts/DPopCleaner.exe') -OutputDir (Join-Path $env:DPOP034_OUTPUT 'evidence')
+          $exe = Join-Path $env:DPOP034_OUTPUT 'artifacts/DPopCleaner.exe'
+          $evidence = Join-Path $env:DPOP034_OUTPUT 'evidence'
+          ./tools/dpop033_ui_smoke.ps1 -ExePath $exe -OutputDir $evidence
+          ./tools/dpop034_zapret_ui_smoke.ps1 -ExePath $exe -OutputDir $evidence
 
       - name: Upload 0.3.4 candidate
         uses: actions/upload-artifact@v4
