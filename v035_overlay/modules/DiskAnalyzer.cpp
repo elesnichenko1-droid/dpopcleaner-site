@@ -89,6 +89,11 @@ struct ScanContext {
         callback(progress);
     }
 
+    void EmitPartial() {
+        if (!options.emitTopLevelSnapshots || !options.partialSnapshot) return;
+        options.partialSnapshot(snapshot);
+    }
+
     DiskNodeId AddNode(const fs::path& path, DiskNodeId parentId, bool directory) {
         DiskNode node{};
         node.id = nextId++;
@@ -109,8 +114,27 @@ struct ScanContext {
         return it == snapshot.nodes.end() ? nullptr : &*it;
     }
 
+    DiskNodeId AddSkippedReparse(const fs::path& path, DiskNodeId parentId, bool directory) {
+        const DiskNodeId childId = AddNode(path, parentId, directory);
+        if (auto* child = FindMutable(childId)) {
+            child->incomplete = true;
+            child->state = DiskScanState::Incomplete;
+        }
+        if (auto* parent = FindMutable(parentId)) {
+            parent->children.push_back(childId);
+            if (directory) ++parent->directoryCount;
+            else ++parent->fileCount;
+            parent->incomplete = true;
+        }
+        ++snapshot.errorCount;
+        ++progress.errors;
+        Notify(path);
+        return childId;
+    }
+
     DiskNodeId ScanDirectory(const fs::path& path, DiskNodeId parentId) {
         const DiskNodeId nodeId = AddNode(path, parentId, true);
+        if (parentId == 0) snapshot.rootId = nodeId;
         ++progress.directoriesVisited;
         Notify(path);
 
@@ -158,24 +182,13 @@ struct ScanContext {
                 continue;
             }
 
-            if (directory) {
-                if (IsReparsePoint(childPath)) {
-                    const DiskNodeId childId = AddNode(childPath, nodeId, true);
-                    if (auto* child = FindMutable(childId)) {
-                        child->incomplete = true;
-                        child->state = DiskScanState::Incomplete;
-                    }
-                    if (auto* parent = FindMutable(nodeId)) {
-                        parent->children.push_back(childId);
-                        ++parent->directoryCount;
-                        parent->incomplete = true;
-                    }
-                    ++snapshot.errorCount;
-                    ++progress.errors;
-                    Notify(childPath);
-                    continue;
-                }
+            if (IsReparsePoint(childPath)) {
+                AddSkippedReparse(childPath, nodeId, directory);
+                if (parentId == 0) EmitPartial();
+                continue;
+            }
 
+            if (directory) {
                 const DiskNodeId childId = ScanDirectory(childPath, nodeId);
                 const DiskNode* child = snapshot.Find(childId);
                 if (auto* parent = FindMutable(nodeId); parent && child) {
@@ -186,6 +199,7 @@ struct ScanContext {
                     parent->directoryCount += 1 + child->directoryCount;
                     parent->incomplete = parent->incomplete || child->incomplete;
                 }
+                if (parentId == 0) EmitPartial();
                 continue;
             }
 
@@ -251,7 +265,7 @@ DiskScanSnapshot ScanDiskTree(const std::filesystem::path& root,
     ScanContext ctx{};
     ctx.stop = stop;
     ctx.callback = std::move(progress);
-    ctx.options = options;
+    ctx.options = std::move(options);
 
     if (stop.stop_requested()) {
         ctx.snapshot.cancelled = true;
@@ -268,6 +282,7 @@ DiskScanSnapshot ScanDiskTree(const std::filesystem::path& root,
     ctx.snapshot.cancelled = ctx.snapshot.cancelled || stop.stop_requested();
     ctx.snapshot.complete = !ctx.snapshot.cancelled;
     ctx.Notify(root, true);
+    ctx.EmitPartial();
     return ctx.snapshot;
 }
 
