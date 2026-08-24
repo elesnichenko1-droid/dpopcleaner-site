@@ -1,0 +1,100 @@
+name: Verify live DPopCleaner 0.3.4 R1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-dpopcleaner-0.3.4-live.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dpopcleaner-0-3-4-live-verification
+  cancel-in-progress: true
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify GitHub Pages manifest and downloadable installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          site='https://elesnichenko1-droid.github.io/dpopcleaner-site/'
+          expected_url='https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.3.4-beta-r1/DPopCleaner_Setup_0.3.4_BETA_R1.exe'
+
+          for i in $(seq 1 30); do
+            html="$(curl -fsSL --retry 2 "${site}?live=${GITHUB_RUN_ID}" || true)"
+            manifest="$(curl -fsSL --retry 2 "${site}update/beta.json?live=${GITHUB_RUN_ID}" || true)"
+            if grep -q '0.3.4 BETA R1' <<<"$html" && grep -q '"version": "0.3.4"' <<<"$manifest"; then
+              printf '%s\n' "$manifest" > live-manifest.json
+              break
+            fi
+            sleep 10
+          done
+
+          test -f live-manifest.json
+
+          python - <<'PY'
+          import json, pathlib
+          m = json.loads(pathlib.Path('live-manifest.json').read_text(encoding='utf-8-sig'))
+          assert m['product'] == 'DPopCleaner'
+          assert m['channel'] == 'beta'
+          assert m['version'] == '0.3.4'
+          assert m['version_code'] == 3041
+          assert m['revision'] == 1
+          assert m['available'] is True
+          assert m['download_url'] == 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.3.4-beta-r1/DPopCleaner_Setup_0.3.4_BETA_R1.exe'
+          assert isinstance(m['size'], int) and m['size'] > 0
+          assert isinstance(m['sha256'], str) and len(m['sha256']) == 64
+          pathlib.Path('download-url.txt').write_text(m['download_url'], encoding='utf-8')
+          pathlib.Path('expected-sha.txt').write_text(m['sha256'].lower(), encoding='utf-8')
+          pathlib.Path('expected-size.txt').write_text(str(m['size']), encoding='utf-8')
+          PY
+
+          curl -fL --retry 5 --retry-delay 3 -o DPopCleaner_Setup_0.3.4_BETA_R1.exe "$(cat download-url.txt)"
+          actual_sha="$(sha256sum DPopCleaner_Setup_0.3.4_BETA_R1.exe | awk '{print $1}')"
+          actual_size="$(stat -c '%s' DPopCleaner_Setup_0.3.4_BETA_R1.exe)"
+          test "$actual_sha" = "$(cat expected-sha.txt)"
+          test "$actual_size" = "$(cat expected-size.txt)"
+          echo "LIVE_SHA=$actual_sha" >> "$GITHUB_ENV"
+          echo "LIVE_SIZE=$actual_size" >> "$GITHUB_ENV"
+
+      - name: Record independent live verification proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          python - <<'PY'
+          import json, os, pathlib
+          from datetime import datetime, timezone
+          proof = {
+              'product': 'DPopCleaner',
+              'version': '0.3.4',
+              'version_code': 3041,
+              'revision': 1,
+              'release_tag': 'v0.3.4-beta-r1',
+              'installer': 'DPopCleaner_Setup_0.3.4_BETA_R1.exe',
+              'download_url': 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.3.4-beta-r1/DPopCleaner_Setup_0.3.4_BETA_R1.exe',
+              'sha256': os.environ['LIVE_SHA'],
+              'size': int(os.environ['LIVE_SIZE']),
+              'site': 'https://elesnichenko1-droid.github.io/dpopcleaner-site/',
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'verified_at_utc': datetime.now(timezone.utc).isoformat(),
+              'live_verified': True,
+          }
+          pathlib.Path('ops/last-live-verification.json').write_text(
+              json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ops/last-live-verification.json
+          git commit -m 'ops: record verified live DPopCleaner 0.3.4 R1' || exit 0
+          git push origin HEAD:main
