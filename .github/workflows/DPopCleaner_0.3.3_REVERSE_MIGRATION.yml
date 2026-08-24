@@ -8,7 +8,7 @@ on:
       - '.github/workflows/DPopCleaner_0.3.3_REVERSE_MIGRATION.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dpopcleaner-0-3-3-reverse-migration
@@ -95,6 +95,23 @@ jobs:
             Write-Host ('{0,4}: {1}' -f $line, $_)
           }
           Write-Host '=== END RecoveryControls.cpp ==='
+
+          New-Item -ItemType Directory -Path debug -Force | Out-Null
+          Copy-Item -LiteralPath $source -Destination 'debug/RecoveryControls.cpp' -Force
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- debug/RecoveryControls.cpp
+          if (-not (git diff --cached --quiet)) {
+            git commit -m 'debug: persist recovered RecoveryControls source'
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Diagnostic commit failed.'
+            }
+            git push origin HEAD:main
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Diagnostic push failed.'
+            }
+          }
 
       - name: Build DPopCleaner 0.3.3 from faithful 0.2.14 UX plus 0.3.2 core
         shell: pwsh
