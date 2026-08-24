@@ -22,7 +22,7 @@ ZapretPageRegions ComputeZapretPageLayout(int width, int height, int dpi) noexce
     const int actionBlockHeight = actionHeight * 2 + gap;
     const int innerWidth = std::max(1, width - margin * 2);
     const int cardWidth = std::max(1, (innerWidth - gap * 2) / 3);
-    const int actionWidth = std::max(1, (innerWidth - gap * 2) / 3);
+    const int actionWidth = std::max(1, (innerWidth - gap * 3) / 4);
 
     ZapretPageRegions regions{};
     regions.gap = gap;
@@ -43,9 +43,9 @@ ZapretPageRegions ComputeZapretPageLayout(int width, int height, int dpi) noexce
     const int actionsY = std::max(
         regions.strategyCombo.y + regions.strategyCombo.height + gap + Scale(54, scale),
         height - margin - actionBlockHeight);
-    for (int index = 0; index < 6; ++index) {
-        const int row = index / 3;
-        const int column = index % 3;
+    for (int index = 0; index < 8; ++index) {
+        const int row = index / 4;
+        const int column = index % 4;
         regions.actions[static_cast<std::size_t>(index)] = {
             margin + column * (actionWidth + gap),
             actionsY + row * (actionHeight + gap),
