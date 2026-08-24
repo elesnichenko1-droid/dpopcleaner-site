@@ -46,6 +46,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 settings parity contract failed.' }
           python tests/test_dpop034_startup_parity.py -v
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 startup parity contract failed.' }
+          python tests/test_dpop034_guard_parity.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 DPopGuard parity contract failed.' }
 
       - name: Build and CTest DPopCleaner 0.3.4
         shell: pwsh
