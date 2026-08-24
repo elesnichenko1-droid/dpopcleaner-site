@@ -8,6 +8,7 @@
 #include <shellapi.h>
 #include <filesystem>
 #include <cwchar>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -34,6 +35,33 @@ bool RequireValidBundle(fs::path& root, std::wstring& error) {
         error = L"Комплект Zapret повреждён или неполон. Не найден файл: " + validation.missing.wstring();
         return false;
     }
+    return true;
+}
+
+bool RunHiddenAndWait(const wchar_t* file, const wchar_t* arguments, DWORD timeoutMs, DWORD& exitCode, std::wstring& error) {
+    SHELLEXECUTEINFOW execute{};
+    execute.cbSize = sizeof(execute);
+    execute.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    execute.lpFile = file;
+    execute.lpParameters = arguments;
+    execute.nShow = SW_HIDE;
+    if (!ShellExecuteExW(&execute) || !execute.hProcess) {
+        error = L"Не удалось запустить системную команду. Код Windows: " + std::to_wstring(GetLastError());
+        return false;
+    }
+    const DWORD wait = WaitForSingleObject(execute.hProcess, timeoutMs);
+    if (wait != WAIT_OBJECT_0) {
+        CloseHandle(execute.hProcess);
+        error = wait == WAIT_TIMEOUT ? L"Системная команда не завершилась вовремя." : L"Ошибка ожидания системной команды.";
+        return false;
+    }
+    if (!GetExitCodeProcess(execute.hProcess, &exitCode)) exitCode = static_cast<DWORD>(-1);
+    CloseHandle(execute.hProcess);
+    if (exitCode != 0) {
+        error = L"Системная команда завершилась с кодом " + std::to_wstring(exitCode) + L".";
+        return false;
+    }
+    error.clear();
     return true;
 }
 
@@ -133,7 +161,6 @@ bool StopBundledWinws(std::wstring& error) {
         return false;
     }
 
-    bool matched = false;
     bool failed = false;
     PROCESSENTRY32W entry{};
     entry.dwSize = sizeof(entry);
@@ -142,7 +169,6 @@ bool StopBundledWinws(std::wstring& error) {
             if (_wcsicmp(entry.szExeFile, L"winws.exe") != 0) continue;
             const auto path = ProcessPath(entry.th32ProcessID);
             if (!IsBundledWinwsPath(status.bundleFolder, path)) continue;
-            matched = true;
             HANDLE process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, entry.th32ProcessID);
             if (!process) {
                 failed = true;
@@ -172,6 +198,55 @@ bool OpenBundledFolder(std::wstring& error) {
     if (!RequireValidBundle(root, error)) return false;
     if (reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", root.c_str(), nullptr, nullptr, SW_SHOWNORMAL)) <= 32) {
         error = L"Не удалось открыть папку Zapret.";
+        return false;
+    }
+    error.clear();
+    return true;
+}
+
+bool RepairRtc(const fs::path& relativeScript, std::wstring& report) {
+    if (!IsLaunchableStrategyPath(relativeScript)) {
+        report = L"Выбран небезопасный или неподдерживаемый путь стратегии Zapret.";
+        return false;
+    }
+    const auto before = QueryStatus();
+    if (!before.bundleValid) {
+        report = L"Сначала восстановите bundle Zapret: отсутствует " + before.missingBundleFile.wstring();
+        return false;
+    }
+    if (before.serviceRunning) {
+        report = L"Zapret сейчас работает как Windows-служба. RTC repair не перезапускает службу автоматически: откройте Service Manager, остановите службу и повторите действие.";
+        return false;
+    }
+
+    std::wstring stopError;
+    if (before.winwsRunning && !StopBundledWinws(stopError)) {
+        report = L"Не удалось безопасно остановить bundled winws: " + stopError;
+        return false;
+    }
+
+    DWORD dnsCode = 0;
+    std::wstring dnsError;
+    if (!RunHiddenAndWait(L"ipconfig.exe", L"/flushdns", 15000, dnsCode, dnsError)) {
+        report = L"Bundled winws остановлен, но DNS-кэш не очищен: " + dnsError;
+        return false;
+    }
+
+    Sleep(700);
+    std::wstring launchError;
+    if (!LaunchStrategy(relativeScript, launchError)) {
+        report = L"DNS-кэш очищен, но стратегия Zapret не перезапустилась: " + launchError;
+        return false;
+    }
+    report = L"RTC repair выполнен: standalone bundled winws остановлен (если был запущен), DNS-кэш очищен и выбранная стратегия запущена заново. Если Discord всё ещё висит на RTC, полностью перезапустите Discord.";
+    return true;
+}
+
+bool OpenZapretUpdatePage(std::wstring& error) {
+    constexpr wchar_t kLatest[] = L"https://github.com/Flowseal/zapret-discord-youtube/releases/latest";
+    const auto code = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", kLatest, nullptr, nullptr, SW_SHOWNORMAL));
+    if (code <= 32) {
+        error = L"Не удалось открыть страницу обновлений Zapret.";
         return false;
     }
     error.clear();
