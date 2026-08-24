@@ -23,5 +23,7 @@ bool LaunchDefaultStrategy(std::wstring& error);
 bool StopBundledWinws(std::wstring& error);
 bool OpenServiceManager(std::wstring& error);
 bool OpenBundledFolder(std::wstring& error);
+bool RepairRtc(const std::filesystem::path& relativeScript, std::wstring& report);
+bool OpenZapretUpdatePage(std::wstring& error);
 
 }
