@@ -12,7 +12,7 @@ MANAGER_SOURCE = ROOT / 'v034_overlay' / 'modules' / 'ZapretManager.cpp'
 
 
 class ZapretUiContractTests(unittest.TestCase):
-    def test_page_has_strategy_picker_eight_actions_rtc_repair_and_non_overlapping_layout(self):
+    def test_page_has_strategy_picker_eight_actions_rtc_repair_and_verified_updater(self):
         for path in (HEADER, SOURCE, LAYOUT_HEADER, MANAGER_HEADER, MANAGER_SOURCE):
             self.assertTrue(path.is_file(), f'{path.name} overlay missing')
         header = HEADER.read_text(encoding='utf-8')
@@ -20,6 +20,7 @@ class ZapretUiContractTests(unittest.TestCase):
         layout_header = LAYOUT_HEADER.read_text(encoding='utf-8')
         manager_header = MANAGER_HEADER.read_text(encoding='utf-8')
         manager_source = MANAGER_SOURCE.read_text(encoding='utf-8')
+        combined = source + manager_header + manager_source
 
         self.assertIn('std::array<HWND, 8> buttons_', header)
         self.assertIn('std::array<ZapretRect, 8> actions', layout_header)
@@ -36,18 +37,27 @@ class ZapretUiContractTests(unittest.TestCase):
             'LaunchDefaultStrategy(',
             'OpenBundledFolder(',
             'RepairRtc(',
-            'OpenZapretUpdatePage(',
+            'CheckForZapretUpdate(',
+            'UpdateBundledZapret(',
             'Запустить выбранную',
             'Остановить bundled winws',
             'Исправление трансляций',
-            'Проверить обновление Zapret',
+            'Проверить / обновить Zapret',
         ):
-            self.assertIn(marker, source + manager_header + manager_source)
+            self.assertIn(marker, combined)
 
-        self.assertIn('ipconfig.exe', manager_source)
-        self.assertIn('/flushdns', manager_source)
-        self.assertIn('serviceRunning', manager_source)
-        self.assertIn('IsBundledWinwsPath', manager_source)
+        for security_marker in (
+            'ipconfig.exe',
+            '/flushdns',
+            'serviceRunning',
+            'IsBundledWinwsPath',
+            'sha256:',
+            'Sha256File',
+            'staging',
+            'backup',
+        ):
+            self.assertIn(security_marker, manager_source)
+
         self.assertNotIn('const int top = 54', source)
         self.assertNotIn('std::array<std::wstring_view, 4>', source)
 
