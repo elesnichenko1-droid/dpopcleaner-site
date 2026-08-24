@@ -23,7 +23,7 @@ if (-not (Test-Path -LiteralPath $tests -PathType Leaf)) {
 Push-Location $RepositoryRoot
 try {
     Write-Host '=== DPopCleaner 0.3.3: tests ==='
-    python -m unittest -v tests/test_dpop033_migrate.py
+    python $tests -v
     if ($LASTEXITCODE -ne 0) {
         throw 'Migration tests failed.'
     }
