@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -54,9 +55,25 @@ bool ValidateSettings(const AppSettings& settings, std::wstring& error) noexcept
 std::wstring NormalizeExclusionPath(const std::filesystem::path& path);
 bool IsExcludedPath(const std::filesystem::path& path, const AppSettings& settings);
 
-// ActiveSettings is process-local committed state. "Применить" updates it
-// without touching disk; SaveAppSettings updates both disk and this state.
-AppSettings ActiveSettings();
-void SetActiveSettings(const AppSettings& settings);
+// Process-local committed state. Apply can change this without writing disk.
+inline std::mutex& ActiveSettingsMutex() noexcept {
+    static std::mutex mutex;
+    return mutex;
+}
+
+inline AppSettings& ActiveSettingsStorage() noexcept {
+    static AppSettings settings{};
+    return settings;
+}
+
+inline AppSettings ActiveSettings() {
+    std::scoped_lock lock(ActiveSettingsMutex());
+    return ActiveSettingsStorage();
+}
+
+inline void SetActiveSettings(const AppSettings& settings) {
+    std::scoped_lock lock(ActiveSettingsMutex());
+    ActiveSettingsStorage() = settings;
+}
 
 } // namespace dpop::settings
