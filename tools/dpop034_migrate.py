@@ -43,6 +43,7 @@ _core._run_donor_migration = _run_donor_migration
 
 transform_cmake_for_page_layout = _build.transform_cmake_for_page_layout
 transform_cmake_for_zapret_center = _build.transform_cmake_for_zapret_center
+transform_cmake_for_zapret_page_layout = _build.transform_cmake_for_zapret_page_layout
 _prepare_034_script_text = _build._prepare_034_script_text
 
 
@@ -65,6 +66,13 @@ def transform_v034_overlay(v034_root: Path) -> dict[str, str]:
         summary['zapret_center_cmake_registered'] = 'true'
     else:
         summary['zapret_center_cmake_registered'] = 'false'
+
+    zapret_layout = v034_root / 'ui' / 'pages' / 'ZapretPageLayout.cpp'
+    if zapret_layout.is_file():
+        updated = transform_cmake_for_zapret_page_layout(updated)
+        summary['zapret_page_layout_cmake_registered'] = 'true'
+    else:
+        summary['zapret_page_layout_cmake_registered'] = 'false'
 
     if updated != original:
         cmake_path.write_text(updated, encoding='utf-8', newline='\n')
