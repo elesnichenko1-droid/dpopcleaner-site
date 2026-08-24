@@ -1,30 +1,11 @@
 # Changelog
 
-## 0.3.1 BETA — Stage 3
+## 0.3.3 BETA R1
 
-### Applications
-- Added real installed application discovery from Windows registry.
-- Added real vendor/MSI uninstaller launching.
-- Added post-uninstall leftover scanning.
-- Added conservative cleanup of app-named folders and Start Menu shortcuts.
-- Cleanup moves candidates to Recycle Bin after explicit confirmation.
-
-### Installer
-- Full Inno Setup installer.
-- Registers DPopCleaner in Windows Installed Apps.
-- Supports upgrade-over-existing installation.
-- Includes DPopUpdater.exe.
-- Adds Start Menu shortcut and optional desktop shortcut.
-
-### Updates
-- Checks beta.json automatically shortly after startup.
-- Downloads updates via HTTPS.
-- Verifies SHA-256 before launch.
-- Verifies Authenticode when release is marked signed.
-- Restarts DPopCleaner after successful update installation.
-
-### Security
-- No runtime PowerShell downloader.
-- No UPX/custom executable packer.
-- No Defender bypass logic.
-- Optional Authenticode signing hook in GitHub Actions.
+- Вернули faithful 0.2.14-style UX как основу новой ветки.
+- Перенесли функциональное ядро 0.3.2 в recovered source.
+- Исправили конфликт `small` с Windows SDK (`smallFont`).
+- Подтвердили Visual Studio 2022 x64 build и 13/13 CTest.
+- Добавили UI smoke-test и защиту от белого фона.
+- Синхронизировали release, updater manifest и GitHub Pages в одном 0.3.3 pipeline.
+- Убрали fallback на 0.3.1 R4 с сайта.

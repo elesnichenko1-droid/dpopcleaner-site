@@ -1,0 +1,178 @@
+name: Build, release and deploy DPopCleaner 0.3.3 R1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-dpopcleaner-0.3.3.yml'
+      - 'release/**'
+      - 'tools/dpop033_*'
+      - 'tests/test_dpop033_*'
+      - 'index.html'
+      - 'script.js'
+      - 'release-manifest.js'
+      - 'styles.css'
+      - 'update/beta.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-dpopcleaner-0.3.3.yml'
+      - 'release/**'
+      - 'tools/dpop033_*'
+      - 'tests/test_dpop033_*'
+      - 'index.html'
+      - 'script.js'
+      - 'release-manifest.js'
+      - 'styles.css'
+      - 'update/beta.json'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: dpopcleaner-0-3-3-r1-publish
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: v0.3.3-beta-r1
+  RELEASE_ASSET: DPopCleaner_Setup_0.3.3_BETA_R1.exe
+  ZAPRET_ARCHIVE_URL: https://github.com/Flowseal/zapret-discord-youtube/releases/download/1.10.1/zapret-discord-youtube-1.10.1.zip
+  ZAPRET_ARCHIVE_SHA256: F748D61FEC75E4EDC992CB5B09D554E914197C68C690384ACEB61F143D8F76C9
+  ZAPRET_LICENSE_URL: https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/1.10.1/LICENSE.txt
+  ZAPRET_LICENSE_SHA256: FE3983A1E91206AD1A530BCFAE01FAD207020CB61882EDD62C1E3CB5F8D5D430
+
+jobs:
+  build-package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test migration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python tests/test_dpop033_migrate.py -v
+          if($LASTEXITCODE-ne 0){throw 'Migration tests failed.'}
+          python tests/test_dpop033_recovery_controls.py -v
+          if($LASTEXITCODE-ne 0){throw 'RecoveryControls regression test failed.'}
+      - name: Build verified 0.3.3 binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $output=Join-Path $env:RUNNER_TEMP 'dpop033-release-output';$workspace=Join-Path $env:RUNNER_TEMP 'dpop033-release-workspace'
+          python tools/dpop033_migrate.py --repository $PWD --output $output --workspace $workspace --build
+          if($LASTEXITCODE-ne 0){throw '0.3.3 build failed.'}
+          ./tools/dpop033_ui_smoke.ps1 -ExePath (Join-Path $output 'artifacts/DPopCleaner.exe') -OutputDir (Join-Path $output 'evidence')
+          "DPOP033_OUTPUT=$output"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Download and verify Zapret 1.10.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $inputs=Join-Path $env:RUNNER_TEMP 'dpop033-inputs';New-Item -ItemType Directory -Path $inputs -Force|Out-Null
+          $archive=Join-Path $inputs 'zapret-1.10.1.zip';$license=Join-Path $inputs 'LICENSE.txt'
+          Invoke-WebRequest -Uri $env:ZAPRET_ARCHIVE_URL -OutFile $archive
+          Invoke-WebRequest -Uri $env:ZAPRET_LICENSE_URL -OutFile $license
+          if((Get-FileHash $archive -Algorithm SHA256).Hash-ne$env:ZAPRET_ARCHIVE_SHA256){throw 'Zapret archive SHA-256 mismatch.'}
+          if((Get-FileHash $license -Algorithm SHA256).Hash-ne$env:ZAPRET_LICENSE_SHA256){throw 'Zapret license SHA-256 mismatch.'}
+          $expanded=Join-Path $inputs 'expanded';Expand-Archive $archive $expanded -Force
+          $service=Get-ChildItem $expanded -Filter service.bat -File -Recurse|Select-Object -First 1
+          if(-not$service){throw 'Zapret service.bat missing.'}
+          "ZAPRET_ROOT=$($service.Directory.FullName)"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ZAPRET_LICENSE=$license"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Remove-Item release/stage,release/output -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path release/stage/zapret,release/output -Force|Out-Null
+          Copy-Item (Join-Path $env:DPOP033_OUTPUT 'artifacts/DPopCleaner.exe') release/stage/DPopCleaner.exe -Force
+          Copy-Item (Join-Path $env:DPOP033_OUTPUT 'artifacts/DPopUpdater.exe') release/stage/DPopUpdater.exe -Force
+          Copy-Item (Join-Path $env:ZAPRET_ROOT '*') release/stage/zapret -Recurse -Force
+          Copy-Item $env:ZAPRET_LICENSE release/stage/zapret/LICENSE.txt -Force
+          $iscc="${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if(-not(Test-Path $iscc)){choco install innosetup --no-progress -y}
+          & $iscc release/DPopCleaner_0.3.3_R1.iss
+          if($LASTEXITCODE-ne 0){throw 'Inno Setup failed.'}
+          $installer=Join-Path $PWD "release/output/$env:RELEASE_ASSET"
+          if(-not(Test-Path $installer)){throw 'Installer missing.'}
+          "DPOP033_INSTALLER=$installer"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build publication metadata
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $publish=Join-Path $env:RUNNER_TEMP 'dpop033-publish';New-Item -ItemType Directory -Path $publish/assets,$publish/update -Force|Out-Null
+          Copy-Item $env:DPOP033_INSTALLER (Join-Path $publish $env:RELEASE_ASSET) -Force
+          Copy-Item (Join-Path $env:DPOP033_OUTPUT 'evidence/default-1200x850.png') (Join-Path $publish 'assets/dpopcleaner-0.3.3-r1.png') -Force
+          $item=Get-Item $env:DPOP033_INSTALLER;$sha=(Get-FileHash $env:DPOP033_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant();$url="https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
+          [ordered]@{product='DPopCleaner';channel='beta';version='0.3.3';version_code=3031;revision=1;mandatory=$false;download_url=$url;sha256=$sha;size=[int64]$item.Length;signed=$false;available=$true;notes_url='https://elesnichenko1-droid.github.io/dpopcleaner-site/';install_args='/SILENT /NORESTART'}|ConvertTo-Json|Set-Content (Join-Path $publish 'update/beta.json') -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.3.3-release-candidate
+          path: ${{ runner.temp }}/dpop033-publish/*
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: build-package
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: dpopcleaner-0.3.3-release-candidate
+          path: publish
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset="publish/${RELEASE_ASSET}"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then gh release upload "${RELEASE_TAG}" "$asset" --clobber; else gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.3.3 BETA R1" --notes-file release/RELEASE_NOTES_0.3.3_R1.md; fi
+      - name: Stage site
+        run: |
+          set -euo pipefail
+          rm -rf _site;mkdir -p _site/assets _site/update
+          cp index.html styles.css script.js release-manifest.js dpopcleaner-icon.png .nojekyll _site/
+          if [ -d assets ]; then cp -R assets/. _site/assets/; fi
+          cp publish/assets/dpopcleaner-0.3.3-r1.png _site/assets/dpopcleaner-0.3.3-r1.png
+          cp publish/update/beta.json _site/update/beta.json
+          grep -q '0.3.3 BETA R1' _site/index.html
+          ! grep -R -n '0.3.1 BETA R4' _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  verify-live:
+    if: github.event_name != 'pull_request'
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify live site and installer
+        run: |
+          set -euo pipefail
+          site='https://elesnichenko1-droid.github.io/dpopcleaner-site/'
+          for i in $(seq 1 18); do html="$(curl -fsSL "${site}?v=${GITHUB_RUN_ID}" || true)";manifest="$(curl -fsSL "${site}update/beta.json?v=${GITHUB_RUN_ID}" || true)";if grep -q '0.3.3 BETA R1'<<<"$html"&&grep -q '"version": "0.3.3"'<<<"$manifest";then printf '%s\n' "$manifest">manifest.json;break;fi;sleep 10;done
+          test -f manifest.json
+          python - <<'PY'
+          import json,pathlib
+          m=json.loads(pathlib.Path('manifest.json').read_text());assert m['version']=='0.3.3' and m['version_code']==3031 and m['revision']==1 and m['available'] is True
+          pathlib.Path('url.txt').write_text(m['download_url']);pathlib.Path('sha.txt').write_text(m['sha256'])
+          PY
+          curl -fL --retry 5 --retry-delay 3 -o installer.exe "$(cat url.txt)"
+          echo "$(cat sha.txt)  installer.exe"|sha256sum --check -

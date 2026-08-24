@@ -1,24 +1,28 @@
-# DPopCleaner 0.3.1 BETA — Stage 3
+# DPopCleaner 0.3.3 BETA R1
 
-DPopCleaner 0.3.1 is a Windows x64 maintenance utility reconstructed as a maintainable C++/Win32 project.
+DPopCleaner — Windows x64 utility для очистки, диагностики и повседневного обслуживания системы.
 
-## What changed in 0.3.1
+## Текущая архитектура
 
-- Real installed-app enumeration from Windows uninstall registry (HKLM/HKCU, 64/32-bit views).
-- Applications page with name, version, publisher and install location.
-- Uses the application's own registered uninstaller/MSI command instead of pretending to remove software.
-- After uninstall, performs a conservative leftover scan in Program Files, ProgramData, Local/Roaming AppData and Start Menu shortcuts.
-- Leftovers are shown to the user and moved to the Recycle Bin only after a second confirmation.
-- Full Inno Setup installer with Add/Remove Programs registration, Start Menu shortcut, optional desktop shortcut and upgrade support.
-- Update check runs automatically after startup.
-- Update package is downloaded over HTTPS and checked with SHA-256. Signed packages are verified with Authenticode.
-- Unsigned BETA packages require an explicit warning/confirmation. Once a code-signing certificate is configured in GitHub secrets, signed updates use the normal automatic path.
-- GitHub Actions builds DPopCleaner.exe, DPopUpdater.exe and DPopCleaner_Setup_0.3.1_BETA.exe and publishes v0.3.1-beta.
+Версия 0.3.3 строится по схеме:
 
-## Important limitation of leftover cleanup
+**faithful UX/поведение 0.2.14 → recovered source → функциональное ядро 0.3.2 → DPopCleaner 0.3.3.**
 
-No generic uninstaller can know every file an arbitrary third-party application ever created unless that application/installer provides a complete installation log. DPopCleaner therefore deliberately uses a conservative scan to avoid deleting unrelated user data. MSI/vendor uninstallers remain the primary removal mechanism.
+Это позволяет сохранить более удачную структуру интерфейса 0.2.14 и при этом не терять новые модули.
 
-## Build
+## Что входит
 
-Windows + Visual Studio 2022 Build Tools / CMake, or simply use the included GitHub Actions workflow.
+- Очистка и системная диагностика.
+- ОЗУ и сведения о системе.
+- DPopGuard QuickScan + AMSI.
+- Диски, приложения, Windows, дубликаты и инструменты.
+- Zapret Center с официальным Zapret 1.10.1.
+- Нативная проверка обновлений через `update/beta.json`.
+
+## CI и публикация
+
+`.github/workflows/DPopCleaner_0.3.3_REVERSE_MIGRATION.yml` проверяет мигратор, собирает Release x64 через Visual Studio 2022, запускает CTest и UI smoke-test.
+
+`.github/workflows/publish-dpopcleaner-0.3.3.yml` формирует Inno Setup installer, GitHub Release, согласованный `update/beta.json` и GitHub Pages.
+
+Старые установщики не используются как fallback: если manifest 0.3.3 не прошёл проверку, кнопка скачивания отключается.
