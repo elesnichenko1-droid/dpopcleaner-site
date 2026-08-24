@@ -16,6 +16,7 @@ public:
     bool Create(HWND parent, SessionLog& log) {
         return PageBase::Create(parent, log, L"DPopGuard");
     }
+    void RunQuickScanAtStartup() { if (!IsBusy()) RunQuickScan(); }
 
 protected:
     bool OnCreate() override;
