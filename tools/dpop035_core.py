@@ -110,10 +110,6 @@ def _insert_ctest_block(text: str, marker: str, block: str) -> str:
 
 
 def _transform_cmake_for_disk(text: str) -> str:
-    # ZapretManager from the modern 0.3.4 backend calls helpers implemented in
-    # ZapretCenterModel. The recovered 0.3.3/0.2.14-style CMake never knew
-    # about that translation unit, so explicitly link the backend dependency
-    # without importing the 0.3.4 UI shell.
     if "src/modules/ZapretCenterModel.cpp" not in text:
         anchor = "  src/modules/ZapretManager.cpp\n"
         if anchor not in text:
@@ -151,8 +147,17 @@ def _transform_cmake_for_settings(text: str) -> str:
             raise ValueError("CMake donor drifted: FullCore source anchor missing for SettingsStore")
         text = text.replace(anchor, anchor + "  src/modules/SettingsStore.cpp\n", 1)
 
-    block = '''\n  add_executable(SettingsStoreTests tests/v035/SettingsStoreTests.cpp src/modules/SettingsStore.cpp)\n  target_include_directories(SettingsStoreTests PRIVATE src)\n  target_compile_definitions(SettingsStoreTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  target_link_libraries(SettingsStoreTests PRIVATE shell32 advapi32)\n  if(MSVC)\n    target_compile_options(SettingsStoreTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME SettingsStoreTests COMMAND SettingsStoreTests)\n'''
-    return _insert_ctest_block(text, "add_executable(SettingsStoreTests", block)
+    if "src/ui/settings/SettingsController.cpp" not in text:
+        anchor = "  src/ui/Shell.cpp\n"
+        if anchor not in text:
+            raise ValueError("CMake donor drifted: Shell source anchor missing for SettingsController")
+        text = text.replace(anchor, anchor + "  src/ui/settings/SettingsController.cpp\n", 1)
+
+    store_block = '''\n  add_executable(SettingsStoreTests tests/v035/SettingsStoreTests.cpp src/modules/SettingsStore.cpp)\n  target_include_directories(SettingsStoreTests PRIVATE src)\n  target_compile_definitions(SettingsStoreTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  target_link_libraries(SettingsStoreTests PRIVATE shell32 advapi32)\n  if(MSVC)\n    target_compile_options(SettingsStoreTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME SettingsStoreTests COMMAND SettingsStoreTests)\n'''
+    text = _insert_ctest_block(text, "add_executable(SettingsStoreTests", store_block)
+
+    controller_block = '''\n  add_executable(SettingsControllerTests\n    tests/v035/SettingsControllerTests.cpp\n    src/ui/settings/SettingsController.cpp\n    src/modules/SettingsStore.cpp\n  )\n  target_include_directories(SettingsControllerTests PRIVATE src)\n  target_compile_definitions(SettingsControllerTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  target_link_libraries(SettingsControllerTests PRIVATE shell32 advapi32)\n  if(MSVC)\n    target_compile_options(SettingsControllerTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME SettingsControllerTests COMMAND SettingsControllerTests)\n'''
+    return _insert_ctest_block(text, "add_executable(SettingsControllerTests", controller_block)
 
 
 def _overlay_v035_tests(repository: Path, stage: Path) -> list[str]:
