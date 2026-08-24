@@ -40,6 +40,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 Zapret UI contract failed.' }
           python tests/test_dpop034_shell_parity.py -v
           if ($LASTEXITCODE -ne 0) { throw '0.3.4 shell parity contract failed.' }
+          python tests/test_dpop034_page_content_layout.py -v
+          if ($LASTEXITCODE -ne 0) { throw '0.3.4 shared page content layout contract failed.' }
 
       - name: Build and CTest DPopCleaner 0.3.4
         shell: pwsh
