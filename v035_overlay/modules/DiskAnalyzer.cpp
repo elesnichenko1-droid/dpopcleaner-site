@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cwctype>
+#include <iterator>
 #include <system_error>
 
 #ifdef _WIN32
