@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / 'tools' / 'dpop034_core.py'
+SHELL = ROOT / 'v034_overlay' / 'ui' / 'Shell.h'
+SHELL_TEST = ROOT / 'v034_overlay' / 'tests' / 'ShellContractTests.cpp'
 INSTALLER = ROOT / 'release' / 'DPopCleaner_0.3.4_R2.iss'
 WORKFLOW = ROOT / '.github' / 'workflows' / 'publish-dpopcleaner-0.3.4.yml'
 MANIFEST = ROOT / 'update' / 'beta.json'
@@ -15,10 +17,12 @@ INDEX = ROOT / 'index.html'
 
 class R2IdentityTests(unittest.TestCase):
     def test_all_release_surfaces_agree_on_r2(self):
-        for path in (CORE, INSTALLER, WORKFLOW, MANIFEST, SITE_MANIFEST, INDEX):
+        for path in (CORE, SHELL, SHELL_TEST, INSTALLER, WORKFLOW, MANIFEST, SITE_MANIFEST, INDEX):
             self.assertTrue(path.is_file(), f'missing R2 release surface: {path}')
 
         core = CORE.read_text(encoding='utf-8')
+        shell = SHELL.read_text(encoding='utf-8')
+        shell_test = SHELL_TEST.read_text(encoding='utf-8')
         installer = INSTALLER.read_text(encoding='utf-8')
         workflow = WORKFLOW.read_text(encoding='utf-8')
         site_manifest = SITE_MANIFEST.read_text(encoding='utf-8')
@@ -32,6 +36,10 @@ class R2IdentityTests(unittest.TestCase):
             "TARGET_RESOURCE_VERSION = '0.3.4.2'",
         ):
             self.assertIn(marker, core)
+
+        self.assertIn('L"DPopCleaner 0.3.4 BETA R2"', shell)
+        self.assertNotIn('L"DPopCleaner 0.3.4 BETA R1"', shell)
+        self.assertIn('identity.windowTitle == L"DPopCleaner 0.3.4 BETA R2"', shell_test)
 
         for marker in (
             '#define MyAppVersion "0.3.4 BETA R2"',
