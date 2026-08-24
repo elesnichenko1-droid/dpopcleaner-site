@@ -21,6 +21,7 @@ project(DPopCleaner VERSION 0.3.4 LANGUAGES CXX RC)
 add_executable(DPopCleaner WIN32
   src/ui/Layout.cpp
   src/ui/Theme.cpp
+  src/ui/pages/ZapretPage.cpp
   src/ui/pages/WorkspacePage.cpp
 )
 if(BUILD_TESTING)
@@ -69,6 +70,16 @@ class CMakeIntegrationTests(unittest.TestCase):
         self.assertIn('tests/v034/ZapretCenterModelTests.cpp', updated)
         self.assertIn('add_test(NAME ZapretCenterModelTests COMMAND ZapretCenterModelTests)', updated)
         self.assertEqual(updated, mod.transform_cmake_for_zapret_center(updated))
+
+    def test_zapret_page_layout_is_compiled_into_app_and_ctest(self):
+        mod = load_module()
+        updated = mod.transform_cmake_for_zapret_page_layout(DONOR_CMAKE)
+        self.assertIn('src/ui/pages/ZapretPageLayout.cpp', updated)
+        self.assertEqual(updated.count('src/ui/pages/ZapretPageLayout.cpp'), 2)
+        self.assertIn('add_executable(ZapretPageLayoutTests', updated)
+        self.assertIn('tests/v034/ZapretPageLayoutTests.cpp', updated)
+        self.assertIn('add_test(NAME ZapretPageLayoutTests COMMAND ZapretPageLayoutTests)', updated)
+        self.assertEqual(updated, mod.transform_cmake_for_zapret_page_layout(updated))
 
 
 class PrepareScriptTests(unittest.TestCase):
