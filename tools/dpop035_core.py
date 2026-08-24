@@ -3,7 +3,8 @@
 
 The recovered v033 tree is the user-visible 0.2.14-style UX host. Only the
 allow-listed backend roots from verified v034 are copied into it; 0.3.4 UI
-files are deliberately excluded. 0.3.5-specific overlays are applied last.
+files are deliberately excluded. Version overlays are partial: core/update
+may be inherited from the normalized R3 source prepared at build time.
 """
 from __future__ import annotations
 
@@ -50,16 +51,25 @@ def apply_overlay(overlay_root: Path, target_root: Path) -> list[str]:
 
 
 def copy_modern_backend(v034: Path, v035: Path) -> list[str]:
+    """Copy backend roots that are actually present in the v034 overlay.
+
+    v034 is a version overlay, not a normalized full source tree. Missing
+    core/update roots intentionally inherit the tracked R3 baseline when the
+    build helper prepares the normalized source. Modules must be present
+    because 0.3.4 carries its modern functional overlay there.
+    """
     copied: list[str] = []
     for root_name in MODERN_BACKEND_ROOTS:
         src = v034 / root_name
-        dst = v035 / root_name
         if not src.is_dir():
-            raise ValueError(f"modern backend root missing: {root_name}")
+            continue
+        dst = v035 / root_name
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src, dst)
         copied.append(root_name)
+    if "modules" not in copied:
+        raise ValueError("modern backend modules overlay missing")
     return copied
 
 
@@ -262,6 +272,7 @@ def prepare_v035(repository: Path, output: Path, workspace: Path, *, build: bool
         "ux_donor": ux_report,
         "backend_donor": backend_report,
         "modern_backend_roots": list(copied_backend),
+        "inherited_backend_roots": [name for name in MODERN_BACKEND_ROOTS if name not in copied_backend],
         "overlay_files": overlay_files,
         "v035_test_files": test_files,
         "build": {"requested": build, "completed": False, "tests_passed": False},
