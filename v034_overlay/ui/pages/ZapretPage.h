@@ -26,6 +26,7 @@ protected:
 private:
     void RefreshStatus();
     void ReloadStrategies();
+    void UpdateZapret();
     const dpop::zapret::StrategyEntry* SelectedStrategy() const noexcept;
     bool RunAction(int buttonIndex, std::wstring& error);
 
