@@ -29,7 +29,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          python -m unittest -v tests/test_dpop033_migrate.py
+          python tests/test_dpop033_migrate.py -v
           if ($LASTEXITCODE -ne 0) {
             throw 'Migration unit tests failed.'
           }

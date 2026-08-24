@@ -238,7 +238,7 @@ class WorkflowContractTests(unittest.TestCase):
     def test_workflow_runs_tests_build_ui_capture_and_uploads_evidence(self):
         root = MODULE_PATH.parents[1]
         workflow = (root / ".github" / "workflows" / "DPopCleaner_0.3.3_REVERSE_MIGRATION.yml").read_text(encoding="utf-8")
-        self.assertIn("python -m unittest -v tests/test_dpop033_migrate.py", workflow)
+        self.assertIn("python tests/test_dpop033_migrate.py -v", workflow)
         self.assertIn("tools/dpop033_migrate.py", workflow)
         self.assertIn("--build", workflow)
         self.assertIn("tools/dpop033_ui_smoke.ps1", workflow)
