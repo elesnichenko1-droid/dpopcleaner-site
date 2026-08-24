@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "tools" / "dpop035_core.py"
+CMAKE_OVERLAY = ROOT / "v035_overlay" / "CMakeLists.txt"
 
 
 def load_core():
@@ -60,13 +61,17 @@ class MigrationBoundaryTests(unittest.TestCase):
         transformed = m._transform_cmake_for_settings(donor)
         self.assertIn("src/modules/SettingsStore.cpp", transformed)
         self.assertIn("src/ui/settings/SettingsController.cpp", transformed)
-        self.assertIn("src/ui/TrayIcon.cpp", transformed)
         self.assertIn("add_executable(SettingsStoreTests", transformed)
         self.assertIn("tests/v035/SettingsStoreTests.cpp", transformed)
         self.assertIn("add_test(NAME SettingsStoreTests", transformed)
         self.assertIn("add_executable(SettingsControllerTests", transformed)
         self.assertIn("tests/v035/SettingsControllerTests.cpp", transformed)
         self.assertIn("add_test(NAME SettingsControllerTests", transformed)
+
+        overlay = CMAKE_OVERLAY.read_text(encoding="utf-8")
+        self.assertIn("src/ui/TrayIcon.cpp", overlay)
+        self.assertIn("src/modules/SettingsStore.cpp", overlay)
+        self.assertIn("src/ui/settings/SettingsController.cpp", overlay)
 
     def test_overlay_empty_is_safe(self):
         m = load_core()
