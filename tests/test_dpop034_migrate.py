@@ -187,6 +187,31 @@ class OrchestratorTests(unittest.TestCase):
             self.assertEqual(report['donor']['target_version'], '0.3.3')
 
 
+class DonorEntrypointTests(unittest.TestCase):
+    def test_run_donor_migration_uses_repair_entrypoint_not_raw_core(self):
+        import sys
+        from types import SimpleNamespace
+        mod = load_module()
+        calls = []
+        repaired = SimpleNamespace(migrate=lambda repository, output, workspace, build, keep_worktree: calls.append((repository, output, workspace, build, keep_worktree)) or {'fixed': True})
+        raw = SimpleNamespace(migrate=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('raw core must not be used')))
+        old_repaired = sys.modules.get('dpop033_migrate')
+        old_raw = sys.modules.get('dpop033_core')
+        sys.modules['dpop033_migrate'] = repaired
+        sys.modules['dpop033_core'] = raw
+        try:
+            result = mod._run_donor_migration(Path('repo'), Path('out'), Path('work'))
+        finally:
+            if old_repaired is None: sys.modules.pop('dpop033_migrate', None)
+            else: sys.modules['dpop033_migrate'] = old_repaired
+            if old_raw is None: sys.modules.pop('dpop033_core', None)
+            else: sys.modules['dpop033_core'] = old_raw
+        self.assertEqual(result, {'fixed': True})
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(calls[0][3])
+        self.assertTrue(calls[0][4])
+
+
 class CliContractTests(unittest.TestCase):
     def test_parser_supports_repository_output_workspace_and_no_build(self):
         mod = load_module()
