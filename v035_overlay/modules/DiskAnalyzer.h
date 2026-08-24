@@ -44,13 +44,6 @@ struct DiskScanProgress {
     std::uint64_t errors{};
 };
 
-struct DiskScanOptions {
-    std::size_t progressEveryEntries{128};
-    bool includeFilesAsNodes{true};
-};
-
-using DiskProgressCallback = std::function<void(const DiskScanProgress&)>;
-
 struct DiskScanSnapshot {
     DiskNodeId rootId{};
     std::vector<DiskNode> nodes;
@@ -60,6 +53,16 @@ struct DiskScanSnapshot {
 
     const DiskNode* Find(DiskNodeId id) const noexcept;
     const DiskNode* FindPath(const std::filesystem::path& path) const noexcept;
+};
+
+using DiskProgressCallback = std::function<void(const DiskScanProgress&)>;
+using DiskPartialCallback = std::function<void(const DiskScanSnapshot&)>;
+
+struct DiskScanOptions {
+    std::size_t progressEveryEntries{128};
+    bool includeFilesAsNodes{true};
+    bool emitTopLevelSnapshots{true};
+    DiskPartialCallback partialSnapshot;
 };
 
 DiskScanSnapshot ScanDiskTree(
