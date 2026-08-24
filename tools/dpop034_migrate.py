@@ -42,21 +42,32 @@ _run_donor_migration = _run_repaired_donor
 _core._run_donor_migration = _run_donor_migration
 
 transform_cmake_for_page_layout = _build.transform_cmake_for_page_layout
+transform_cmake_for_zapret_center = _build.transform_cmake_for_zapret_center
 _prepare_034_script_text = _build._prepare_034_script_text
 
 
 def transform_v034_overlay(v034_root: Path) -> dict[str, str]:
     summary = _original_transform_v034_overlay(v034_root)
+    cmake_path = v034_root / 'CMakeLists.txt'
+    original = cmake_path.read_text(encoding='utf-8')
+    updated = original
+
     page_layout = v034_root / 'ui' / 'PageLayout.cpp'
     if page_layout.is_file():
-        cmake_path = v034_root / 'CMakeLists.txt'
-        original = cmake_path.read_text(encoding='utf-8')
-        updated = transform_cmake_for_page_layout(original)
-        if updated != original:
-            cmake_path.write_text(updated, encoding='utf-8', newline='\n')
+        updated = transform_cmake_for_page_layout(updated)
         summary['page_layout_cmake_registered'] = 'true'
     else:
         summary['page_layout_cmake_registered'] = 'false'
+
+    zapret_model = v034_root / 'modules' / 'ZapretCenterModel.cpp'
+    if zapret_model.is_file():
+        updated = transform_cmake_for_zapret_center(updated)
+        summary['zapret_center_cmake_registered'] = 'true'
+    else:
+        summary['zapret_center_cmake_registered'] = 'false'
+
+    if updated != original:
+        cmake_path.write_text(updated, encoding='utf-8', newline='\n')
     return summary
 
 
