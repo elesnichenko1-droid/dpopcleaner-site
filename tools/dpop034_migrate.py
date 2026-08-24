@@ -44,6 +44,7 @@ _core._run_donor_migration = _run_donor_migration
 transform_cmake_for_page_layout = _build.transform_cmake_for_page_layout
 transform_cmake_for_zapret_center = _build.transform_cmake_for_zapret_center
 transform_cmake_for_zapret_page_layout = _build.transform_cmake_for_zapret_page_layout
+transform_cmake_for_shell_parity = _build.transform_cmake_for_shell_parity
 _prepare_034_script_text = _build._prepare_034_script_text
 
 
@@ -73,6 +74,14 @@ def transform_v034_overlay(v034_root: Path) -> dict[str, str]:
         summary['zapret_page_layout_cmake_registered'] = 'true'
     else:
         summary['zapret_page_layout_cmake_registered'] = 'false'
+
+    startup_page = v034_root / 'ui' / 'pages' / 'StartupPage.cpp'
+    updates_page = v034_root / 'ui' / 'pages' / 'UpdatesPage.cpp'
+    if startup_page.is_file() and updates_page.is_file():
+        updated = transform_cmake_for_shell_parity(updated)
+        summary['shell_parity_cmake_registered'] = 'true'
+    else:
+        summary['shell_parity_cmake_registered'] = 'false'
 
     if updated != original:
         cmake_path.write_text(updated, encoding='utf-8', newline='\n')
