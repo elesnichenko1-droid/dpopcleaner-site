@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RECOVERY = ROOT / 'v034_overlay' / 'ui' / 'RecoveryControls.cpp'
 APPLICATIONS = ROOT / 'v034_overlay' / 'ui' / 'pages' / 'ApplicationsPage.cpp'
+STARTUP = ROOT / 'v034_overlay' / 'ui' / 'pages' / 'StartupPage.cpp'
 
 
 class VisualSpacingRegressionTests(unittest.TestCase):
@@ -30,6 +31,14 @@ class VisualSpacingRegressionTests(unittest.TestCase):
         self.assertRegex(source, r'MoveWindow\(count_,\s*listRight - 130,\s*top \+ 36,')
         self.assertIn('RECT search{margin, top, listRight, top + searchPanelH};', source)
         self.assertIn('RECT list{margin, top + searchPanelH + 2, listRight, height - margin};', source)
+
+    def test_startup_summary_lives_inside_panel_header_without_clipping(self):
+        self.assertTrue(STARTUP.is_file(), 'StartupPage overlay missing')
+        source = STARTUP.read_text(encoding='utf-8')
+        self.assertIn('const int countWidth = 300;', source)
+        self.assertRegex(source, r'MoveWindow\(count_,\s*std::max\(margin, width - margin - countWidth\),\s*top \+ 7,\s*countWidth,\s*24,\s*TRUE\);')
+        self.assertRegex(source, r'MoveWindow\(list_,\s*margin \+ 10,\s*top \+ 38,')
+        self.assertNotIn('width - margin - 180), 18, 180, 24', source)
 
 
 if __name__ == '__main__':
