@@ -4,178 +4,35 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#07111f" />
-  <meta name="description" content="DPopCleaner 0.3.1 BETA R4 — очистка, диагностика, безопасные обновления и официальный Zapret 1.10.1 для Windows x64." />
-  <meta property="og:title" content="DPopCleaner — контроль Windows без лишнего шума" />
-  <meta property="og:description" content="Очистка, анализ системы, автозагрузка, DPopGuard 2 и инструменты Windows в одном приложении." />
+  <meta name="description" content="DPopCleaner 0.3.3 BETA R1 — очистка, диагностика, управление Windows и официальный Zapret 1.10.1 для Windows x64." />
+  <meta property="og:title" content="DPopCleaner 0.3.3 — контроль Windows без лишнего шума" />
+  <meta property="og:description" content="Faithful UX 0.2.14 на ядре 0.3.2: очистка, память, защита, диски, приложения, Windows, дубликаты, инструменты и Zapret." />
   <meta property="og:type" content="website" />
-  <title>DPopCleaner — очистка и контроль Windows</title>
+  <title>DPopCleaner 0.3.3 — очистка и контроль Windows</title>
   <link rel="icon" href="./dpopcleaner-icon.png" type="image/png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="ambient ambient-a"></div>
-  <div class="ambient ambient-b"></div>
-
-  <header class="site-header" id="top">
-    <div class="container nav-wrap">
-      <a class="brand" href="#top" aria-label="DPopCleaner — на главную">
-        <img src="./dpopcleaner-icon.png" alt="" width="42" height="42" />
-        <span>DPopCleaner</span>
-        <small>BETA</small>
-      </a>
-      <nav class="nav" aria-label="Основная навигация">
-        <a href="#features">Возможности</a>
-        <a href="#how">Как работает</a>
-        <a href="#security">О сборке</a>
-        <a href="#faq">FAQ</a>
-      </nav>
-      <a class="button button-small button-ghost js-download" href="https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.3.1-beta-r4/DPopCleaner_Setup_0.3.1_BETA_R4.exe"><span class="js-download-label">Скачать</span></a>
-      <button class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
-    </div>
-  </header>
-
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="site-header" id="top"><div class="container nav-wrap">
+    <a class="brand" href="#top"><img src="./dpopcleaner-icon.png" alt="" width="42" height="42" /><span>DPopCleaner</span><small>BETA</small></a>
+    <nav class="nav"><a href="#features">Возможности</a><a href="#how">Как работает</a><a href="#security">О сборке</a><a href="#faq">FAQ</a></nav>
+    <a class="button button-small button-ghost js-download" href="#release-status" aria-disabled="true" data-disabled="true"><span class="js-download-label">Проверка релиза…</span></a>
+    <button class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
+  </div></header>
   <main>
-    <section class="hero">
-      <div class="container hero-grid">
-        <div class="hero-copy reveal">
-          <div class="eyebrow"><span class="dot"></span> DPopCleaner 0.3.1 BETA R4 · Windows x64</div>
-          <h1>Windows под контролем.<br><span>Без лишнего шума.</span></h1>
-          <p class="lead">Очистка, диагностика, управление автозагрузкой, DPopGuard 2, нативная проверка обновлений и официальный Zapret 1.10.1 — в одном приложении.</p>
-          <div class="hero-actions">
-            <a class="button button-primary js-download" href="https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.3.1-beta-r4/DPopCleaner_Setup_0.3.1_BETA_R4.exe">
-              <span class="download-icon">↓</span>
-              <span class="js-download-label">Скачать 0.3.1 BETA R4</span>
-            </a>
-            <a class="button button-secondary" href="#features">Посмотреть возможности</a>
-          </div>
-          <div class="release-meta" aria-label="Сведения о релизе">
-            <span>Windows 10 / 11</span>
-            <i></i>
-            <span>x64</span>
-            <i></i>
-            <span class="js-size">ожидается сборка</span>
-            <i></i>
-            <span>Бесплатная BETA</span>
-          </div>
-        </div>
-
-        <div class="hero-visual reveal delay-1" aria-label="Фактический интерфейс DPopCleaner 0.3.1 BETA R4">
-          <div class="glow-ring"></div>
-          <div class="app-screenshot-frame">
-            <img src="./assets/dpopcleaner-0.3.1-r4.png" width="1215" height="715" alt="Окно DPopCleaner 0.3.1 BETA R4, снятое с финального релизного бинарника" />
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="release-status-section" id="release-status">
-      <div class="container">
-        <div class="release-status-card reveal">
-          <span class="release-status-dot"></span>
-          <div><strong>Статус релиза</strong><p id="releaseStatus">DPopCleaner 0.3.1 BETA R4 опубликован, проверен и готов к загрузке.</p></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="trust-strip">
-      <div class="container trust-grid reveal">
-        <div><strong>0.3.1 R4</strong><span>новая полная BETA-сборка</span></div>
-        <div><strong>x64</strong><span>64-битная Windows</span></div>
-        <div><strong class="js-size">ожидается сборка</strong><span>размер установщика</span></div>
-        <div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div>
-      </div>
-    </section>
-
-    <section class="section" id="features">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker">Возможности</p>
-          <h2>Один центр для повседневного ухода за Windows</h2>
-          <p>DPopCleaner объединяет инструменты, которые обычно приходится искать по разным разделам системы и отдельным утилитам.</p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature-card reveal"><div class="feature-icon">✦</div><h3>Очистка системы</h3><p>Поиск временных данных и ненужных файлов с понятным сценарием очистки.</p><span>Cleaner</span></article>
-          <article class="feature-card reveal delay-1"><div class="feature-icon">◉</div><h3>Анализ ресурсов</h3><p>Обзор CPU, RAM, дисков, GPU и доступных процессов для поиска проблемных мест.</p><span>System analysis</span></article>
-          <article class="feature-card reveal delay-2"><div class="feature-icon">⌁</div><h3>DPopGuard 2</h3><p>Быстрая эвристическая проверка автозапуска. В текущей BETA подозрительные записи только показываются — автоматического удаления нет.</p><span>Quick scan</span></article>
-          <article class="feature-card reveal"><div class="feature-icon">▦</div><h3>Приложения</h3><p>Реальный список установленных программ из Windows. Запускает штатный деинсталлятор, затем ищет оставшиеся папки, данные и ярлыки и предлагает убрать их в Корзину.</p><span>Uninstall + leftovers</span></article>
-          <article class="feature-card reveal"><div class="feature-icon">↗</div><h3>Автозагрузка</h3><p>Просмотр записей автозапуска текущего пользователя из реестра Windows.</p><span>Startup Manager</span></article>
-          <article class="feature-card reveal delay-1"><div class="feature-icon">⌘</div><h3>Инструменты Windows</h3><p>Быстрый доступ к диагностике, обслуживанию и проверке системных компонентов.</p><span>Windows tools</span></article>
-          <article class="feature-card reveal delay-2"><div class="feature-icon">⇄</div><h3>Zapret 1.10.1 в комплекте</h3><p>Полный официальный набор Flowseal: стратегии, service.bat, WinDivert и проверка обновлений. Запуск и установка службы — только вручную.</p><span>Verified bundle</span></article>
-          <article class="feature-card reveal"><div class="feature-icon">↓</div><h3>Нативные обновления</h3><p>WinHTTP, HTTPS, размер и SHA-256. Фоновая проверка только сообщает о версии — установку запускает пользователь.</p><span>Safe updater</span></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section steps-section" id="how">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker">Как это работает</p>
-          <h2>Три шага вместо десятка системных окон</h2>
-        </div>
-        <div class="steps">
-          <article class="step reveal"><b>01</b><h3>Запустите анализ</h3><p>DPopCleaner собирает доступные сведения о состоянии системы и показывает, где требуется внимание.</p></article>
-          <article class="step reveal delay-1"><b>02</b><h3>Проверьте рекомендации</h3><p>Вы выбираете нужные действия: очистка, автозагрузка, системные инструменты или быстрая проверка.</p></article>
-          <article class="step reveal delay-2"><b>03</b><h3>Примените изменения</h3><p>Выполняйте только выбранные действия и возвращайтесь к журналам, если нужно проверить результат.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="security">
-      <div class="container security-card reveal">
-        <div class="shield-wrap"><img src="./dpopcleaner-icon.png" alt="Иконка DPopCleaner" /></div>
-        <div class="security-copy">
-          <p class="kicker">О текущей сборке</p>
-          <h2>Проверяемый релиз, без громких обещаний</h2>
-          <p>Полный установщик R3 содержит DPopCleaner, DPopUpdater и закреплённый официальный Zapret 1.10.1. Архив Zapret и лицензия проверяются по SHA-256 при сборке. Приложение запрашивает права администратора при запуске, но не устанавливает службу Zapret автоматически.</p>
-          <div class="hash-box">
-            <div><small>SHA-256</small><code id="hashValue">будет опубликован после сборки</code></div>
-            <button id="copyHash2" class="copy-button" type="button">Копировать</button>
-          </div>
-          <div class="build-facts">
-            <span><b>Формат</b> PE32+ Windows GUI</span>
-            <span><b>Архитектура</b> x86-64</span>
-            <span><b>Сборка</b> GitHub Actions · Windows x64</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="faq">
-      <div class="container faq-layout">
-        <div class="section-head reveal">
-          <p class="kicker">FAQ</p>
-          <h2>Перед установкой</h2>
-          <p>Короткие ответы на вопросы, которые особенно важны для BETA-версии.</p>
-        </div>
-        <div class="faq-list reveal delay-1">
-          <details open><summary>Для какой Windows предназначен DPopCleaner?</summary><p>Текущий установщик собран под 64-битную Windows. Для сайта мы позиционируем релиз для Windows 10 и Windows 11 x64.</p></details>
-          <details><summary>Почему приложение запрашивает администратора при запуске?</summary><p>R3 работает с системной диагностикой, автозагрузкой и внешними инструментами, которым нужны повышенные права. Запрос UAC встроен в manifest DPopCleaner; updater сам остаётся обычным процессом.</p></details>
-          <details><summary>DPopGuard 2 заменяет антивирус?</summary><p>Нет. Это дополнительная эвристическая проверка процессов и автозапуска. Она ничего не удаляет автоматически и не заменяет Microsoft Defender или другой антивирус.</p></details>
-          <details><summary>Запускается ли Zapret или DPopCleaner автоматически?</summary><p>Нет. Установщик не ставит службу Zapret, а DPopUpdater не перезапускает приложение после обновления. Стратегия и менеджер службы открываются только по кнопке в Zapret Center.</p></details>
-          <details><summary>Как проверить скачанный установщик?</summary><p>Вычислите SHA-256 файла и сравните его со значением на этой странице. Для текущего BETA-релиза ожидаемый хеш загружается из update/beta.json и отображается выше.</p></details>
-        </div>
-      </div>
-    </section>
-
-    <section class="cta-section">
-      <div class="container cta reveal">
-        <div><p class="kicker">DPopCleaner 0.3.1 BETA R4</p><h2>Скачать проверенную сборку</h2><p>Сейчас доступна <span class="js-download-version">0.3.1 BETA R4</span> · <span class="js-size">2.11 МБ</span></p></div>
-        <a class="button button-primary js-download" href="https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.3.1-beta-r4/DPopCleaner_Setup_0.3.1_BETA_R4.exe"><span class="download-icon">↓</span> <span class="js-download-label">Скачать 0.3.1 BETA R4</span></a>
-      </div>
-    </section>
+    <section class="hero"><div class="container hero-grid">
+      <div class="hero-copy reveal"><div class="eyebrow"><span class="dot"></span> DPopCleaner 0.3.3 BETA R1 · Windows x64</div><h1>Windows под контролем.<br><span>Без лишнего шума.</span></h1><p class="lead">Стабильный стиль и логика 0.2.14, восстановленные поверх функционального ядра 0.3.2: очистка, память, DPopGuard, диски, приложения, Windows, дубликаты, инструменты и официальный Zapret 1.10.1.</p><div class="hero-actions"><a class="button button-primary js-download" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span><span class="js-download-label">Проверка релиза 0.3.3…</span></a><a class="button button-secondary" href="#features">Посмотреть возможности</a></div><div class="release-meta"><span>Windows 10 / 11</span><i></i><span>x64</span><i></i><span class="js-size">проверка…</span><i></i><span>Бесплатная BETA</span></div></div>
+      <div class="hero-visual reveal delay-1"><div class="glow-ring"></div><div class="app-screenshot-frame"><img src="./assets/dpopcleaner-0.3.3-r1.png" width="1116" height="788" alt="Окно DPopCleaner 0.3.3 BETA R1" /></div></div>
+    </div></section>
+    <section class="release-status-section" id="release-status"><div class="container"><div class="release-status-card reveal"><span class="release-status-dot"></span><div><strong>Статус релиза</strong><p id="releaseStatus">Проверяем актуальный манифест DPopCleaner 0.3.3 BETA R1…</p></div></div></div></section>
+    <section class="trust-strip"><div class="container trust-grid reveal"><div><strong>0.3.3 R1</strong><span>faithful 0.2.14 UX + 0.3.2 core</span></div><div><strong>x64</strong><span>64-битная Windows</span></div><div><strong class="js-size">проверка…</strong><span>размер установщика</span></div><div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div></div></section>
+    <section class="section" id="features"><div class="container"><div class="section-head reveal"><p class="kicker">Возможности 0.3.3</p><h2>Один центр для повседневного ухода за Windows</h2><p>0.3.3 возвращает более удобную архитектуру интерфейса и сохраняет функциональное ядро новой ветки.</p></div><div class="feature-grid"><article class="feature-card reveal"><div class="feature-icon">✦</div><h3>Очистка</h3><p>Быстрые сценарии очистки и системные операции с подтверждением пользователя.</p><span>Cleaner</span></article><article class="feature-card reveal delay-1"><div class="feature-icon">◉</div><h3>ОЗУ</h3><p>Состояние оперативной памяти и быстрый переход к обслуживанию.</p><span>Memory</span></article><article class="feature-card reveal delay-2"><div class="feature-icon">⌁</div><h3>DPopGuard</h3><p>QuickScan + AMSI и диагностические проверки без автоматического удаления.</p><span>QuickScan + AMSI</span></article><article class="feature-card reveal"><div class="feature-icon">◫</div><h3>Диски</h3><p>Состояние накопителей и использование пространства.</p><span>Disk</span></article><article class="feature-card reveal delay-1"><div class="feature-icon">▦</div><h3>Приложения</h3><p>Штатное удаление программ и консервативный поиск остатков.</p><span>Applications</span></article><article class="feature-card reveal delay-2"><div class="feature-icon">⊞</div><h3>Windows</h3><p>Системные сведения и обслуживающие инструменты Windows.</p><span>Windows</span></article><article class="feature-card reveal"><div class="feature-icon">≋</div><h3>Дубликаты</h3><p>Отдельный раздел для работы с повторяющимися файлами.</p><span>Duplicates</span></article><article class="feature-card reveal delay-1"><div class="feature-icon">⇄</div><h3>Zapret 1.10.1</h3><p>Проверенный официальный пакет Flowseal входит в установщик; служба не запускается автоматически.</p><span>Verified bundle</span></article></div></div></section>
+    <section class="section steps-section" id="how"><div class="container"><div class="section-head reveal"><p class="kicker">Как это работает</p><h2>Сначала анализ — потом действие</h2></div><div class="steps"><article class="step reveal"><b>01</b><h3>Откройте нужный раздел</h3><p>Навигация разделяет очистку, память, защиту, диски, приложения, Windows и инструменты.</p></article><article class="step reveal delay-1"><b>02</b><h3>Проверьте данные</h3><p>Программа показывает фактическое состояние системы.</p></article><article class="step reveal delay-2"><b>03</b><h3>Подтвердите изменения</h3><p>Изменяющие систему операции выполняются только по явному действию пользователя.</p></article></div></div></section>
+    <section class="section" id="security"><div class="container security-card reveal"><div class="shield-wrap"><img src="./dpopcleaner-icon.png" alt="Иконка DPopCleaner" /></div><div class="security-copy"><p class="kicker">О текущей сборке</p><h2>0.3.3 проходит Windows-сборку и автоматические проверки</h2><p>Release pipeline собирает DPopCleaner и DPopUpdater на Windows Server 2022 / Visual Studio 2022 x64, запускает CTest, UI smoke-test, формирует Inno Setup установщик и публикует согласованный manifest. Zapret 1.10.1 и лицензия проверяются по SHA-256.</p><div class="hash-box"><div><small>SHA-256 установщика</small><code id="hashValue">загрузка манифеста…</code></div><button id="copyHash2" class="copy-button" type="button">Копировать</button></div><div class="build-facts"><span><b>Версия</b> 0.3.3 BETA R1</span><span><b>Архитектура</b> x86-64</span><span><b>Сборка</b> GitHub Actions · Windows 2022</span></div></div></div></section>
+    <section class="section" id="faq"><div class="container faq-layout"><div class="section-head reveal"><p class="kicker">FAQ</p><h2>Перед установкой</h2><p>Коротко о текущей BETA.</p></div><div class="faq-list reveal delay-1"><details open><summary>Что именно такое 0.3.3?</summary><p>UX и поведение 0.2.14 используются как эталон, а функции и ядро 0.3.2 выступают донором.</p></details><details><summary>Для какой Windows предназначена сборка?</summary><p>Windows 10/11 x64.</p></details><details><summary>Почему нужны права администратора?</summary><p>DPopCleaner работает с системной диагностикой и обслуживанием; DPopUpdater остаётся asInvoker.</p></details><details><summary>Запускается ли Zapret автоматически?</summary><p>Нет. Пакет входит в установщик, но запуск стратегий и установка службы выполняются только пользователем.</p></details><details><summary>Как проверить установщик?</summary><p>Сравните SHA-256 скачанного файла со значением на этой странице.</p></details></div></div></section>
+    <section class="cta-section"><div class="container cta reveal"><div><p class="kicker">DPopCleaner 0.3.3 BETA R1</p><h2>Скачать проверенную сборку</h2><p>Актуальная версия: <span class="js-download-version">0.3.3 BETA R1</span> · <span class="js-size">проверка…</span></p></div><a class="button button-primary js-download" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span> <span class="js-download-label">Проверка релиза 0.3.3…</span></a></div></section>
   </main>
-
-  <footer class="footer">
-    <div class="container footer-grid">
-      <div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · BETA</span></div></div>
-      <div class="footer-links"><a href="#features">Возможности</a><a href="#security">О сборке</a><a href="#faq">FAQ</a><a href="#top">Наверх ↑</a></div>
-      <p>© 2026 DPopCleaner. BETA software.</p>
-    </div>
-  </footer>
-
-  <div class="toast" id="toast" role="status" aria-live="polite">SHA-256 скопирован</div>
-  <script src="release-manifest.js"></script>
-  <script src="script.js"></script>
-</body>
-</html>
-
+  <footer class="footer"><div class="container footer-grid"><div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · BETA</span></div></div><div class="footer-links"><a href="#features">Возможности</a><a href="#security">О сборке</a><a href="#faq">FAQ</a><a href="#top">Наверх ↑</a></div><p>© 2026 DPopCleaner. BETA software.</p></div></footer>
+  <div class="toast" id="toast" role="status" aria-live="polite">SHA-256 скопирован</div><script src="release-manifest.js"></script><script src="script.js"></script>
+</body></html>
