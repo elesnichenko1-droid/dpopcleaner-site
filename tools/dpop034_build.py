@@ -51,6 +51,27 @@ def transform_cmake_for_zapret_page_layout(text: str) -> str:
     return _insert_ctest_block(text, 'add_executable(ZapretPageLayoutTests', block)
 
 
+def transform_cmake_for_shell_parity(text: str) -> str:
+    """Restore Startup/Updates as real compiled pages without duplicating entries."""
+    if 'src/ui/pages/StartupPage.cpp' not in text:
+        anchors = ('  src/ui/pages/GuardPage.cpp\n', '  src/ui/pages/ApplicationsPage.cpp\n')
+        for anchor in anchors:
+            if anchor in text:
+                text = text.replace(anchor, anchor + '  src/ui/pages/StartupPage.cpp\n', 1)
+                break
+        else:
+            raise ValueError('CMake donor drifted: page source anchor for StartupPage missing')
+    if 'src/ui/pages/UpdatesPage.cpp' not in text:
+        anchors = ('  src/ui/pages/SettingsPage.cpp\n', '  src/ui/pages/ZapretPage.cpp\n')
+        for anchor in anchors:
+            if anchor in text:
+                text = text.replace(anchor, '  src/ui/pages/UpdatesPage.cpp\n' + anchor, 1)
+                break
+        else:
+            raise ValueError('CMake donor drifted: page source anchor for UpdatesPage missing')
+    return text
+
+
 def _prepare_034_script_text() -> str:
     return r'''[CmdletBinding()]
 param(
