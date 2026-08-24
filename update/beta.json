@@ -1,8 +1,8 @@
 {
   "product": "DPopCleaner",
   "channel": "beta",
-  "version": "0.3.3",
-  "version_code": 3031,
+  "version": "0.3.4",
+  "version_code": 3041,
   "revision": 1,
   "mandatory": false,
   "download_url": "",
