@@ -90,12 +90,13 @@ try {
   $main=[IntPtr]$p.MainWindowHandle
   $zapret=[IntPtr]::Zero
   foreach($h in Get-Children $main){
-    if((Get-Class $h) -eq 'Button' -and (Get-Text $h) -eq 'Zapret'){
+    $text=Get-Text $h
+    if((Get-Class $h) -eq 'Button' -and ($text -eq 'Zapret' -or $text -eq 'Zapret Center')){
       $zapret=$h
       break
     }
   }
-  if($zapret -eq [IntPtr]::Zero){ throw 'Zapret tab button not found' }
+  if($zapret -eq [IntPtr]::Zero){ throw 'Zapret sidebar button not found' }
   [void][DPop034Win32]::SendMessage($zapret,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
   Start-Sleep -Milliseconds 900
   Resize-Client $main 1200 850
