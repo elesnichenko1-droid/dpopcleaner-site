@@ -51,6 +51,13 @@ std::wstring WindowText(HWND hwnd) {
     return text;
 }
 
+void InitPageControls() {
+    INITCOMMONCONTROLSEX common{};
+    common.dwSize = sizeof(common);
+    common.dwICC = ICC_LISTVIEW_CLASSES;
+    (void)InitCommonControlsEx(&common);
+}
+
 HWND CreateHiddenHost() {
     HWND host = CreateWindowExW(
         0,
@@ -89,6 +96,51 @@ void SavePage(dpop::ui::SettingsPage& page) {
         reinterpret_cast<LPARAM>(save));
 }
 
+void TestSettingsPageHandlesOwnerDrawButtons() {
+    TempSettingsRoot temp;
+    InitPageControls();
+
+    HWND host = CreateHiddenHost();
+    dpop::ui::SessionLog log;
+    dpop::ui::SettingsPage page;
+    Require(page.Create(host, log), "SettingsPage::Create failed for owner-draw test");
+    page.Layout({0, 0, 1200, 850});
+
+    HWND button = GetDlgItem(page.Hwnd(), 3300);
+    Require(button != nullptr, "General section button 3300 missing");
+
+    HDC windowDc = GetDC(page.Hwnd());
+    Require(windowDc != nullptr, "GetDC failed for owner-draw test");
+    HDC memoryDc = CreateCompatibleDC(windowDc);
+    Require(memoryDc != nullptr, "CreateCompatibleDC failed for owner-draw test");
+    HBITMAP bitmap = CreateCompatibleBitmap(windowDc, 240, 48);
+    Require(bitmap != nullptr, "CreateCompatibleBitmap failed for owner-draw test");
+    HGDIOBJ oldBitmap = SelectObject(memoryDc, bitmap);
+
+    DRAWITEMSTRUCT draw{};
+    draw.CtlType = ODT_BUTTON;
+    draw.CtlID = 3300;
+    draw.itemAction = ODA_DRAWENTIRE;
+    draw.hwndItem = button;
+    draw.hDC = memoryDc;
+    draw.rcItem = RECT{0, 0, 240, 48};
+
+    const LRESULT handled = SendMessageW(
+        page.Hwnd(),
+        WM_DRAWITEM,
+        static_cast<WPARAM>(draw.CtlID),
+        reinterpret_cast<LPARAM>(&draw));
+
+    SelectObject(memoryDc, oldBitmap);
+    DeleteObject(bitmap);
+    DeleteDC(memoryDc);
+    ReleaseDC(page.Hwnd(), windowDc);
+
+    Require(handled == TRUE,
+            "PageBase did not handle WM_DRAWITEM for a page-owned button");
+    Require(DestroyWindow(host) != FALSE, "could not destroy owner-draw integration host");
+}
+
 void TestSettingsPagePersistsAndRestoresLargeFileThreshold() {
     TempSettingsRoot temp;
 
@@ -98,13 +150,7 @@ void TestSettingsPagePersistsAndRestoresLargeFileThreshold() {
     Require(SaveAppSettings(seed, error), "could not seed settings.json");
     Require(error.empty(), "seeding settings.json returned an error");
 
-    // Register the list-view class used by the Exclusions section. Some
-    // headless Windows runners report FALSE from InitCommonControlsEx even
-    // though the class is usable, so the real proof is SettingsPage::Create.
-    INITCOMMONCONTROLSEX common{};
-    common.dwSize = sizeof(common);
-    common.dwICC = ICC_LISTVIEW_CLASSES;
-    (void)InitCommonControlsEx(&common);
+    InitPageControls();
 
     HWND host = CreateHiddenHost();
     dpop::ui::SessionLog log;
@@ -159,6 +205,7 @@ void TestSettingsPagePersistsAndRestoresLargeFileThreshold() {
 
 int main() {
     try {
+        TestSettingsPageHandlesOwnerDrawButtons();
         TestSettingsPagePersistsAndRestoresLargeFileThreshold();
         return 0;
     } catch (const std::exception& ex) {
