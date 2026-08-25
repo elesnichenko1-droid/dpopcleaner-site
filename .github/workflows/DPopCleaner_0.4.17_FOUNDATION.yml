@@ -1,0 +1,72 @@
+name: DPopCleaner 0.4.17 Foundation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/dpopcleaner-0.4.17-0214
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify 0.4.17 foundation contracts
+        shell: pwsh
+        run: |
+          python tests/test_dpop0417_core_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_layout_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_stage_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_workflow_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run DPop.Common tests
+        shell: pwsh
+        run: |
+          dotnet test v0417/tests/DPop.Common.Tests/DPop.Common.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build DPop.Common
+        shell: pwsh
+        run: |
+          dotnet build v0417/src/DPop.Common/DPop.Common.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Stage approved 0.4.17 foundation payload
+        shell: pwsh
+        run: ./tools/dpop0417_stage.ps1
+
+      - name: Verify staged original core is byte-identical
+        shell: pwsh
+        run: |
+          $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
+          $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
+          if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) {
+            throw "Staged original core changed: $blob"
+          }
+          Write-Host "Immutable original core verified: $blob"
+
+      - name: Upload foundation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: DPopCleaner-0.4.17-foundation-${{ github.run_id }}
+          path: _release/0.4.17/stage
+          if-no-files-found: error
