@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using DPop.Common.Localization;
 using DPop.DiskAnalyzer.Model;
@@ -100,6 +102,7 @@ namespace DPop.DiskAnalyzer.UI
         }
 
         public string InitialRoot { get; set; }
+        public string SmokeReportPath { get; set; }
 
         protected override async void OnShown(EventArgs e)
         {
@@ -304,6 +307,7 @@ namespace DPop.DiskAnalyzer.UI
                     result.FileCount,
                     result.FolderCount,
                     SizeFormatter.BytesText(result.LogicalBytes));
+                WriteSmokeReport(result);
             }
             catch (OperationCanceledException)
             {
@@ -319,6 +323,40 @@ namespace DPop.DiskAnalyzer.UI
                 _scanCancellation = null;
                 SetBusy(false);
             }
+        }
+
+        private void WriteSmokeReport(DiskNode result)
+        {
+            if (string.IsNullOrWhiteSpace(SmokeReportPath)) return;
+
+            var fullPath = Path.GetFullPath(SmokeReportPath);
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+
+            var columns = _grid.Columns
+                .Cast<DataGridViewColumn>()
+                .Select(column => column.HeaderText)
+                .ToArray();
+            var report = new Dictionary<string, object>
+            {
+                ["target"] = "DPopCleaner 0.4.17 Disk Analyzer",
+                ["root"] = result.FullPath,
+                ["logical_bytes"] = result.LogicalBytes,
+                ["allocated_complete"] = result.AllocatedComplete,
+                ["allocated_bytes"] = result.AllocatedBytes,
+                ["file_count"] = result.FileCount,
+                ["folder_count"] = result.FolderCount,
+                ["row_count"] = _grid.Rows.Count,
+                ["columns"] = columns,
+                ["status"] = _status.Text,
+            };
+
+            var json = new JavaScriptSerializer().Serialize(report);
+            var temporary = fullPath + ".tmp";
+            File.WriteAllText(temporary, json);
+            if (File.Exists(fullPath)) File.Delete(fullPath);
+            File.Move(temporary, fullPath);
         }
 
         private void ProgressChanged(ScanProgress progress)
