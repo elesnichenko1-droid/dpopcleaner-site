@@ -59,12 +59,12 @@ bool ProtectedPath(const fs::path& path) noexcept {
 #endif
 }
 
-std::uint64_t AllocatedFileBytes(const fs::path& path, std::uint64_t logical) noexcept {
+std::optional<std::uint64_t> AllocatedFileBytes(const fs::path& path, std::uint64_t logical) noexcept {
 #ifdef _WIN32
     DWORD high = 0;
     SetLastError(NO_ERROR);
     const DWORD low = GetCompressedFileSizeW(path.c_str(), &high);
-    if (low == INVALID_FILE_SIZE && GetLastError() != NO_ERROR) return logical;
+    if (low == INVALID_FILE_SIZE && GetLastError() != NO_ERROR) return std::nullopt;
     return (static_cast<std::uint64_t>(high) << 32) | low;
 #else
     return logical;
@@ -79,6 +79,15 @@ struct ScanContext {
     DiskScanProgress progress;
     DiskNodeId nextId{1};
     std::size_t entriesSinceProgress{};
+
+    std::optional<std::uint64_t> AllocatedSize(const fs::path& path, std::uint64_t logical) const {
+        if (options.allocatedSizeProvider) return options.allocatedSizeProvider(path, logical);
+        return AllocatedFileBytes(path, logical);
+    }
+
+    void MarkAllocationIncomplete(DiskNodeId id) {
+        if (auto* node = FindMutable(id)) node->allocatedComplete = false;
+    }
 
     void Notify(const fs::path& path, bool force = false) {
         if (!callback) return;
@@ -119,6 +128,7 @@ struct ScanContext {
         const DiskNodeId childId = AddNode(path, parentId, directory);
         if (auto* child = FindMutable(childId)) {
             child->incomplete = true;
+            child->allocatedComplete = false;
             child->state = DiskScanState::Incomplete;
         }
         if (auto* parent = FindMutable(parentId)) {
@@ -126,6 +136,7 @@ struct ScanContext {
             if (directory) ++parent->directoryCount;
             else ++parent->fileCount;
             parent->incomplete = true;
+            parent->allocatedComplete = false;
         }
         ++snapshot.errorCount;
         ++progress.errors;
@@ -142,6 +153,7 @@ struct ScanContext {
         if (stop.stop_requested()) {
             if (auto* node = FindMutable(nodeId)) {
                 node->incomplete = true;
+                node->allocatedComplete = false;
                 node->state = DiskScanState::Incomplete;
             }
             snapshot.cancelled = true;
@@ -156,6 +168,7 @@ struct ScanContext {
             ++progress.errors;
             if (auto* node = FindMutable(nodeId)) {
                 node->incomplete = true;
+                node->allocatedComplete = false;
                 node->state = DiskScanState::Incomplete;
             }
             Notify(path, true);
@@ -165,11 +178,16 @@ struct ScanContext {
         for (; it != end; it.increment(ec)) {
             if (stop.stop_requested()) {
                 snapshot.cancelled = true;
+                MarkAllocationIncomplete(nodeId);
                 break;
             }
             if (ec) {
                 ++snapshot.errorCount;
                 ++progress.errors;
+                if (auto* node = FindMutable(nodeId)) {
+                    node->incomplete = true;
+                    node->allocatedComplete = false;
+                }
                 ec.clear();
                 continue;
             }
@@ -180,6 +198,10 @@ struct ScanContext {
             if (typeError) {
                 ++snapshot.errorCount;
                 ++progress.errors;
+                if (auto* node = FindMutable(nodeId)) {
+                    node->incomplete = true;
+                    node->allocatedComplete = false;
+                }
                 continue;
             }
 
@@ -196,6 +218,7 @@ struct ScanContext {
                     parent->children.push_back(childId);
                     parent->logicalBytes += child->logicalBytes;
                     parent->allocatedBytes += child->allocatedBytes;
+                    parent->allocatedComplete = parent->allocatedComplete && child->allocatedComplete;
                     parent->fileCount += child->fileCount;
                     parent->directoryCount += 1 + child->directoryCount;
                     parent->incomplete = parent->incomplete || child->incomplete;
@@ -205,20 +228,36 @@ struct ScanContext {
             }
 
             const bool regular = it->is_regular_file(typeError);
-            if (typeError || !regular) continue;
+            if (typeError) {
+                ++snapshot.errorCount;
+                ++progress.errors;
+                if (auto* node = FindMutable(nodeId)) {
+                    node->incomplete = true;
+                    node->allocatedComplete = false;
+                }
+                continue;
+            }
+            if (!regular) continue;
+
             const auto logical = it->file_size(typeError);
             if (typeError) {
                 ++snapshot.errorCount;
                 ++progress.errors;
+                if (auto* node = FindMutable(nodeId)) {
+                    node->incomplete = true;
+                    node->allocatedComplete = false;
+                }
                 continue;
             }
-            const std::uint64_t allocated = AllocatedFileBytes(childPath, logical);
+
+            const auto allocated = AllocatedSize(childPath, logical);
             ++progress.filesVisited;
             progress.logicalBytes += logical;
 
             if (auto* parent = FindMutable(nodeId)) {
                 parent->logicalBytes += logical;
-                parent->allocatedBytes += allocated;
+                if (allocated) parent->allocatedBytes += *allocated;
+                else parent->allocatedComplete = false;
                 ++parent->fileCount;
             }
 
@@ -226,7 +265,8 @@ struct ScanContext {
                 const DiskNodeId childId = AddNode(childPath, nodeId, false);
                 if (auto* file = FindMutable(childId)) {
                     file->logicalBytes = logical;
-                    file->allocatedBytes = allocated;
+                    file->allocatedBytes = allocated.value_or(0);
+                    file->allocatedComplete = allocated.has_value();
                     file->fileCount = 1;
                     file->state = DiskScanState::Complete;
                 }
@@ -236,7 +276,10 @@ struct ScanContext {
         }
 
         if (auto* node = FindMutable(nodeId)) {
-            if (snapshot.cancelled) node->incomplete = true;
+            if (snapshot.cancelled) {
+                node->incomplete = true;
+                node->allocatedComplete = false;
+            }
             node->state = node->incomplete ? DiskScanState::Incomplete : DiskScanState::Complete;
         }
         Notify(path, true);
