@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DPop.Common\DPop.Common.csproj" />
+    <Reference Include="System.Web.Extensions" />
   </ItemGroup>
 </Project>
