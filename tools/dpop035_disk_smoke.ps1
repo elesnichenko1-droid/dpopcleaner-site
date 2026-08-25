@@ -112,7 +112,9 @@ try {
   if((Text $scan) -ne 'Сканировать' -or (Text $stop) -ne 'Стоп'){throw 'Disk control ID contract drifted'}
   if(-not [DPop035DiskWin32]::SetWindowText($edit,$fixture)){throw 'Could not set disk fixture path'}
   if((Text $edit) -ne $fixture){throw "Disk fixture path did not reach path control: $(Text $edit)"}
-  [void][DPop035DiskWin32]::SendMessage($scan,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
+  # Send exactly one BN_CLICKED command to the Disk page. This distinguishes
+  # page state from any BM_CLICK automation side effects on an owner-drawn button.
+  [void][DPop035DiskWin32]::SendMessage($diskPage,0x0111,[IntPtr]3303,$scan)
 
   $deadline=(Get-Date).AddSeconds(20)
   do { Start-Sleep -Milliseconds 200; $p.Refresh(); if($p.HasExited){throw 'App exited during disk scan'} } while([DPop035DiskWin32]::IsWindowEnabled($stop) -and (Get-Date)-lt $deadline)
