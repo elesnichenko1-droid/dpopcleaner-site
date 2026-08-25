@@ -14,6 +14,10 @@ class DPop0417DiskSmokeContractTests(unittest.TestCase):
         self.assertIn("--root", lowered)
         self.assertIn("--smoke-report", lowered)
         self.assertIn("printwindow", lowered)
+        self.assertIn("movewindow", lowered)
+        self.assertIn("resize-client", lowered)
+        self.assertIn("1200", lowered)
+        self.assertIn("850", lowered)
         self.assertIn("remove-item $fixture", lowered)
 
         for forbidden in [
