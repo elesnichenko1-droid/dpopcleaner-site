@@ -90,9 +90,9 @@ function Start-App {
 }
 function Open-CleaningSettings([Diagnostics.Process]$p) {
   $main=[IntPtr]$p.MainWindowHandle
-  $gear=Find-VisibleById $main 1100
-  if($gear -eq [IntPtr]::Zero){throw 'Settings gear (1100) not found'}
-  [void][DPop035SettingsWin32]::SendMessage($main,0x0111,[IntPtr]1100,$gear)
+  $settingsNav=Find-VisibleById $main 1012
+  if($settingsNav -eq [IntPtr]::Zero){throw 'Settings navigation button (1012) not found'}
+  [void][DPop035SettingsWin32]::SendMessage($main,0x0111,[IntPtr]1012,$settingsNav)
   Start-Sleep -Milliseconds 300
 
   $large=Find-VisibleById $main 3343
