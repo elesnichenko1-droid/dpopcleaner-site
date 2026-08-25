@@ -1,5 +1,8 @@
 #include "ui/settings/SettingsController.h"
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 
 using namespace dpop::settings;
