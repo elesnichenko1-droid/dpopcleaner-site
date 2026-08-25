@@ -34,6 +34,7 @@ HWND CreatePushButton(
     ButtonVisual visual = ButtonVisual::Normal
 ) noexcept;
 
+bool SetButtonVisual(HWND button, ButtonVisual visual) noexcept;
 ButtonVisual ButtonVisualFor(HWND button) noexcept;
 
 HWND CreateReadOnlyLogEdit(HWND parent, int id) noexcept;
