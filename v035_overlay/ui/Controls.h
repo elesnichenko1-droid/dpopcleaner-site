@@ -34,6 +34,8 @@ HWND CreatePushButton(
     ButtonVisual visual = ButtonVisual::Normal
 ) noexcept;
 
+ButtonVisual ButtonVisualFor(HWND button) noexcept;
+
 HWND CreateReadOnlyLogEdit(HWND parent, int id) noexcept;
 HWND CreateDarkListView(HWND parent, int id) noexcept;
 
