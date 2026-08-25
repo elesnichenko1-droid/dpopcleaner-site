@@ -1,0 +1,18 @@
+{
+  "app.version": "0.4.17",
+  "disk.title": "Disk Analyzer",
+  "disk.scan": "Scan",
+  "disk.stop": "Stop",
+  "disk.back": "Back",
+  "disk.choose_folder": "Choose folder",
+  "disk.refresh": "Refresh",
+  "disk.large_files": "Large files",
+  "disk.explorer": "Explorer",
+  "restore.title": "Restore Center",
+  "restore.rollback": "Restore",
+  "restore.unavailable": "Rollback unavailable",
+  "common.close": "Close",
+  "common.cancel": "Cancel",
+  "common.error": "Error",
+  "common.ok": "OK"
+}
