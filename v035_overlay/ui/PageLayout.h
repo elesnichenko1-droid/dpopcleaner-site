@@ -1,6 +1,12 @@
 #pragma once
 
+#include "modules/DiskAnalyzer.h"
+
+#include <windows.h>
+
 #include <algorithm>
+#include <fstream>
+#include <utility>
 
 namespace dpop::ui {
 
@@ -74,3 +80,28 @@ inline PageRegions ComputePageRegions(int width, int height, int dpi, int action
 }
 
 } // namespace dpop::ui
+
+// Temporary, opt-in release-gate trace. It is dormant for normal users and
+// records only the root path passed by the Disk page when CI sets the env var.
+namespace dpop::disk {
+inline DiskScanSnapshot ScanDiskTreeWithUiTrace(
+    const std::filesystem::path& root,
+    std::stop_token stop = {},
+    DiskProgressCallback progress = {},
+    DiskScanOptions options = {}
+) {
+    wchar_t tracePath[32768]{};
+    const DWORD count = GetEnvironmentVariableW(
+        L"DPOP_DISK_TRACE_FILE",
+        tracePath,
+        static_cast<DWORD>(std::size(tracePath))
+    );
+    if (count > 0 && count < std::size(tracePath)) {
+        std::wofstream out(std::filesystem::path(tracePath), std::ios::app);
+        if (out) out << root.wstring() << L'\n';
+    }
+    return ScanDiskTree(root, stop, std::move(progress), std::move(options));
+}
+} // namespace dpop::disk
+
+#define ScanDiskTree ScanDiskTreeWithUiTrace
