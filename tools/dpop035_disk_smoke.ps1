@@ -50,7 +50,7 @@ public static class DPop035DiskWin32 {
 }
 '@
 
-function Text([IntPtr]$h) { $b=New-Object Text.StringBuilder 512; [void][DPop035DiskWin32]::GetWindowText($h,$b,$b.Capacity); $b.ToString() }
+function Text([IntPtr]$h) { if($h -eq [IntPtr]::Zero){return ''}; $b=New-Object Text.StringBuilder 4096; [void][DPop035DiskWin32]::GetWindowText($h,$b,$b.Capacity); $b.ToString() }
 function Class([IntPtr]$h) { $b=New-Object Text.StringBuilder 128; [void][DPop035DiskWin32]::GetClassName($h,$b,$b.Capacity); $b.ToString() }
 function Find-Control([IntPtr]$main,[string]$class,[string]$text='') {
   foreach($h in [DPop035DiskWin32]::Children($main)) {
@@ -102,9 +102,6 @@ try {
   [void][DPop035DiskWin32]::SendMessage($diskTab,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
   Start-Sleep -Milliseconds 700
 
-  # Resolve the Disk page from its unique path Edit control, then address the
-  # scan/stop buttons within that page. Searching the entire shell by caption
-  # can select controls belonging to another hidden page.
   $edit=Find-ControlById $main 'Edit' 3320
   if($edit -eq [IntPtr]::Zero){throw 'Disk path edit (3320) not found'}
   $diskPage=[DPop035DiskWin32]::GetParent($edit)
@@ -119,7 +116,11 @@ try {
 
   $deadline=(Get-Date).AddSeconds(20)
   do { Start-Sleep -Milliseconds 200; $p.Refresh(); if($p.HasExited){throw 'App exited during disk scan'} } while([DPop035DiskWin32]::IsWindowEnabled($stop) -and (Get-Date)-lt $deadline)
-  if([DPop035DiskWin32]::IsWindowEnabled($stop)){throw "Disk fixture scan did not finish in time. Path=$(Text $edit)"}
+  if([DPop035DiskWin32]::IsWindowEnabled($stop)){
+    $status=Text ([DPop035DiskWin32]::GetDlgItem($main,1201))
+    $log=Text ([DPop035DiskWin32]::GetDlgItem($main,1202))
+    throw "Disk fixture scan did not finish in time. Path=$(Text $edit) Status=$status Log=$log"
+  }
   if(-not [DPop035DiskWin32]::IsWindowEnabled($scan)){throw 'Scan button was not restored after completion'}
 
   $capture1200=Capture $main 'disk-1200x850'
