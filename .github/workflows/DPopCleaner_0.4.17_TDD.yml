@@ -29,3 +29,18 @@ jobs:
             [ -e "$test" ] || continue
             python "$test" -v
           done
+
+  common-tests:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v5
+
+      - name: Run DPop.Common tests when present
+        shell: pwsh
+        run: |
+          $project = 'v0417/tests/DPop.Common.Tests/DPop.Common.Tests.csproj'
+          if (Test-Path -LiteralPath $project) {
+            dotnet test $project -c Release --nologo
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
