@@ -60,7 +60,7 @@ namespace DPop.DiskAnalyzer.UI
             var chooseButton = MakeButton(L("disk.choose_folder"), 126, ChooseClicked);
             _pathBox = new TextBox
             {
-                Width = 320,
+                Width = 230,
                 Margin = new Padding(5, 3, 5, 3),
             };
             _scanButton = MakeButton(L("disk.scan"), 96, ScanClicked);
