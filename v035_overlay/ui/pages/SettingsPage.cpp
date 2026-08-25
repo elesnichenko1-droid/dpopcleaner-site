@@ -165,7 +165,13 @@ void SettingsPage::OnVisibilityChanged(bool visible) noexcept {
 void SettingsPage::SelectSection(Section section) noexcept {
     section_ = section;
     UpdateSectionVisibility();
-    for (HWND button : sectionButtons_) if (button) InvalidateRect(button, nullptr, TRUE);
+    const std::size_t active = static_cast<std::size_t>(section_);
+    for (std::size_t i = 0; i < sectionButtons_.size(); ++i) {
+        HWND button = sectionButtons_[i];
+        if (!button) continue;
+        SetButtonVisual(button, i == active ? ButtonVisual::Accent : ButtonVisual::Normal);
+        InvalidateRect(button, nullptr, TRUE);
+    }
     InvalidateRect(Hwnd(), nullptr, TRUE);
 }
 
