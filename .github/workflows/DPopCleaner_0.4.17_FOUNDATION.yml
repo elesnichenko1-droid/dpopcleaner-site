@@ -44,6 +44,15 @@ jobs:
           dotnet test v0417/tests/DPop.Common.Tests/DPop.Common.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Run Disk Analyzer unit tests when present
+        shell: pwsh
+        run: |
+          $project = 'v0417/tests/DiskAnalyzer.Tests/DiskAnalyzer.Tests.csproj'
+          if (Test-Path -LiteralPath $project) {
+            dotnet test $project -c Release --nologo
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
       - name: Build DPop.Common
         shell: pwsh
         run: |
