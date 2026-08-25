@@ -1,0 +1,109 @@
+name: DPopCleaner 0.3.5 Candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dpopcleaner-0-3-5-candidate-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify all 0.3.5 contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tests = Get-ChildItem tests -Filter 'test_dpop035_*.py' -File | Sort-Object Name
+          if (-not $tests) { throw 'No 0.3.5 contract tests found.' }
+          foreach ($test in $tests) {
+            Write-Host "=== $($test.Name) ==="
+            python $test.FullName -v
+            if ($LASTEXITCODE -ne 0) { throw "Contract failed: $($test.Name)" }
+          }
+
+      - name: Build and CTest DPopCleaner 0.3.5
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'dpop035-output'
+          $workspace = Join-Path $env:RUNNER_TEMP 'dpop035-workspace'
+          python tools/dpop035_migrate.py --repository $PWD --output $output --workspace $workspace --build
+          if ($LASTEXITCODE -ne 0) { throw 'DPopCleaner 0.3.5 migration/build failed.' }
+          "DPOP035_OUTPUT=$output" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "DPOP035_WORKSPACE=$workspace" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Capture recovered async bridge diagnostics
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceRoot = Join-Path $env:DPOP035_WORKSPACE 'prepared-035-src/src/ui'
+          $evidence = Join-Path $env:DPOP035_OUTPUT 'evidence/async-bridge'
+          New-Item -ItemType Directory -Path $evidence -Force | Out-Null
+          foreach ($name in @('PageBase.cpp', 'PageBase.h')) {
+            $source = Join-Path $sourceRoot $name
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+              throw "Recovered async source missing: $source"
+            }
+            Copy-Item -LiteralPath $source -Destination (Join-Path $evidence $name) -Force
+          }
+          Write-Host '--- PageBase async bridge excerpt ---'
+          Select-String -Path (Join-Path $sourceRoot 'PageBase.cpp') -Pattern 'StartAsync|QueueApply|CompleteAsync|kAsync|busy_' -Context 5,12 |
+            ForEach-Object { $_.ToString() } |
+            Write-Host
+
+      - name: Verify recovered shell smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:DPOP035_OUTPUT 'artifacts/DPopCleaner.exe'
+          $evidence = Join-Path $env:DPOP035_OUTPUT 'evidence/shell'
+          ./tools/dpop033_ui_smoke.ps1 -ExePath $exe -OutputDir $evidence
+
+      - name: Verify Settings save and restart persistence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $build = Join-Path $env:DPOP035_WORKSPACE 'build-035'
+          ctest --test-dir $build -C Release -R '^SettingsPageIntegrationTests$' --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'SettingsPage same-process persistence gate failed.' }
+
+      - name: Capture Settings at supported release sizes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:DPOP035_OUTPUT 'artifacts/DPopCleaner.exe'
+          $evidence = Join-Path $env:DPOP035_OUTPUT 'evidence/settings'
+          ./tools/dpop035_settings_visual_smoke.ps1 -ExePath $exe -OutputDir $evidence
+
+      - name: Verify TreeSize-style Disk UI on controlled fixture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:DPOP035_OUTPUT 'artifacts/DPopCleaner.exe'
+          $evidence = Join-Path $env:DPOP035_OUTPUT 'evidence/disk'
+          ./tools/dpop035_disk_smoke.ps1 -ExePath $exe -OutputDir $evidence
+
+      - name: Upload 0.3.5 candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.3.5-candidate
+          path: ${{ runner.temp }}/dpop035-output/*
+          if-no-files-found: warn
