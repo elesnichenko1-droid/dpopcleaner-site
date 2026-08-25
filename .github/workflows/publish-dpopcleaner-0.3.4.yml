@@ -17,21 +17,6 @@ on:
       - 'release-manifest.js'
       - 'styles.css'
       - 'update/beta.json'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/publish-dpopcleaner-0.3.4.yml'
-      - '.github/workflows/DPopCleaner_0.3.4_CANDIDATE.yml'
-      - 'release/DPopCleaner_0.3.4_R2.iss'
-      - 'release/RELEASE_NOTES_0.3.4_R2.md'
-      - 'tools/dpop034_*'
-      - 'tests/test_dpop034_*'
-      - 'v034_overlay/**'
-      - 'index.html'
-      - 'script.js'
-      - 'release-manifest.js'
-      - 'styles.css'
-      - 'update/beta.json'
 
 permissions:
   contents: write
