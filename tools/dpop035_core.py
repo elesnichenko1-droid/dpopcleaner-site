@@ -157,7 +157,10 @@ def _transform_cmake_for_settings(text: str) -> str:
     text = _insert_ctest_block(text, "add_executable(SettingsStoreTests", store_block)
 
     controller_block = '''\n  add_executable(SettingsControllerTests\n    tests/v035/SettingsControllerTests.cpp\n    src/ui/settings/SettingsController.cpp\n    src/modules/SettingsStore.cpp\n  )\n  target_include_directories(SettingsControllerTests PRIVATE src)\n  target_compile_definitions(SettingsControllerTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  target_link_libraries(SettingsControllerTests PRIVATE shell32 advapi32)\n  if(MSVC)\n    target_compile_options(SettingsControllerTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME SettingsControllerTests COMMAND SettingsControllerTests)\n'''
-    return _insert_ctest_block(text, "add_executable(SettingsControllerTests", controller_block)
+    text = _insert_ctest_block(text, "add_executable(SettingsControllerTests", controller_block)
+
+    page_block = '''\n  add_executable(SettingsPageIntegrationTests\n    tests/v035/SettingsPageIntegrationTests.cpp\n    src/ui/pages/SettingsPage.cpp\n    src/ui/PageBase.cpp\n    src/ui/RecoveryControls.cpp\n    src/ui/Controls.cpp\n    src/ui/Theme.cpp\n    src/ui/SessionLog.cpp\n    src/ui/settings/SettingsController.cpp\n    src/modules/SettingsStore.cpp\n    src/modules/FullCore.cpp\n    src/modules/DPopGuard.cpp\n    src/modules/StartupManager.cpp\n    src/update/Hash.cpp\n  )\n  target_include_directories(SettingsPageIntegrationTests PRIVATE src)\n  target_compile_definitions(SettingsPageIntegrationTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)\n  target_link_libraries(SettingsPageIntegrationTests PRIVATE\n    user32 gdi32 shell32 ole32 advapi32 comdlg32 dwmapi uxtheme\n    bcrypt shlwapi comctl32 psapi\n  )\n  if(MSVC)\n    target_compile_options(SettingsPageIntegrationTests PRIVATE /W4 /permissive- /utf-8)\n  endif()\n  add_test(NAME SettingsPageIntegrationTests COMMAND SettingsPageIntegrationTests)\n'''
+    return _insert_ctest_block(text, "add_executable(SettingsPageIntegrationTests", page_block)
 
 
 def _overlay_v035_tests(repository: Path, stage: Path) -> list[str]:
