@@ -18,6 +18,7 @@ namespace DPop.DiskAnalyzer.UI
     {
         private readonly LanguageCatalog _language;
         private readonly DiskScanner _scanner;
+        private readonly FlowLayoutPanel _toolbar;
         private readonly TextBox _pathBox;
         private readonly DataGridView _grid;
         private readonly Label _status;
@@ -44,7 +45,7 @@ namespace DPop.DiskAnalyzer.UI
             MinimumSize = new Size(900, 600);
             Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
 
-            var toolbar = new FlowLayoutPanel
+            _toolbar = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
                 Height = 42,
@@ -72,15 +73,15 @@ namespace DPop.DiskAnalyzer.UI
             _largeFilesButton.Enabled = false;
             _explorerButton.Enabled = false;
 
-            toolbar.Controls.Add(backButton);
-            toolbar.Controls.Add(driveButton);
-            toolbar.Controls.Add(chooseButton);
-            toolbar.Controls.Add(_pathBox);
-            toolbar.Controls.Add(_scanButton);
-            toolbar.Controls.Add(_stopButton);
-            toolbar.Controls.Add(refreshButton);
-            toolbar.Controls.Add(_largeFilesButton);
-            toolbar.Controls.Add(_explorerButton);
+            _toolbar.Controls.Add(backButton);
+            _toolbar.Controls.Add(driveButton);
+            _toolbar.Controls.Add(chooseButton);
+            _toolbar.Controls.Add(_pathBox);
+            _toolbar.Controls.Add(_scanButton);
+            _toolbar.Controls.Add(_stopButton);
+            _toolbar.Controls.Add(refreshButton);
+            _toolbar.Controls.Add(_largeFilesButton);
+            _toolbar.Controls.Add(_explorerButton);
 
             _status = new Label
             {
@@ -98,7 +99,7 @@ namespace DPop.DiskAnalyzer.UI
 
             Controls.Add(_grid);
             Controls.Add(_status);
-            Controls.Add(toolbar);
+            Controls.Add(_toolbar);
         }
 
         public string InitialRoot { get; set; }
@@ -338,6 +339,16 @@ namespace DPop.DiskAnalyzer.UI
                 .Cast<DataGridViewColumn>()
                 .Select(column => column.HeaderText)
                 .ToArray();
+            var visibleToolbarControls = _toolbar.Controls
+                .Cast<Control>()
+                .Where(control => control.Visible)
+                .ToArray();
+            var toolbarContentRight = visibleToolbarControls.Length == 0
+                ? 0
+                : visibleToolbarControls.Max(control => control.Right + control.Margin.Right);
+            var toolbarLimit = Math.Max(0, _toolbar.ClientSize.Width - _toolbar.Padding.Right);
+            var toolbarOverflow = toolbarContentRight > toolbarLimit;
+
             var report = new Dictionary<string, object>
             {
                 ["target"] = "DPopCleaner 0.4.17 Disk Analyzer",
@@ -350,6 +361,9 @@ namespace DPop.DiskAnalyzer.UI
                 ["row_count"] = _grid.Rows.Count,
                 ["columns"] = columns,
                 ["status"] = _status.Text,
+                ["toolbar_overflow"] = toolbarOverflow,
+                ["toolbar_client_width"] = _toolbar.ClientSize.Width,
+                ["toolbar_content_right"] = toolbarContentRight,
             };
 
             var json = new JavaScriptSerializer().Serialize(report);
