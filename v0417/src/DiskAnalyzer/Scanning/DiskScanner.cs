@@ -19,13 +19,27 @@ namespace DPop.DiskAnalyzer.Scanning
 
         public Task<DiskNode> ScanAsync(string rootPath, CancellationToken token)
         {
+            return ScanAsync(rootPath, token, null);
+        }
+
+        public Task<DiskNode> ScanAsync(
+            string rootPath,
+            CancellationToken token,
+            Action<ScanProgress> progress)
+        {
             if (string.IsNullOrWhiteSpace(rootPath))
                 throw new ArgumentException("A scan root is required.", nameof(rootPath));
 
-            return Task.Run(() => ScanDirectory(rootPath, token), token);
+            return Task.Run(() =>
+            {
+                var state = new ScanState(progress);
+                var result = ScanDirectory(rootPath, token, state);
+                state.Report(rootPath);
+                return result;
+            }, token);
         }
 
-        private DiskNode ScanDirectory(string path, CancellationToken token)
+        private DiskNode ScanDirectory(string path, CancellationToken token, ScanState state)
         {
             token.ThrowIfCancellationRequested();
 
@@ -49,6 +63,8 @@ namespace DPop.DiskAnalyzer.Scanning
                     DiskNode child;
                     if (entry.IsDirectory)
                     {
+                        state.FoldersScanned++;
+
                         if (entry.IsReparsePoint)
                         {
                             child = new DiskNode
@@ -66,7 +82,7 @@ namespace DPop.DiskAnalyzer.Scanning
                         }
                         else
                         {
-                            child = ScanDirectory(entry.FullPath, token);
+                            child = ScanDirectory(entry.FullPath, token, state);
                             child.Name = entry.Name;
                             child.ModifiedUtc = entry.ModifiedUtc;
                         }
@@ -88,6 +104,9 @@ namespace DPop.DiskAnalyzer.Scanning
                             FolderCount = 0,
                             ModifiedUtc = entry.ModifiedUtc,
                         };
+
+                        state.FilesScanned++;
+                        state.LogicalBytesFound += entry.Length;
                     }
 
                     node.Children.Add(child);
@@ -102,6 +121,8 @@ namespace DPop.DiskAnalyzer.Scanning
                     {
                         node.AllocatedComplete = false;
                     }
+
+                    state.EntryProcessed(entry.FullPath);
                 }
             }
             catch (UnauthorizedAccessException)
@@ -122,6 +143,47 @@ namespace DPop.DiskAnalyzer.Scanning
             var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var name = Path.GetFileName(trimmed);
             return string.IsNullOrEmpty(name) ? path : name;
+        }
+
+        private sealed class ScanState
+        {
+            private readonly Action<ScanProgress> _progress;
+            private DateTime _lastReportUtc = DateTime.UtcNow;
+            private int _entriesSinceReport;
+
+            public ScanState(Action<ScanProgress> progress)
+            {
+                _progress = progress;
+            }
+
+            public long FilesScanned { get; set; }
+            public long FoldersScanned { get; set; }
+            public long LogicalBytesFound { get; set; }
+
+            public void EntryProcessed(string currentPath)
+            {
+                _entriesSinceReport++;
+                var elapsed = DateTime.UtcNow - _lastReportUtc;
+                if (_entriesSinceReport >= 100 || elapsed >= TimeSpan.FromMilliseconds(100))
+                    Report(currentPath);
+            }
+
+            public void Report(string currentPath)
+            {
+                if (_progress == null)
+                    return;
+
+                _progress(new ScanProgress
+                {
+                    CurrentPath = currentPath,
+                    FilesScanned = FilesScanned,
+                    FoldersScanned = FoldersScanned,
+                    LogicalBytesFound = LogicalBytesFound,
+                });
+
+                _entriesSinceReport = 0;
+                _lastReportUtc = DateTime.UtcNow;
+            }
         }
     }
 }
