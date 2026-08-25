@@ -21,6 +21,8 @@ class DiskContractTests(unittest.TestCase):
             "DiskNodeId",
             "logicalBytes",
             "allocatedBytes",
+            "allocatedComplete",
+            "allocatedSizeProvider",
             "fileCount",
             "directoryCount",
             "DiskScanSnapshot",
@@ -43,6 +45,13 @@ class DiskContractTests(unittest.TestCase):
         self.assertTrue("NM_CUSTOMDRAW" in source or "NMLVCUSTOMDRAW" in source)
         self.assertIn("palette.accent", source)
         self.assertNotIn("Безопасность", source)
+
+    def test_unknown_allocated_size_is_rendered_as_dash(self):
+        source = PAGE_CPP.read_text(encoding="utf-8")
+        self.assertIn("AllocatedText", source)
+        self.assertIn('allocatedComplete ? dpop::full::FormatBytes(node.allocatedBytes) : L"—"', source)
+        self.assertIn("row.allocatedText = AllocatedText(*node);", source)
+        self.assertIn("AllocatedText(*rootNode)", source)
 
     def test_disk_page_is_an_async_analyzer_not_file_browser(self):
         header = PAGE_H.read_text(encoding="utf-8")
