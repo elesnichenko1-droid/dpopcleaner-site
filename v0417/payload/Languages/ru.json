@@ -1,0 +1,18 @@
+{
+  "app.version": "0.4.17",
+  "disk.title": "Анализатор диска",
+  "disk.scan": "Сканировать",
+  "disk.stop": "Стоп",
+  "disk.back": "Назад",
+  "disk.choose_folder": "Выбрать каталог",
+  "disk.refresh": "Обновить",
+  "disk.large_files": "Крупные файлы",
+  "disk.explorer": "Проводник",
+  "restore.title": "Центр восстановления",
+  "restore.rollback": "Восстановить",
+  "restore.unavailable": "Откат недоступен",
+  "common.close": "Закрыть",
+  "common.cancel": "Отмена",
+  "common.error": "Ошибка",
+  "common.ok": "ОК"
+}
