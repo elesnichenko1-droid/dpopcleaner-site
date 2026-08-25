@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "tools" / "dpop035_core.py"
 CMAKE_OVERLAY = ROOT / "v035_overlay" / "CMakeLists.txt"
 UI_SMOKE = ROOT / "tools" / "dpop033_ui_smoke.ps1"
+CANDIDATE_WORKFLOW = ROOT / ".github" / "workflows" / "DPopCleaner_0.3.5_CANDIDATE.yml"
+SETTINGS_PAGE_TEST = ROOT / "tests" / "v035" / "SettingsPageIntegrationTests.cpp"
 PAGE_BASE_CPP = ROOT / "v035_overlay" / "ui" / "PageBase.cpp"
 PAGE_BASE_H = ROOT / "v035_overlay" / "ui" / "PageBase.h"
 
@@ -75,6 +77,23 @@ class MigrationBoundaryTests(unittest.TestCase):
         self.assertIn("src/ui/TrayIcon.cpp", overlay)
         self.assertIn("src/modules/SettingsStore.cpp", overlay)
         self.assertIn("src/ui/settings/SettingsController.cpp", overlay)
+        self.assertIn("add_executable(SettingsPageIntegrationTests", overlay)
+        self.assertIn("tests/v035/SettingsPageIntegrationTests.cpp", overlay)
+        self.assertIn("src/ui/pages/SettingsPage.cpp", overlay)
+        self.assertIn("add_test(NAME SettingsPageIntegrationTests", overlay)
+
+        self.assertTrue(SETTINGS_PAGE_TEST.is_file())
+        page_test = SETTINGS_PAGE_TEST.read_text(encoding="utf-8")
+        self.assertIn("GetDlgItem(page.Hwnd(), 3343)", page_test)
+        self.assertIn("SetWindowTextW(large, L\"777\")", page_test)
+        self.assertIn("MAKEWPARAM(3431, BN_CLICKED)", page_test)
+        self.assertIn("persisted.settings.largeFileMB == 777", page_test)
+        self.assertIn("WindowText(large) == L\"777\"", page_test)
+
+    def test_settings_release_gate_is_same_process_not_cross_process_editing(self):
+        workflow = CANDIDATE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("SettingsPageIntegrationTests", workflow)
+        self.assertNotIn("dpop035_settings_smoke.ps1 -ExePath", workflow)
 
     def test_progressive_page_async_bridge_never_joins_worker_on_apply_message(self):
         self.assertTrue(PAGE_BASE_CPP.is_file(), "0.3.5 must override recovered PageBase.cpp")
