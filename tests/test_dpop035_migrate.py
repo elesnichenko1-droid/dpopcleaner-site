@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "tools" / "dpop035_core.py"
 CMAKE_OVERLAY = ROOT / "v035_overlay" / "CMakeLists.txt"
 UI_SMOKE = ROOT / "tools" / "dpop033_ui_smoke.ps1"
+PAGE_BASE_CPP = ROOT / "v035_overlay" / "ui" / "PageBase.cpp"
+PAGE_BASE_H = ROOT / "v035_overlay" / "ui" / "PageBase.h"
 
 
 def load_core():
@@ -73,6 +75,28 @@ class MigrationBoundaryTests(unittest.TestCase):
         self.assertIn("src/ui/TrayIcon.cpp", overlay)
         self.assertIn("src/modules/SettingsStore.cpp", overlay)
         self.assertIn("src/ui/settings/SettingsController.cpp", overlay)
+
+    def test_progressive_page_async_bridge_never_joins_worker_on_apply_message(self):
+        self.assertTrue(PAGE_BASE_CPP.is_file(), "0.3.5 must override recovered PageBase.cpp")
+        self.assertTrue(PAGE_BASE_H.is_file(), "0.3.5 must override recovered PageBase.h")
+        header = PAGE_BASE_H.read_text(encoding="utf-8")
+        source = PAGE_BASE_CPP.read_text(encoding="utf-8")
+
+        self.assertIn("kPageAsyncApplyMessage", header)
+        self.assertIn("kPageAsyncFinishedMessage", header)
+        self.assertIn("std::deque<std::function<void()>>", header)
+        self.assertIn("pendingApply_.push_back", source)
+        self.assertIn("DrainPendingApplies", source)
+        self.assertIn("case kPageAsyncApplyMessage:", source)
+        self.assertIn("case kPageAsyncFinishedMessage:", source)
+
+        apply_case = source.split("case kPageAsyncApplyMessage:", 1)[1].split("case kPageAsyncFinishedMessage:", 1)[0]
+        self.assertIn("DrainPendingApplies();", apply_case)
+        self.assertNotIn("worker_.join()", apply_case)
+        self.assertNotIn("busy_.store(false)", apply_case)
+
+        finished_case = source.split("case kPageAsyncFinishedMessage:", 1)[1].split("case WM_CTLCOLORSTATIC:", 1)[0]
+        self.assertIn("CompleteAsync();", finished_case)
 
     def test_shared_ui_smoke_forces_exit_close_behavior_in_isolated_settings_root(self):
         smoke = UI_SMOKE.read_text(encoding="utf-8-sig")
