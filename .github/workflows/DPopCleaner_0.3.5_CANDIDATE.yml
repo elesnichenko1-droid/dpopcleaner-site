@@ -44,6 +44,26 @@ jobs:
           python tools/dpop035_migrate.py --repository $PWD --output $output --workspace $workspace --build
           if ($LASTEXITCODE -ne 0) { throw 'DPopCleaner 0.3.5 migration/build failed.' }
           "DPOP035_OUTPUT=$output" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "DPOP035_WORKSPACE=$workspace" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Capture recovered async bridge diagnostics
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceRoot = Join-Path $env:DPOP035_WORKSPACE 'prepared-035-src/src/ui'
+          $evidence = Join-Path $env:DPOP035_OUTPUT 'evidence/async-bridge'
+          New-Item -ItemType Directory -Path $evidence -Force | Out-Null
+          foreach ($name in @('PageBase.cpp', 'PageBase.h')) {
+            $source = Join-Path $sourceRoot $name
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+              throw "Recovered async source missing: $source"
+            }
+            Copy-Item -LiteralPath $source -Destination (Join-Path $evidence $name) -Force
+          }
+          Write-Host '--- PageBase async bridge excerpt ---'
+          Select-String -Path (Join-Path $sourceRoot 'PageBase.cpp') -Pattern 'StartAsync|QueueApply|CompleteAsync|kAsync|busy_' -Context 5,12 |
+            ForEach-Object { $_.ToString() } |
+            Write-Host
 
       - name: Verify recovered shell smoke
         shell: pwsh
@@ -62,8 +82,9 @@ jobs:
           ./tools/dpop035_disk_smoke.ps1 -ExePath $exe -OutputDir $evidence
 
       - name: Upload 0.3.5 candidate evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dpopcleaner-0.3.5-candidate
           path: ${{ runner.temp }}/dpop035-output/*
-          if-no-files-found: error
+          if-no-files-found: warn
