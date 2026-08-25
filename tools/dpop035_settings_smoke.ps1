@@ -49,7 +49,6 @@ public static class DPop035SettingsWin32 {
   public delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumProc cb, IntPtr data);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder b, int n);
-  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool SetWindowText(IntPtr h, string text);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
   [DllImport("user32.dll")] public static extern int GetDlgCtrlID(IntPtr h);
@@ -118,6 +117,15 @@ function Open-CleaningSettings([Diagnostics.Process]$p) {
   }
   return [pscustomobject]@{ Main=$main; Page=$settingsPage; Large=$large; LoadStatus=$loadStatus }
 }
+function Set-EditTextByMessages([IntPtr]$edit,[string]$digits) {
+  # Standard EDIT messages exercise the same buffer that the application reads.
+  [void][DPop035SettingsWin32]::SendMessage($edit,0x00B1,[IntPtr]0,[IntPtr](-1)) # EM_SETSEL all
+  [void][DPop035SettingsWin32]::SendMessage($edit,0x0303,[IntPtr]::Zero,[IntPtr]::Zero) # WM_CLEAR
+  foreach($ch in $digits.ToCharArray()) {
+    [void][DPop035SettingsWin32]::SendMessage($edit,0x0102,[IntPtr][int]$ch,[IntPtr]1) # WM_CHAR
+  }
+  Start-Sleep -Milliseconds 100
+}
 function Close-App([Diagnostics.Process]$p,[IntPtr]$main) {
   [void][DPop035SettingsWin32]::SendMessage($main,0x0010,[IntPtr]::Zero,[IntPtr]::Zero)
   if(-not $p.WaitForExit(10000)){throw 'DPopCleaner did not exit after WM_CLOSE'}
@@ -148,8 +156,10 @@ try {
   $first=Start-App
   $firstUi=Open-CleaningSettings $first
   if((Text $firstUi.Large) -ne '500'){throw "Initial large_file_mb UI value is not 500: $(Text $firstUi.Large)"}
-  if(-not [DPop035SettingsWin32]::SetWindowText($firstUi.Large,'777')){throw 'Could not edit large_file_mb'}
-  if((Text $firstUi.Large) -ne '777'){throw 'Edited large_file_mb did not reach control'}
+  Set-EditTextByMessages $firstUi.Large '777'
+  if((Text $firstUi.Large) -ne '777'){throw "EDIT message input did not produce 777: $(Text $firstUi.Large)"}
+  [void](Capture $firstUi.Main 'settings-edited-777-before-save')
+
   $save=[DPop035SettingsWin32]::GetDlgItem($firstUi.Page,3431)
   if($save -eq [IntPtr]::Zero){throw 'Settings Save button (3431) not found'}
   if(-not [DPop035SettingsWin32]::IsWindowVisible($save)){throw 'Settings Save button is not visible'}
