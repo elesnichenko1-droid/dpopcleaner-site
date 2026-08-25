@@ -12,14 +12,25 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $fixture = Join-Path $env:RUNNER_TEMP 'dpop035-disk-fixture'
 $trace = Join-Path $OutputDir 'disk-root-trace.txt'
+$settingsRoot = Join-Path $env:RUNNER_TEMP 'dpop035-disk-smoke-settings'
 Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $settingsRoot -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $trace -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path (Join-Path $fixture 'Users/Test/Cache') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $fixture 'Windows/Logs') -Force | Out-Null
+New-Item -ItemType Directory -Path $settingsRoot -Force | Out-Null
 [IO.File]::WriteAllBytes((Join-Path $fixture 'root.bin'), (New-Object byte[] 4096))
 [IO.File]::WriteAllBytes((Join-Path $fixture 'Users/user.bin'), (New-Object byte[] 16384))
 [IO.File]::WriteAllBytes((Join-Path $fixture 'Users/Test/Cache/cache.bin'), (New-Object byte[] 32768))
 [IO.File]::WriteAllBytes((Join-Path $fixture 'Windows/Logs/log.bin'), (New-Object byte[] 8192))
+@'
+{
+  "schema_version": 2,
+  "tray_enabled": false,
+  "close_behavior": 0,
+  "large_file_mb": 500
+}
+'@ | Set-Content -LiteralPath (Join-Path $settingsRoot 'settings.json') -Encoding utf8
 
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
@@ -33,7 +44,6 @@ public static class DPop035DiskWin32 {
   [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumProc cb, IntPtr data);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder b, int n);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder b, int n);
-  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool SetWindowText(IntPtr h, string text);
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint msg,IntPtr wp,IntPtr lp);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
@@ -93,7 +103,11 @@ function Capture([IntPtr]$h,[string]$name) {
 
 $p=$null
 try {
+  # The controlled root is inherited before the process starts. This avoids
+  # cross-process WM_SETTEXT/UIPI ambiguity while exercising the real DiskPage.
+  $env:DPOP_DISK_TEST_ROOT = $fixture
   $env:DPOP_DISK_TRACE_FILE = $trace
+  $env:DPOP_SETTINGS_ROOT = $settingsRoot
   $p=Start-Process -FilePath $ExePath -PassThru
   $deadline=(Get-Date).AddSeconds(30)
   do { Start-Sleep -Milliseconds 250; $p.Refresh(); if($p.HasExited){throw 'App exited before window appeared'} } while($p.MainWindowHandle -eq 0 -and (Get-Date)-lt $deadline)
@@ -118,8 +132,7 @@ try {
   if($scan -eq [IntPtr]::Zero -or $stop -eq [IntPtr]::Zero){throw 'Disk scan controls not found on Disk page'}
   if(-not [DPop035DiskWin32]::IsWindowVisible($scan) -or -not [DPop035DiskWin32]::IsWindowVisible($stop)){throw 'Disk scan controls are not visible'}
   if((Text $scan) -ne 'Сканировать' -or (Text $stop) -ne 'Стоп'){throw 'Disk control ID contract drifted'}
-  if(-not [DPop035DiskWin32]::SetWindowText($edit,$fixture)){throw 'Could not set disk fixture path'}
-  if((Text $edit) -ne $fixture){throw "Disk fixture path did not reach path control: $(Text $edit)"}
+  if((Text $edit) -ne $fixture){throw "DiskPage did not inherit controlled fixture root. Expected=$fixture Actual=$(Text $edit)"}
   [void][DPop035DiskWin32]::SendMessage($diskPage,0x0111,[IntPtr]3303,$scan)
 
   $deadline=(Get-Date).AddSeconds(20)
@@ -151,7 +164,10 @@ try {
   if($p.ExitCode -ne 0){throw "App exited with code $($p.ExitCode)"}
 }
 finally {
+  Remove-Item Env:DPOP_DISK_TEST_ROOT -ErrorAction SilentlyContinue
   Remove-Item Env:DPOP_DISK_TRACE_FILE -ErrorAction SilentlyContinue
+  Remove-Item Env:DPOP_SETTINGS_ROOT -ErrorAction SilentlyContinue
   if($null -ne $p -and -not $p.HasExited){Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue}
   Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $settingsRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
