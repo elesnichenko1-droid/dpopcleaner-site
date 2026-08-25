@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "tools" / "dpop035_core.py"
 CMAKE_OVERLAY = ROOT / "v035_overlay" / "CMakeLists.txt"
+UI_SMOKE = ROOT / "tools" / "dpop033_ui_smoke.ps1"
 
 
 def load_core():
@@ -72,6 +73,13 @@ class MigrationBoundaryTests(unittest.TestCase):
         self.assertIn("src/ui/TrayIcon.cpp", overlay)
         self.assertIn("src/modules/SettingsStore.cpp", overlay)
         self.assertIn("src/ui/settings/SettingsController.cpp", overlay)
+
+    def test_shared_ui_smoke_forces_exit_close_behavior_in_isolated_settings_root(self):
+        smoke = UI_SMOKE.read_text(encoding="utf-8-sig")
+        self.assertIn("DPOP_SETTINGS_ROOT", smoke)
+        self.assertIn('"tray_enabled": false', smoke)
+        self.assertIn('"close_behavior": 0', smoke)
+        self.assertIn("Remove-Item Env:DPOP_SETTINGS_ROOT", smoke)
 
     def test_overlay_empty_is_safe(self):
         m = load_core()
