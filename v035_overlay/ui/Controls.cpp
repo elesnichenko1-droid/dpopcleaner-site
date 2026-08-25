@@ -101,12 +101,17 @@ HWND CreatePushButton(
     );
     if (!button) return nullptr;
 
-    const auto encoded = static_cast<INT_PTR>(visual) + 1;
-    if (!SetPropW(button, kButtonVisualProperty, reinterpret_cast<HANDLE>(encoded))) {
+    if (!SetButtonVisual(button, visual)) {
         DestroyWindow(button);
         return nullptr;
     }
     return button;
+}
+
+bool SetButtonVisual(HWND button, ButtonVisual visual) noexcept {
+    if (!button) return false;
+    const auto encoded = static_cast<INT_PTR>(visual) + 1;
+    return SetPropW(button, kButtonVisualProperty, reinterpret_cast<HANDLE>(encoded)) != FALSE;
 }
 
 ButtonVisual ButtonVisualFor(HWND button) noexcept {
