@@ -50,6 +50,7 @@ public static class DPop035SettingsWin32 {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder b, int n);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool SetWindowText(IntPtr h, string text);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
   [DllImport("user32.dll")] public static extern int GetDlgCtrlID(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr parent, int id);
@@ -90,9 +91,9 @@ function Start-App {
 }
 function Open-CleaningSettings([Diagnostics.Process]$p) {
   $main=[IntPtr]$p.MainWindowHandle
-  $settingsNav=Find-VisibleById $main 1012
-  if($settingsNav -eq [IntPtr]::Zero){throw 'Settings navigation button (1012) not found'}
-  [void][DPop035SettingsWin32]::SendMessage($main,0x0111,[IntPtr]1012,$settingsNav)
+  $gear=Find-VisibleById $main 1100
+  if($gear -eq [IntPtr]::Zero){throw 'Settings gear (1100) not found'}
+  [void][DPop035SettingsWin32]::SendMessage($main,0x0111,[IntPtr]1100,$gear)
   Start-Sleep -Milliseconds 300
 
   $large=Find-VisibleById $main 3343
@@ -150,12 +151,27 @@ try {
   if((Text $firstUi.Large) -ne '777'){throw 'Edited large_file_mb did not reach control'}
   $save=[DPop035SettingsWin32]::GetDlgItem($firstUi.Page,3431)
   if($save -eq [IntPtr]::Zero){throw 'Settings Save button (3431) not found'}
+  if(-not [DPop035SettingsWin32]::IsWindowVisible($save)){throw 'Settings Save button is not visible'}
   [void][DPop035SettingsWin32]::SendMessage($firstUi.Page,0x0111,[IntPtr]3431,$save)
   Start-Sleep -Milliseconds 250
 
+  $statusAfterSave=Text ([DPop035SettingsWin32]::GetDlgItem($firstUi.Main,1201))
+  $logAfterSave=Text ([DPop035SettingsWin32]::GetDlgItem($firstUi.Main,1202))
+  $uiValueAfterSave=Text $firstUi.Large
+  [pscustomobject]@{
+    status=$statusAfterSave
+    ui_value=$uiValueAfterSave
+    save_visible=[DPop035SettingsWin32]::IsWindowVisible($save)
+    save_enabled=[DPop035SettingsWin32]::IsWindowEnabled($save)
+    log=$logAfterSave
+  } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'settings-save-command-diagnostics.json') -Encoding utf8
+  [void](Capture $firstUi.Main 'settings-after-save-command')
+
   if(-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)){throw 'settings.json disappeared after Save'}
   $saved=Get-Content -LiteralPath $settingsPath -Raw
-  if($saved -notmatch '"large_file_mb"\s*:\s*777'){throw "settings.json did not persist large_file_mb=777: $saved"}
+  if($saved -notmatch '"large_file_mb"\s*:\s*777'){
+    throw "settings.json did not persist large_file_mb=777. UI=$uiValueAfterSave Status=$statusAfterSave Log=$logAfterSave JSON=$saved"
+  }
   Copy-Item -LiteralPath $settingsPath -Destination (Join-Path $OutputDir 'settings-after-save.json') -Force
   Close-App $first $firstUi.Main
   $first=$null
