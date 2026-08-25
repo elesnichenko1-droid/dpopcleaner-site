@@ -1,5 +1,8 @@
 #include "modules/SettingsStore.h"
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <filesystem>
 #include <fstream>
