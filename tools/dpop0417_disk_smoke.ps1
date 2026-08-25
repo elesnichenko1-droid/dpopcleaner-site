@@ -23,6 +23,8 @@ using System.Runtime.InteropServices;
 public static class DPop0417DiskSmokeWin32 {
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll", SetLastError=true)] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool GetClientRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int width, int height, bool repaint);
     [DllImport("user32.dll", SetLastError=true)] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdc, uint flags);
 }
 '@
@@ -33,6 +35,36 @@ function Write-FixedFile([string]$Path, [int]$Length, [byte]$Value) {
     [IO.File]::WriteAllBytes($Path, $bytes)
 }
 
+function Resize-Client([IntPtr]$Handle, [int]$Width, [int]$Height) {
+    $windowRect = New-Object DPop0417DiskSmokeWin32+RECT
+    $clientRect = New-Object DPop0417DiskSmokeWin32+RECT
+    if (-not [DPop0417DiskSmokeWin32]::GetWindowRect($Handle, [ref]$windowRect)) {
+        throw 'GetWindowRect failed while resizing Disk Analyzer.'
+    }
+    if (-not [DPop0417DiskSmokeWin32]::GetClientRect($Handle, [ref]$clientRect)) {
+        throw 'GetClientRect failed while resizing Disk Analyzer.'
+    }
+
+    $nonClientWidth = ($windowRect.Right - $windowRect.Left) - ($clientRect.Right - $clientRect.Left)
+    $nonClientHeight = ($windowRect.Bottom - $windowRect.Top) - ($clientRect.Bottom - $clientRect.Top)
+    $outerWidth = $Width + $nonClientWidth
+    $outerHeight = $Height + $nonClientHeight
+    if (-not [DPop0417DiskSmokeWin32]::MoveWindow($Handle, 10, 10, $outerWidth, $outerHeight, $true)) {
+        throw 'MoveWindow failed while setting Disk Analyzer smoke viewport.'
+    }
+    Start-Sleep -Milliseconds 500
+
+    $verify = New-Object DPop0417DiskSmokeWin32+RECT
+    if (-not [DPop0417DiskSmokeWin32]::GetClientRect($Handle, [ref]$verify)) {
+        throw 'GetClientRect failed while verifying Disk Analyzer viewport.'
+    }
+    $actualWidth = $verify.Right - $verify.Left
+    $actualHeight = $verify.Bottom - $verify.Top
+    if ($actualWidth -ne $Width -or $actualHeight -ne $Height) {
+        throw "Disk Analyzer client size mismatch: $actualWidth x $actualHeight"
+    }
+}
+
 function Capture-Window([IntPtr]$Handle, [string]$Path) {
     $rect = New-Object DPop0417DiskSmokeWin32+RECT
     if (-not [DPop0417DiskSmokeWin32]::GetWindowRect($Handle, [ref]$rect)) {
@@ -40,7 +72,7 @@ function Capture-Window([IntPtr]$Handle, [string]$Path) {
     }
     $width = $rect.Right - $rect.Left
     $height = $rect.Bottom - $rect.Top
-    if ($width -lt 900 -or $height -lt 600) {
+    if ($width -lt 1200 -or $height -lt 850) {
         throw "Disk Analyzer window is unexpectedly small: $width x $height"
     }
 
@@ -96,6 +128,8 @@ try {
     } while ($p.MainWindowHandle -eq 0 -and (Get-Date) -lt $windowDeadline)
     if ($p.MainWindowHandle -eq 0) { throw 'Disk Analyzer main window timeout.' }
 
+    Resize-Client ([IntPtr]$p.MainWindowHandle) 1200 850
+
     $reportDeadline = (Get-Date).AddSeconds(30)
     while (-not (Test-Path -LiteralPath $report) -and (Get-Date) -lt $reportDeadline) {
         Start-Sleep -Milliseconds 200
@@ -124,6 +158,7 @@ try {
         folder_count = [int64]$data.folder_count
         row_count = [int]$data.row_count
         columns = @($data.columns)
+        client_size = '1200x850'
         screenshot = [IO.Path]::GetFileName($screenshot)
         app_report = [IO.Path]::GetFileName($report)
     } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $OutputDir 'disk-smoke-summary.json') -Encoding utf8
