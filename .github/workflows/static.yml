@@ -1,9 +1,7 @@
-name: Deploy verified DPopCleaner site to Pages
+name: Deploy legacy DPopCleaner site to Pages (manual only)
 
 on:
-  workflow_run:
-    workflows: ["Build, verify and release DPopCleaner 0.3.1 R3"]
-    types: [completed]
+  workflow_dispatch:
 
 permissions:
   actions: read
@@ -11,30 +9,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-legacy-manual
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  legacy-manual-only:
     runs-on: ubuntu-latest
     steps:
-      - name: Download site produced by the verified release run
-        uses: actions/download-artifact@v5
-        with:
-          name: dpopcleaner-pages-site-${{ github.event.workflow_run.id }}
-          path: _site
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Legacy deployer disabled for automatic releases
+        run: |
+          echo "Automatic legacy Pages deployment is disabled."
+          echo "DPopCleaner 0.3.5+ is published by publish-dpopcleaner-0.3.5.yml."
