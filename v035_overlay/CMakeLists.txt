@@ -247,4 +247,29 @@ if(BUILD_TESTING)
     target_compile_options(SettingsControllerTests PRIVATE /W4 /permissive- /utf-8)
   endif()
   add_test(NAME SettingsControllerTests COMMAND SettingsControllerTests)
+
+  add_executable(SettingsPageIntegrationTests
+    tests/v035/SettingsPageIntegrationTests.cpp
+    src/ui/pages/SettingsPage.cpp
+    src/ui/settings/SettingsController.cpp
+    src/ui/PageBase.cpp
+    src/ui/RecoveryControls.cpp
+    src/ui/SessionLog.cpp
+    src/ui/Controls.cpp
+    src/ui/Theme.cpp
+    src/modules/SettingsStore.cpp
+    src/modules/FullCore.cpp
+    src/modules/DPopGuard.cpp
+    src/modules/StartupManager.cpp
+    src/update/Hash.cpp
+  )
+  target_include_directories(SettingsPageIntegrationTests PRIVATE src)
+  target_compile_definitions(SettingsPageIntegrationTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(SettingsPageIntegrationTests PRIVATE
+    user32 gdi32 shell32 ole32 advapi32 comdlg32 uxtheme comctl32 psapi bcrypt
+  )
+  if(MSVC)
+    target_compile_options(SettingsPageIntegrationTests PRIVATE /W4 /permissive- /utf-8)
+  endif()
+  add_test(NAME SettingsPageIntegrationTests COMMAND SettingsPageIntegrationTests)
 endif()
