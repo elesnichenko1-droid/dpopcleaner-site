@@ -1,0 +1,8 @@
+DPopCleaner.exe
+Languages/
+Shell/
+Documentation/
+Modules/DPop.Common.dll
+Modules/DiskAnalyzer.exe
+Modules/RestoreCenter.exe
+Resources/
