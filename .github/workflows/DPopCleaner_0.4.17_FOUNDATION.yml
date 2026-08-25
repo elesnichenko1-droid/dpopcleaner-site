@@ -65,6 +65,13 @@ jobs:
         shell: pwsh
         run: ./tools/dpop0417_stage.ps1
 
+      - name: Run Disk Analyzer controlled UI smoke
+        shell: pwsh
+        run: |
+          ./tools/dpop0417_disk_smoke.ps1 `
+            -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' `
+            -OutputDir '_release/0.4.17/evidence/disk'
+
       - name: Verify staged original core is byte-identical
         shell: pwsh
         run: |
@@ -79,5 +86,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DPopCleaner-0.4.17-foundation-${{ github.run_id }}
-          path: _release/0.4.17/stage
+          path: |
+            _release/0.4.17/stage
+            _release/0.4.17/evidence
           if-no-files-found: error
