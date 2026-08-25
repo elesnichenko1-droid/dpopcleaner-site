@@ -1,5 +1,6 @@
 #include "ui/PageBase.h"
 
+#include "ui/Controls.h"
 #include "ui/Theme.h"
 
 #include <exception>
@@ -226,6 +227,23 @@ LRESULT PageBase::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case kPageAsyncFinishedMessage:
         CompleteAsync();
         return 0;
+
+    case WM_DRAWITEM: {
+        const auto* draw = reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
+        if (draw && draw->CtlType == ODT_BUTTON && draw->hwndItem) {
+            const int length = GetWindowTextLengthW(draw->hwndItem);
+            std::wstring text;
+            if (length > 0) {
+                text.resize(static_cast<std::size_t>(length + 1), L'\0');
+                const int copied = GetWindowTextW(draw->hwndItem, text.data(), length + 1);
+                text.resize(copied > 0 ? static_cast<std::size_t>(copied) : 0U);
+            }
+            if (DrawOwnerButton(*draw, text, ButtonVisualFor(draw->hwndItem))) {
+                return TRUE;
+            }
+        }
+        break;
+    }
 
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLORBTN: {
