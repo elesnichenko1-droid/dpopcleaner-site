@@ -1,5 +1,8 @@
 #include "modules/DiskAnalyzer.h"
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <filesystem>
 #include <fstream>
