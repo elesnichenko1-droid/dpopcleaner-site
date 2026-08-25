@@ -131,6 +131,31 @@ void TestRoundTrip() {
     assert(ActiveSettings() == s);
 }
 
+void TestOverwriteExistingSettings() {
+    TempSettingsRoot temp;
+    auto first = DefaultSettings();
+    first.trayEnabled = false;
+    first.closeBehavior = CloseBehavior::Exit;
+    first.checkUpdatesAtStartup = false;
+    first.largeFileMB = 500;
+
+    std::wstring error;
+    assert(SaveAppSettings(first, error));
+    assert(error.empty());
+    assert(LoadAppSettings().settings.largeFileMB == 500);
+
+    auto second = first;
+    second.largeFileMB = 777;
+    assert(SaveAppSettings(second, error));
+    assert(error.empty());
+    assert(!fs::exists(fs::path(SettingsPath().wstring() + L".tmp")));
+
+    const auto loaded = LoadAppSettings();
+    assert(!loaded.usedDefaults);
+    assert(loaded.settings.largeFileMB == 777);
+    assert(loaded.settings == second);
+}
+
 void TestCorruptFallback() {
     TempSettingsRoot temp;
     WriteUtf8(SettingsPath(), "{not-json");
@@ -173,6 +198,7 @@ int main() {
     TestNormalizeAndExclusions();
     TestActiveSettingsAreSessionScoped();
     TestRoundTrip();
+    TestOverwriteExistingSettings();
     TestCorruptFallback();
     TestSchemaOneMigrationAndDedup();
     return 0;
