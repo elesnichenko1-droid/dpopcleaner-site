@@ -26,14 +26,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Verify 0.3.5 migration and Disk contracts
+      - name: Verify all 0.3.5 contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          python tests/test_dpop035_migrate.py -v
-          if ($LASTEXITCODE -ne 0) { throw '0.3.5 migration contract failed.' }
-          python tests/test_dpop035_disk_contract.py -v
-          if ($LASTEXITCODE -ne 0) { throw '0.3.5 Disk contract failed.' }
+          $tests = Get-ChildItem tests -Filter 'test_dpop035_*.py' -File | Sort-Object Name
+          if (-not $tests) { throw 'No 0.3.5 contract tests found.' }
+          foreach ($test in $tests) {
+            Write-Host "=== $($test.Name) ==="
+            python $test.FullName -v
+            if ($LASTEXITCODE -ne 0) { throw "Contract failed: $($test.Name)" }
+          }
 
       - name: Build and CTest DPopCleaner 0.3.5
         shell: pwsh
