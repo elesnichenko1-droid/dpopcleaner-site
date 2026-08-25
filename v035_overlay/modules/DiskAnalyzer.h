@@ -4,8 +4,10 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace dpop::disk {
@@ -27,6 +29,7 @@ struct DiskNode {
     bool directory{};
     std::uint64_t logicalBytes{};
     std::uint64_t allocatedBytes{};
+    bool allocatedComplete{true};
     std::uint64_t fileCount{};
     std::uint64_t directoryCount{};
     std::int64_t modifiedUnix100ns{};
@@ -57,12 +60,16 @@ struct DiskScanSnapshot {
 
 using DiskProgressCallback = std::function<void(const DiskScanProgress&)>;
 using DiskPartialCallback = std::function<void(const DiskScanSnapshot&)>;
+using DiskAllocatedSizeProvider = std::function<std::optional<std::uint64_t>(
+    const std::filesystem::path&,
+    std::uint64_t logicalBytes)>;
 
 struct DiskScanOptions {
     std::size_t progressEveryEntries{128};
     bool includeFilesAsNodes{true};
     bool emitTopLevelSnapshots{true};
     DiskPartialCallback partialSnapshot;
+    DiskAllocatedSizeProvider allocatedSizeProvider;
 };
 
 DiskScanSnapshot ScanDiskTree(
