@@ -24,7 +24,12 @@ namespace DPop.RestoreCenter
             var installRoot = ResolveInstallRoot();
             var languageCode = ReadArgument(args, "--lang") ?? "ru";
             var language = LanguageCatalog.Load(Path.Combine(installRoot, "Languages"), languageCode);
-            var documentationRoot = Path.Combine(installRoot, "Documentation");
+            var smokeDocumentationRoot = ReadArgument(args, "--smoke-documentation-root");
+            if (!string.IsNullOrWhiteSpace(smokeDocumentationRoot) && !SmokeDocumentationAllowed(smokeDocumentationRoot))
+                return 90;
+            var documentationRoot = string.IsNullOrWhiteSpace(smokeDocumentationRoot)
+                ? Path.Combine(installRoot, "Documentation")
+                : Path.GetFullPath(smokeDocumentationRoot);
             var history = new HistoryStore(Path.Combine(documentationRoot, "History"));
             var backups = new BackupStore(Path.Combine(documentationRoot, "Backups"));
 
