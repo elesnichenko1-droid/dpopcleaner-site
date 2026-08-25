@@ -13,6 +13,8 @@ CANDIDATE_WORKFLOW = ROOT / ".github" / "workflows" / "DPopCleaner_0.3.5_CANDIDA
 SETTINGS_PAGE_TEST = ROOT / "tests" / "v035" / "SettingsPageIntegrationTests.cpp"
 PAGE_BASE_CPP = ROOT / "v035_overlay" / "ui" / "PageBase.cpp"
 PAGE_BASE_H = ROOT / "v035_overlay" / "ui" / "PageBase.h"
+SHELL_H = ROOT / "v035_overlay" / "ui" / "Shell.h"
+STATUS_BAR_CPP = ROOT / "v035_overlay" / "ui" / "StatusBar.cpp"
 
 
 def load_core():
@@ -32,6 +34,16 @@ class MigrationBoundaryTests(unittest.TestCase):
         self.assertEqual(m.TARGET_VERSION_CODE, "3051")
         self.assertEqual(m.TARGET_REVISION, "1")
         self.assertEqual(m.TARGET_RESOURCE_VERSION, "0.3.5.1")
+
+        self.assertTrue(SHELL_H.is_file())
+        self.assertTrue(STATUS_BAR_CPP.is_file())
+        shell = SHELL_H.read_text(encoding="utf-8")
+        status = STATUS_BAR_CPP.read_text(encoding="utf-8")
+        self.assertIn('L"DPopCleaner 0.3.5 BETA R1"', shell)
+        self.assertIn('L"v0.3.5 BETA R1"', status)
+        self.assertNotIn("0.3.3", shell)
+        self.assertNotIn("0.3.3", status)
+        self.assertIn("kSettingsCommandId = 1100", shell)
 
     def test_backend_allowlist_cannot_replace_ui_host(self):
         m = load_core()
@@ -89,6 +101,8 @@ class MigrationBoundaryTests(unittest.TestCase):
         self.assertIn("MAKEWPARAM(3431, BN_CLICKED)", page_test)
         self.assertIn("persisted.settings.largeFileMB == 777", page_test)
         self.assertIn("WindowText(large) == L\"777\"", page_test)
+        self.assertIn("void Require(bool condition", page_test)
+        self.assertNotIn("<cassert>", page_test)
 
     def test_settings_release_gate_is_same_process_not_cross_process_editing(self):
         workflow = CANDIDATE_WORKFLOW.read_text(encoding="utf-8")
