@@ -31,6 +31,19 @@ protected:
     void OnVisibilityChanged(bool visible) noexcept override;
 
 private:
+    static std::filesystem::path InitialRoot() {
+        // Opt-in release-gate hook. Normal users do not have this variable,
+        // so the production default remains C:\. It changes only the initial
+        // analyzer root and never enables destructive behavior.
+        constexpr DWORD kCapacity = 32768;
+        wchar_t buffer[kCapacity]{};
+        const DWORD count = GetEnvironmentVariableW(L"DPOP_DISK_TEST_ROOT", buffer, kCapacity);
+        if (count > 0 && count < kCapacity) {
+            return std::filesystem::path(buffer).lexically_normal();
+        }
+        return std::filesystem::path(L"C:\\");
+    }
+
     void StartScan(const std::filesystem::path& root, bool addHistory = true);
     void ApplySnapshot(dpop::disk::DiskScanSnapshot snapshot, bool finalSnapshot);
     void BuildVisibleRows();
@@ -50,7 +63,7 @@ private:
     HWND pathEdit_{};
     DiskTreeList tree_;
 
-    std::filesystem::path root_{L"C:\\"};
+    std::filesystem::path root_{InitialRoot()};
     dpop::disk::DiskScanSnapshot snapshot_;
     std::unordered_set<dpop::disk::DiskNodeId> expanded_;
     std::unordered_map<std::wstring, dpop::disk::DiskScanSnapshot> cache_;
