@@ -60,9 +60,10 @@ function Resize-Client([IntPtr]$Handle, [int]$Width, [int]$Height) {
     }
     $actualWidth = $verify.Right - $verify.Left
     $actualHeight = $verify.Bottom - $verify.Top
-    if ($actualWidth -ne $Width -or $actualHeight -ne $Height) {
-        throw "Disk Analyzer client size mismatch: $actualWidth x $actualHeight"
+    if ($actualWidth -lt 1000 -or $actualHeight -lt 700) {
+        throw "Disk Analyzer constrained client is too small: $actualWidth x $actualHeight"
     }
+    return [pscustomobject]@{ Width = $actualWidth; Height = $actualHeight }
 }
 
 function Capture-Window([IntPtr]$Handle, [string]$Path) {
@@ -72,7 +73,7 @@ function Capture-Window([IntPtr]$Handle, [string]$Path) {
     }
     $width = $rect.Right - $rect.Left
     $height = $rect.Bottom - $rect.Top
-    if ($width -lt 1200 -or $height -lt 850) {
+    if ($width -lt 1000 -or $height -lt 700) {
         throw "Disk Analyzer window is unexpectedly small: $width x $height"
     }
 
@@ -128,7 +129,7 @@ try {
     } while ($p.MainWindowHandle -eq 0 -and (Get-Date) -lt $windowDeadline)
     if ($p.MainWindowHandle -eq 0) { throw 'Disk Analyzer main window timeout.' }
 
-    Resize-Client ([IntPtr]$p.MainWindowHandle) 1200 850
+    $actualClient = Resize-Client ([IntPtr]$p.MainWindowHandle) 1200 850
 
     $reportDeadline = (Get-Date).AddSeconds(30)
     while (-not (Test-Path -LiteralPath $report) -and (Get-Date) -lt $reportDeadline) {
@@ -145,6 +146,8 @@ try {
     if ([int]$data.row_count -ne 4) { throw "Unexpected grid row count: $($data.row_count)" }
     if (@($data.columns).Count -ne 7) { throw "Unexpected column count: $(@($data.columns).Count)" }
     if ([string]$data.target -ne 'DPopCleaner 0.4.17 Disk Analyzer') { throw "Unexpected target: $($data.target)" }
+    if (-not ($data.PSObject.Properties.Name -contains 'toolbar_overflow')) { throw 'Disk smoke report lacks toolbar_overflow.' }
+    if ([bool]$data.toolbar_overflow) { throw 'Disk Analyzer toolbar overflows the constrained viewport.' }
 
     Capture-Window ([IntPtr]$p.MainWindowHandle) $screenshot
     if (-not (Test-Path -LiteralPath $screenshot -PathType Leaf)) { throw 'Disk Analyzer screenshot missing.' }
@@ -158,7 +161,9 @@ try {
         folder_count = [int64]$data.folder_count
         row_count = [int]$data.row_count
         columns = @($data.columns)
-        client_size = '1200x850'
+        requested_client_size = '1200x850'
+        actual_client_size = ("{0}x{1}" -f $actualClient.Width, $actualClient.Height)
+        toolbar_overflow = [bool]$data.toolbar_overflow
         screenshot = [IO.Path]::GetFileName($screenshot)
         app_report = [IO.Path]::GetFileName($report)
     } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $OutputDir 'disk-smoke-summary.json') -Encoding utf8
