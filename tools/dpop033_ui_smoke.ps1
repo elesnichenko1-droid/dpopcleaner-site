@@ -14,6 +14,20 @@ if (-not (Test-Path -LiteralPath $ExePath -PathType Leaf)) {
 }
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
+# 0.3.5 defaults WM_CLOSE to minimize-to-tray. The shared visual smoke needs
+# deterministic process shutdown, so isolate its settings and explicitly use
+# Exit semantics. Older recovery builds ignore DPOP_SETTINGS_ROOT.
+$smokeSettingsRoot = Join-Path $env:RUNNER_TEMP ('dpop-ui-smoke-settings-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $smokeSettingsRoot -Force | Out-Null
+$env:DPOP_SETTINGS_ROOT = $smokeSettingsRoot
+@'
+{
+  "schema_version": 2,
+  "tray_enabled": false,
+  "close_behavior": 0
+}
+'@ | Set-Content -LiteralPath (Join-Path $smokeSettingsRoot 'settings.json') -Encoding utf8
+
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System;
@@ -237,6 +251,8 @@ finally {
     if ($null -ne $process -and -not $process.HasExited) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     }
+    Remove-Item Env:DPOP_SETTINGS_ROOT -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $smokeSettingsRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 [pscustomobject]$report |
