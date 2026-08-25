@@ -4,6 +4,8 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>DiskAnalyzer</AssemblyName>
     <RootNamespace>DPop.DiskAnalyzer</RootNamespace>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DPop.Common\DPop.Common.csproj" />
