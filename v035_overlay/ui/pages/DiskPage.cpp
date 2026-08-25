@@ -44,6 +44,10 @@ std::wstring CountText(std::uint64_t value) {
     return std::to_wstring(value);
 }
 
+std::wstring AllocatedText(const dpop::disk::DiskNode& node) {
+    return node.allocatedComplete ? dpop::full::FormatBytes(node.allocatedBytes) : L"—";
+}
+
 bool LessNoCase(const std::wstring& a, const std::wstring& b) {
     return Lower(a) < Lower(b);
 }
@@ -150,7 +154,7 @@ void DiskPage::ApplySnapshot(dpop::disk::DiskScanSnapshot snapshot, bool finalSn
     const auto* rootNode = snapshot_.Find(snapshot_.rootId);
     if (rootNode) {
         summary_ = dpop::full::FormatBytes(rootNode->logicalBytes) + L" • занято " +
-                   dpop::full::FormatBytes(rootNode->allocatedBytes) + L" • файлов " +
+                   AllocatedText(*rootNode) + L" • файлов " +
                    std::to_wstring(rootNode->fileCount) + L" • папок " +
                    std::to_wstring(rootNode->directoryCount) + L" • ошибок " +
                    std::to_wstring(snapshot_.errorCount);
@@ -176,6 +180,9 @@ std::vector<dpop::disk::DiskNodeId> DiskPage::SortedChildren(const dpop::disk::D
         const auto* b = snapshot_.Find(rhsId);
         if (!a || !b) return lhsId < rhsId;
         if (a->directory != b->directory) return a->directory > b->directory;
+        if (sortColumn_ == 2 && a->allocatedComplete != b->allocatedComplete) {
+            return a->allocatedComplete;
+        }
 
         int cmp = 0;
         switch (sortColumn_) {
@@ -215,7 +222,7 @@ void DiskPage::AppendVisibleNode(dpop::disk::DiskNodeId id, unsigned depth, std:
     row.incomplete = node->incomplete;
     row.name = node->displayName;
     row.sizeText = dpop::full::FormatBytes(node->logicalBytes);
-    row.allocatedText = dpop::full::FormatBytes(node->allocatedBytes);
+    row.allocatedText = AllocatedText(*node);
     row.filesText = node->directory ? CountText(node->fileCount) : L"1";
     row.dirsText = node->directory ? CountText(node->directoryCount) : L"";
     row.parentPercent = dpop::disk::ParentPercent(*node, parent);
@@ -269,7 +276,7 @@ void DiskPage::ShowLargeFiles() {
         row.nodeId = node->id;
         row.name = node->path.wstring();
         row.sizeText = dpop::full::FormatBytes(node->logicalBytes);
-        row.allocatedText = dpop::full::FormatBytes(node->allocatedBytes);
+        row.allocatedText = AllocatedText(*node);
         row.filesText = L"1";
         row.parentPercent = rootNode ? dpop::disk::ParentPercent(*node, rootNode) : 0.0;
         row.modifiedText = ModifiedText(node->path);
