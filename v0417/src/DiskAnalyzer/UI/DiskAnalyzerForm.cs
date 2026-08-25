@@ -27,6 +27,9 @@ namespace DPop.DiskAnalyzer.UI
         private CancellationTokenSource _scanCancellation;
         private string _currentRoot;
         private DiskNode _rootNode;
+        private string _sortColumn = "size";
+        private bool _sortAscending;
+        private bool _showingLargeFiles;
 
         public DiskAnalyzerForm(LanguageCatalog language, DiskScanner scanner)
         {
@@ -88,6 +91,8 @@ namespace DPop.DiskAnalyzer.UI
 
             _grid = BuildGrid();
             _grid.CellPainting += GridCellPainting;
+            _grid.ColumnHeaderMouseClick += GridColumnHeaderMouseClick;
+            UpdateSortGlyph();
 
             Controls.Add(_grid);
             Controls.Add(_status);
@@ -151,7 +156,7 @@ namespace DPop.DiskAnalyzer.UI
                 Width = width,
                 MinimumWidth = Math.Min(width, 70),
                 AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
+                SortMode = DataGridViewColumnSortMode.Programmatic,
             };
         }
 
@@ -230,7 +235,9 @@ namespace DPop.DiskAnalyzer.UI
 
         private void LargeFilesClicked(object sender, EventArgs e)
         {
-            // Enabled when the large-file query is installed in the next tested step.
+            if (_rootNode == null) return;
+            _showingLargeFiles = true;
+            PopulateLargeFiles();
         }
 
         private void ExplorerClicked(object sender, EventArgs e)
@@ -283,6 +290,7 @@ namespace DPop.DiskAnalyzer.UI
             _currentRoot = root;
             _pathBox.Text = root;
             _scanCancellation = new CancellationTokenSource();
+            _showingLargeFiles = false;
             SetBusy(true);
             _status.Text = Format("disk.status_scanning", root);
 
@@ -336,13 +344,45 @@ namespace DPop.DiskAnalyzer.UI
             _explorerButton.Enabled = !busy && _rootNode != null;
         }
 
+        private void GridColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.ColumnIndex < 0) return;
+            var column = _grid.Columns[e.ColumnIndex].Name;
+            if (string.Equals(_sortColumn, column, StringComparison.OrdinalIgnoreCase))
+            {
+                _sortAscending = !_sortAscending;
+            }
+            else
+            {
+                _sortColumn = column;
+                _sortAscending = string.Equals(column, "name", StringComparison.OrdinalIgnoreCase);
+            }
+
+            UpdateSortGlyph();
+            if (_rootNode == null) return;
+            if (_showingLargeFiles)
+                PopulateLargeFiles();
+            else
+                PopulateTree(_rootNode);
+        }
+
+        private void UpdateSortGlyph()
+        {
+            foreach (DataGridViewColumn column in _grid.Columns)
+                column.HeaderCell.SortGlyphDirection = SortOrder.None;
+
+            var active = _grid.Columns[_sortColumn];
+            if (active != null)
+                active.HeaderCell.SortGlyphDirection = _sortAscending ? SortOrder.Ascending : SortOrder.Descending;
+        }
+
         private void PopulateTree(DiskNode root)
         {
             _grid.SuspendLayout();
             try
             {
                 _grid.Rows.Clear();
-                AddNode(root, null, 0, 100.0);
+                AddNode(root, 0, 100.0);
                 if (_grid.Rows.Count > 0)
                     _grid.Rows[0].Selected = true;
             }
@@ -352,9 +392,48 @@ namespace DPop.DiskAnalyzer.UI
             }
         }
 
-        private void AddNode(DiskNode node, DiskNode parent, int depth, double parentPercent)
+        private void PopulateLargeFiles()
+        {
+            var files = DiskTreeQuery.LargestFiles(_rootNode, 200);
+            var rows = files.Select(file => new DiskGridRow(
+                file,
+                0,
+                _rootNode.LogicalBytes <= 0 ? 0.0 : file.LogicalBytes * 100.0 / _rootNode.LogicalBytes));
+
+            _grid.SuspendLayout();
+            try
+            {
+                _grid.Rows.Clear();
+                foreach (var row in DiskGridSorter.Sort(rows, _sortColumn, _sortAscending))
+                    AddGridRow(row);
+                if (_grid.Rows.Count > 0)
+                    _grid.Rows[0].Selected = true;
+            }
+            finally
+            {
+                _grid.ResumeLayout();
+            }
+
+            _status.Text = L("disk.large_files") + ": " + files.Count.ToString("N0");
+        }
+
+        private void AddNode(DiskNode node, int depth, double parentPercent)
         {
             var model = new DiskGridRow(node, depth, parentPercent);
+            AddGridRow(model);
+
+            var childRows = node.Children.Select(child => new DiskGridRow(
+                child,
+                depth + 1,
+                node.LogicalBytes <= 0 ? 0.0 : child.LogicalBytes * 100.0 / node.LogicalBytes));
+
+            foreach (var child in DiskGridSorter.Sort(childRows, _sortColumn, _sortAscending))
+                AddNode(child.Node, depth + 1, child.ParentPercent);
+        }
+
+        private void AddGridRow(DiskGridRow model)
+        {
+            var node = model.Node;
             var modified = node.ModifiedUtc == default(DateTime)
                 ? "—"
                 : node.ModifiedUtc.ToLocalTime().ToString("g");
@@ -368,14 +447,6 @@ namespace DPop.DiskAnalyzer.UI
                 model.ParentPercent.ToString("0.0") + " %",
                 modified);
             _grid.Rows[index].Tag = model;
-
-            foreach (var child in node.Children.OrderByDescending(x => x.LogicalBytes).ThenBy(x => x.Name))
-            {
-                var percent = node.LogicalBytes <= 0
-                    ? 0.0
-                    : child.LogicalBytes * 100.0 / node.LogicalBytes;
-                AddNode(child, node, depth + 1, percent);
-            }
         }
 
         private void GridCellPainting(object sender, DataGridViewCellPaintingEventArgs e)
