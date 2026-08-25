@@ -13,6 +13,7 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $settingsRoot = Join-Path $env:RUNNER_TEMP 'dpop035-settings-smoke'
 $settingsPath = Join-Path $settingsRoot 'settings.json'
+$defaultSettingsPath = Join-Path $env:LOCALAPPDATA 'DPopCleaner/settings.json'
 Remove-Item -LiteralPath $settingsRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $settingsRoot -Force | Out-Null
 @'
@@ -95,10 +96,10 @@ function Open-CleaningSettings([Diagnostics.Process]$p) {
   if($gear -eq [IntPtr]::Zero){throw 'Settings gear (1100) not found'}
   [void][DPop035SettingsWin32]::SendMessage($main,0x0111,[IntPtr]1100,$gear)
   Start-Sleep -Milliseconds 300
+  $loadStatus=Text ([DPop035SettingsWin32]::GetDlgItem($main,1201))
 
   $large=Find-VisibleById $main 3343
   if($large -eq [IntPtr]::Zero){
-    # Settings opens in General; resolve the page via its visible General control.
     $general=Find-VisibleById $main 3320
     if($general -eq [IntPtr]::Zero){throw 'Visible Settings page control not found'}
     $settingsPage=[DPop035SettingsWin32]::GetParent($general)
@@ -115,7 +116,7 @@ function Open-CleaningSettings([Diagnostics.Process]$p) {
   if($large -eq [IntPtr]::Zero -or -not [DPop035SettingsWin32]::IsWindowVisible($large)){
     throw 'Large-file setting (3343) is not visible after selecting Cleaning'
   }
-  return [pscustomobject]@{ Main=$main; Page=$settingsPage; Large=$large }
+  return [pscustomobject]@{ Main=$main; Page=$settingsPage; Large=$large; LoadStatus=$loadStatus }
 }
 function Close-App([Diagnostics.Process]$p,[IntPtr]$main) {
   [void][DPop035SettingsWin32]::SendMessage($main,0x0010,[IntPtr]::Zero,[IntPtr]::Zero)
@@ -158,19 +159,27 @@ try {
   $statusAfterSave=Text ([DPop035SettingsWin32]::GetDlgItem($firstUi.Main,1201))
   $logAfterSave=Text ([DPop035SettingsWin32]::GetDlgItem($firstUi.Main,1202))
   $uiValueAfterSave=Text $firstUi.Large
+  $fixtureJson=if(Test-Path -LiteralPath $settingsPath){Get-Content -LiteralPath $settingsPath -Raw}else{'<missing>'}
+  $defaultJson=if(Test-Path -LiteralPath $defaultSettingsPath){Get-Content -LiteralPath $defaultSettingsPath -Raw}else{'<missing>'}
   [pscustomobject]@{
-    status=$statusAfterSave
+    load_status=$firstUi.LoadStatus
+    expected_fixture_path=$settingsPath
+    default_settings_path=$defaultSettingsPath
+    status_after_save=$statusAfterSave
     ui_value=$uiValueAfterSave
     save_visible=[DPop035SettingsWin32]::IsWindowVisible($save)
     save_enabled=[DPop035SettingsWin32]::IsWindowEnabled($save)
+    fixture_json=$fixtureJson
+    default_json=$defaultJson
     log=$logAfterSave
   } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'settings-save-command-diagnostics.json') -Encoding utf8
   [void](Capture $firstUi.Main 'settings-after-save-command')
+  if(Test-Path -LiteralPath $defaultSettingsPath){Copy-Item -LiteralPath $defaultSettingsPath -Destination (Join-Path $OutputDir 'default-settings-after-save.json') -Force}
 
   if(-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)){throw 'settings.json disappeared after Save'}
   $saved=Get-Content -LiteralPath $settingsPath -Raw
   if($saved -notmatch '"large_file_mb"\s*:\s*777'){
-    throw "settings.json did not persist large_file_mb=777. UI=$uiValueAfterSave Status=$statusAfterSave Log=$logAfterSave JSON=$saved"
+    throw "settings.json did not persist large_file_mb=777. LoadStatus=$($firstUi.LoadStatus) UI=$uiValueAfterSave Status=$statusAfterSave DefaultPath=$defaultSettingsPath JSON=$saved"
   }
   Copy-Item -LiteralPath $settingsPath -Destination (Join-Path $OutputDir 'settings-after-save.json') -Force
   Close-App $first $firstUi.Main
