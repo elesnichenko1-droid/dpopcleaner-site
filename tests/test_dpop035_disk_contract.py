@@ -10,6 +10,7 @@ TREE_H = ROOT / "v035_overlay" / "ui" / "controls" / "DiskTreeList.h"
 TREE_CPP = ROOT / "v035_overlay" / "ui" / "controls" / "DiskTreeList.cpp"
 PAGE_H = ROOT / "v035_overlay" / "ui" / "pages" / "DiskPage.h"
 PAGE_CPP = ROOT / "v035_overlay" / "ui" / "pages" / "DiskPage.cpp"
+SMOKE = ROOT / "tools" / "dpop035_disk_smoke.ps1"
 
 
 class DiskContractTests(unittest.TestCase):
@@ -63,6 +64,21 @@ class DiskContractTests(unittest.TestCase):
         self.assertNotIn("BrowserEntry", header)
         self.assertNotIn("Содержимое папки", source)
         self.assertNotIn("Безопасность", source)
+
+    def test_disk_runtime_gate_seeds_fixture_before_process_start(self):
+        header = PAGE_H.read_text(encoding="utf-8")
+        smoke = SMOKE.read_text(encoding="utf-8-sig")
+        self.assertIn("DPOP_DISK_TEST_ROOT", header)
+        self.assertIn("GetEnvironmentVariableW", header)
+        self.assertIn('std::filesystem::path(L"C:\\\\")', header)
+        self.assertIn("$env:DPOP_DISK_TEST_ROOT = $fixture", smoke)
+        self.assertIn("$env:DPOP_DISK_TRACE_FILE = $trace", smoke)
+        self.assertIn("$env:DPOP_SETTINGS_ROOT = $settingsRoot", smoke)
+        self.assertIn("DiskPage did not inherit controlled fixture root", smoke)
+        self.assertIn("Disk scanner root mismatch", smoke)
+        self.assertIn("Remove-Item Env:DPOP_DISK_TEST_ROOT", smoke)
+        self.assertNotIn("SetWindowText($edit", smoke)
+        self.assertNotIn("SetWindowText(IntPtr h, string text)", smoke)
 
     def test_disk_page_never_deletes_arbitrary_files(self):
         source = PAGE_CPP.read_text(encoding="utf-8")
