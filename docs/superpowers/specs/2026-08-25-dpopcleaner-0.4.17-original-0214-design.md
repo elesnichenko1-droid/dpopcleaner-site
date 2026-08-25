@@ -28,7 +28,7 @@ Because the original 0.2.14 source code is unavailable, 0.4.17 is structured as 
 
 ```text
 DPopCleaner\
-├─ DPopCleaner.exe                 # original 0.2.14 core binary, preserved behavior
+├─ DPopCleaner.exe                 # original 0.2.14 core behavior
 ├─ Languages\
 │  ├─ ru.json
 │  └─ en.json
@@ -51,11 +51,26 @@ DPopCleaner\
 
 ### Original core rule
 
-`DPopCleaner.exe` is the actual preserved 0.2.14 program. Existing 0.2.14 functions are not reimplemented just to make them look newer.
+The preserved 0.2.14 executable is the real legacy core. Existing 0.2.14 functions are not reimplemented just to make them look newer.
 
 New functionality is delivered as isolated companion modules. No DLL injection, no undocumented in-process hooks, and no AV-hostile binary instrumentation are part of the first 0.4.17 scope.
 
 If a future requirement demands adding a new button directly inside the legacy 0.2.14 window, that is a separate reverse-engineering task and must be approved separately. It is not silently emulated in 0.4.17.
+
+## Version identity treatment
+
+The repository keeps the original 0.2.14 input binary unchanged and hash-verifiable.
+
+For the staged 0.4.17 distribution we may apply **only deterministic cosmetic version-resource/string patching** to a copied binary when all of the following are true:
+
+- the original input hash matches the pinned 0.2.14 hash;
+- the exact legacy version token is found the expected number of times;
+- the replacement is equal or shorter and is NUL-padded without moving PE sections;
+- no executable code/control-flow bytes are modified;
+- PE structure and launch smoke remain valid;
+- UI smoke confirms `0.4.17` and no visible `BETA/R/Stage` identity remains.
+
+This is binary metadata/text patching, not a source reconstruction. If the contract cannot prove a safe patch, the build fails rather than guessing.
 
 ## Languages
 
@@ -75,7 +90,7 @@ Example keys:
 
 Only one language dictionary is active at a time. Missing keys fall back to Russian. New UI must never create two overlapping translated controls.
 
-The untouched original 0.2.14 legacy window keeps its original built-in text. We do not claim that external language files can safely rewrite hardcoded legacy strings without source code.
+The original 0.2.14 legacy UI is not falsely advertised as fully externalized. Its built-in Russian text remains legacy text unless a specific display token is covered by the safe cosmetic patch contract above.
 
 ## Shell folder
 
@@ -185,7 +200,7 @@ A failed rollback must leave diagnostic information and must not delete the back
 
 ## Installer
 
-The installer produces a clean `DPopCleaner 0.4.17` installation containing the preserved original core plus the new external modules and folders.
+The installer produces a clean `DPopCleaner 0.4.17` installation containing the preserved original core behavior plus the new external modules and folders.
 
 It must create the full folder structure even before the first history item exists, so `Languages`, `Shell`, and `Documentation` are visible and predictable immediately after installation.
 
@@ -197,7 +212,7 @@ The website is redesigned around the real application rather than marketing clai
 
 Hero section:
 
-- real screenshot of the preserved 0.2.14 DPopCleaner window;
+- real screenshot of the 0.4.17 staged DPopCleaner executable derived from the verified original 0.2.14 core;
 - `DPopCleaner 0.4.17`;
 - one primary download button;
 - Windows 10/11 x64;
@@ -205,7 +220,7 @@ Hero section:
 
 Feature sections show:
 
-- original DPopCleaner core;
+- original DPopCleaner core behavior;
 - Disk Analyzer;
 - Restore Center;
 - external Languages architecture;
@@ -218,17 +233,19 @@ The download button is enabled for 0.4.17 only after the installer has passed in
 0.4.17 is not published until all of the following pass:
 
 1. preserved original 0.2.14 core hash/input contract;
-2. installer contains `Languages`, `Shell`, `Documentation`, `Modules`;
-3. no reconstructed C++ application sources are included in the 0.4.17 staged payload;
-4. Disk Analyzer controlled-fixture scan;
-5. unknown allocated size displays `—`;
-6. Restore Center reversible action round-trip;
-7. non-reversible history item has no fake restore action;
-8. language pack switch in new modules does not overlap controls;
-9. silent installer test;
-10. installed launch smoke;
-11. GitHub Release asset hash;
-12. live website version and installer SHA-256 verification.
+2. deterministic version-identity patch contract, or fail closed;
+3. installer contains `Languages`, `Shell`, `Documentation`, `Modules`;
+4. no reconstructed C++ application sources are included in the 0.4.17 staged payload;
+5. Disk Analyzer controlled-fixture scan;
+6. unknown allocated size displays `—`;
+7. Restore Center reversible action round-trip;
+8. non-reversible history item has no fake restore action;
+9. language pack switch in new modules does not overlap controls;
+10. silent installer test;
+11. installed launch smoke;
+12. installed UI shows `0.4.17` with no `BETA/R/Stage` identity;
+13. GitHub Release asset hash;
+14. live website version and installer SHA-256 verification.
 
 ## Explicit exclusions
 
@@ -236,5 +253,6 @@ The download button is enabled for 0.4.17 only after the installer has passed in
 - No `v035_overlay` application code.
 - No reconstructed C++ DPopCleaner application as the runtime base.
 - No fake claim that the original 0.2.14 hardcoded UI has been fully externalized into language files.
+- No DLL injection or undocumented runtime hooks in 0.4.17.
 - No direct delete action in Disk Analyzer.
 - No rollback promise for data that DPopCleaner cannot actually restore.
