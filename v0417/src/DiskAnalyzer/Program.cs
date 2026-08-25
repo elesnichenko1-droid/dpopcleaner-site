@@ -15,6 +15,7 @@ namespace DPop.DiskAnalyzer
         private static void Main(string[] args)
         {
             var root = GetArgument(args, "--root");
+            var smokeReport = GetArgument(args, "--smoke-report");
             var languageCode = GetArgument(args, "--lang")
                 ?? CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 
@@ -31,6 +32,7 @@ namespace DPop.DiskAnalyzer
             var form = new DiskAnalyzerForm(language, scanner)
             {
                 InitialRoot = root,
+                SmokeReportPath = smokeReport,
             };
             Application.Run(form);
         }
