@@ -192,11 +192,10 @@ namespace DPop.RestoreCenter
 
         private static string ResolveInstallRoot()
         {
-            var moduleDirectory = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var parent = Directory.GetParent(moduleDirectory);
-            return parent != null && string.Equals(parent.Name, "Modules", StringComparison.OrdinalIgnoreCase)
-                ? parent.Parent?.FullName ?? moduleDirectory
-                : moduleDirectory;
+            var moduleDirectory = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            if (string.Equals(moduleDirectory.Name, "Modules", StringComparison.OrdinalIgnoreCase) && moduleDirectory.Parent != null)
+                return moduleDirectory.Parent.FullName;
+            return moduleDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
         private static string ReadArgument(string[] args, string name)
