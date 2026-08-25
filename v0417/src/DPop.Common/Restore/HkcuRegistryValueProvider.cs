@@ -6,9 +6,16 @@ using Microsoft.Win32;
 
 namespace DPop.Common.Restore
 {
-    public sealed class HkcuRegistryValueProvider
+    public sealed class HkcuRegistryValueProvider : IRestoreProvider
     {
         private readonly JavaScriptSerializer _json = new JavaScriptSerializer();
+
+        public string BackupCategory => "Registry";
+
+        public bool CanHandle(string operationId)
+        {
+            return string.Equals(operationId, "registry.hkcu", StringComparison.Ordinal);
+        }
 
         public static string CreateTarget(string subKey, string valueName, RegistryValueKind valueKind)
         {
