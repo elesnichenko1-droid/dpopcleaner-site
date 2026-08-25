@@ -5,7 +5,7 @@ using System.Web.Script.Serialization;
 
 namespace DPop.Common.Restore
 {
-    public sealed class FileStateProvider
+    public sealed class FileStateProvider : IRestoreProvider
     {
         private readonly string _allowedRoot;
         private readonly string _allowedPrefix;
@@ -22,13 +22,21 @@ namespace DPop.Common.Restore
                 : _allowedRoot + Path.DirectorySeparatorChar;
         }
 
+        public string BackupCategory => "Settings";
+
+        public bool CanHandle(string operationId)
+        {
+            return string.Equals(operationId, "settings.file", StringComparison.Ordinal);
+        }
+
         public string Capture(string targetPath)
         {
             var target = ValidateTarget(targetPath);
+            var exists = File.Exists(target);
             var state = new Dictionary<string, object>
             {
-                ["exists"] = File.Exists(target),
-                ["bytes"] = File.Exists(target) ? Convert.ToBase64String(File.ReadAllBytes(target)) : null,
+                ["exists"] = exists,
+                ["bytes"] = exists ? Convert.ToBase64String(File.ReadAllBytes(target)) : null,
             };
             return _json.Serialize(state);
         }
@@ -53,8 +61,7 @@ namespace DPop.Common.Restore
             if (state == null || !state.TryGetValue("exists", out existsValue) || !(existsValue is bool))
                 throw new InvalidDataException("File restore state has no valid exists flag.");
 
-            var existed = (bool)existsValue;
-            if (!existed)
+            if (!(bool)existsValue)
             {
                 if (File.Exists(target)) File.Delete(target);
                 return;
@@ -102,9 +109,9 @@ namespace DPop.Common.Restore
 
         private static string NormalizeDirectory(string path)
         {
-            var full = Path.GetFullPath(path)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return full.Length == 0 ? Path.GetPathRoot(Path.GetFullPath(path)) : full;
+            var resolved = Path.GetFullPath(path);
+            var full = resolved.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return full.Length == 0 ? Path.GetPathRoot(resolved) : full;
         }
     }
 }
