@@ -11,7 +11,9 @@ if (-not (Test-Path -LiteralPath $ExePath -PathType Leaf)) { throw "EXE missing:
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $fixture = Join-Path $env:RUNNER_TEMP 'dpop035-disk-fixture'
+$trace = Join-Path $OutputDir 'disk-root-trace.txt'
 Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $trace -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path (Join-Path $fixture 'Users/Test/Cache') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $fixture 'Windows/Logs') -Force | Out-Null
 [IO.File]::WriteAllBytes((Join-Path $fixture 'root.bin'), (New-Object byte[] 4096))
@@ -51,11 +53,11 @@ public static class DPop035DiskWin32 {
 '@
 
 function Text([IntPtr]$h) { if($h -eq [IntPtr]::Zero){return ''}; $b=New-Object Text.StringBuilder 4096; [void][DPop035DiskWin32]::GetWindowText($h,$b,$b.Capacity); $b.ToString() }
-function Class([IntPtr]$h) { $b=New-Object Text.StringBuilder 128; [void][DPop035DiskWin32]::GetClassName($h,$b,$b.Capacity); $b.ToString() }
+function ControlClass([IntPtr]$h) { $b=New-Object Text.StringBuilder 128; [void][DPop035DiskWin32]::GetClassName($h,$b,$b.Capacity); $b.ToString() }
 function Find-Control([IntPtr]$main,[string]$class,[string]$text='') {
   foreach($h in [DPop035DiskWin32]::Children($main)) {
     if(-not [DPop035DiskWin32]::IsWindowVisible($h)) { continue }
-    if((Class $h) -ne $class) { continue }
+    if((ControlClass $h) -ne $class) { continue }
     if($text -and (Text $h) -ne $text) { continue }
     return $h
   }
@@ -64,7 +66,7 @@ function Find-Control([IntPtr]$main,[string]$class,[string]$text='') {
 function Find-VisibleControlById([IntPtr]$main,[string]$class,[int]$id) {
   foreach($h in [DPop035DiskWin32]::Children($main)) {
     if(-not [DPop035DiskWin32]::IsWindowVisible($h)) { continue }
-    if((Class $h) -ne $class) { continue }
+    if((ControlClass $h) -ne $class) { continue }
     if([DPop035DiskWin32]::GetDlgCtrlID($h) -ne $id) { continue }
     return $h
   }
@@ -91,6 +93,7 @@ function Capture([IntPtr]$h,[string]$name) {
 
 $p=$null
 try {
+  $env:DPOP_DISK_TRACE_FILE = $trace
   $p=Start-Process -FilePath $ExePath -PassThru
   $deadline=(Get-Date).AddSeconds(30)
   do { Start-Sleep -Milliseconds 250; $p.Refresh(); if($p.HasExited){throw 'App exited before window appeared'} } while($p.MainWindowHandle -eq 0 -and (Get-Date)-lt $deadline)
@@ -108,7 +111,8 @@ try {
   $diskPage=[DPop035DiskWin32]::GetParent($edit)
   if($diskPage -eq [IntPtr]::Zero){throw 'Disk page parent not found'}
   if(-not [DPop035DiskWin32]::IsWindowVisible($diskPage)){throw 'Resolved Disk page is not visible'}
-  if((Class $diskPage) -ne 'DPopCleaner032RecoveryPage'){throw "Unexpected Disk page class: $(Class $diskPage)"}
+  $pageClass = ControlClass $diskPage
+  if($pageClass -ne 'DPopCleaner032RecoveryPage'){throw "Unexpected Disk page class: $pageClass"}
   $scan=[DPop035DiskWin32]::GetDlgItem($diskPage,3303)
   $stop=[DPop035DiskWin32]::GetDlgItem($diskPage,3304)
   if($scan -eq [IntPtr]::Zero -or $stop -eq [IntPtr]::Zero){throw 'Disk scan controls not found on Disk page'}
@@ -116,17 +120,18 @@ try {
   if((Text $scan) -ne 'Сканировать' -or (Text $stop) -ne 'Стоп'){throw 'Disk control ID contract drifted'}
   if(-not [DPop035DiskWin32]::SetWindowText($edit,$fixture)){throw 'Could not set disk fixture path'}
   if((Text $edit) -ne $fixture){throw "Disk fixture path did not reach path control: $(Text $edit)"}
-  # Send exactly one BN_CLICKED command to the visible Disk page.
   [void][DPop035DiskWin32]::SendMessage($diskPage,0x0111,[IntPtr]3303,$scan)
 
   $deadline=(Get-Date).AddSeconds(20)
   do { Start-Sleep -Milliseconds 200; $p.Refresh(); if($p.HasExited){throw 'App exited during disk scan'} } while([DPop035DiskWin32]::IsWindowEnabled($stop) -and (Get-Date)-lt $deadline)
+  $rootTrace = if(Test-Path -LiteralPath $trace){(Get-Content -LiteralPath $trace -Raw).Trim()}else{'<missing>'}
   if([DPop035DiskWin32]::IsWindowEnabled($stop)){
     $status=Text ([DPop035DiskWin32]::GetDlgItem($main,1201))
     $log=Text ([DPop035DiskWin32]::GetDlgItem($main,1202))
-    throw "Disk fixture scan did not finish in time. Path=$(Text $edit) PageClass=$(Class $diskPage) PageVisible=$([DPop035DiskWin32]::IsWindowVisible($diskPage)) Status=$status Log=$log"
+    throw "Disk fixture scan did not finish in time. Path=$(Text $edit) PageClass=$pageClass RootTrace=$rootTrace Status=$status Log=$log"
   }
   if(-not [DPop035DiskWin32]::IsWindowEnabled($scan)){throw 'Scan button was not restored after completion'}
+  if($rootTrace -ne $fixture){throw "Disk scanner root mismatch. Expected=$fixture Actual=$rootTrace"}
 
   $capture1200=Capture $main 'disk-1200x850'
   Resize-Client $main 1100 700
@@ -135,6 +140,7 @@ try {
   [pscustomobject]@{
     target='DPopCleaner 0.3.5 BETA R1'
     fixture=$fixture
+    scanner_root=$rootTrace
     scan_finished=$true
     capture_1200=$capture1200
     capture_1100=$capture1100
@@ -145,6 +151,7 @@ try {
   if($p.ExitCode -ne 0){throw "App exited with code $($p.ExitCode)"}
 }
 finally {
+  Remove-Item Env:DPOP_DISK_TRACE_FILE -ErrorAction SilentlyContinue
   if($null -ne $p -and -not $p.HasExited){Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue}
   Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction SilentlyContinue
 }
