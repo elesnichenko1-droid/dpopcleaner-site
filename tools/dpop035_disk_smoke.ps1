@@ -61,8 +61,9 @@ function Find-Control([IntPtr]$main,[string]$class,[string]$text='') {
   }
   return [IntPtr]::Zero
 }
-function Find-ControlById([IntPtr]$main,[string]$class,[int]$id) {
+function Find-VisibleControlById([IntPtr]$main,[string]$class,[int]$id) {
   foreach($h in [DPop035DiskWin32]::Children($main)) {
+    if(-not [DPop035DiskWin32]::IsWindowVisible($h)) { continue }
     if((Class $h) -ne $class) { continue }
     if([DPop035DiskWin32]::GetDlgCtrlID($h) -ne $id) { continue }
     return $h
@@ -102,18 +103,20 @@ try {
   [void][DPop035DiskWin32]::SendMessage($diskTab,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
   Start-Sleep -Milliseconds 700
 
-  $edit=Find-ControlById $main 'Edit' 3320
-  if($edit -eq [IntPtr]::Zero){throw 'Disk path edit (3320) not found'}
+  $edit=Find-VisibleControlById $main 'Edit' 3320
+  if($edit -eq [IntPtr]::Zero){throw 'Visible Disk path edit (3320) not found'}
   $diskPage=[DPop035DiskWin32]::GetParent($edit)
   if($diskPage -eq [IntPtr]::Zero){throw 'Disk page parent not found'}
+  if(-not [DPop035DiskWin32]::IsWindowVisible($diskPage)){throw 'Resolved Disk page is not visible'}
+  if((Class $diskPage) -ne 'DPopCleaner032RecoveryPage'){throw "Unexpected Disk page class: $(Class $diskPage)"}
   $scan=[DPop035DiskWin32]::GetDlgItem($diskPage,3303)
   $stop=[DPop035DiskWin32]::GetDlgItem($diskPage,3304)
   if($scan -eq [IntPtr]::Zero -or $stop -eq [IntPtr]::Zero){throw 'Disk scan controls not found on Disk page'}
+  if(-not [DPop035DiskWin32]::IsWindowVisible($scan) -or -not [DPop035DiskWin32]::IsWindowVisible($stop)){throw 'Disk scan controls are not visible'}
   if((Text $scan) -ne 'Сканировать' -or (Text $stop) -ne 'Стоп'){throw 'Disk control ID contract drifted'}
   if(-not [DPop035DiskWin32]::SetWindowText($edit,$fixture)){throw 'Could not set disk fixture path'}
   if((Text $edit) -ne $fixture){throw "Disk fixture path did not reach path control: $(Text $edit)"}
-  # Send exactly one BN_CLICKED command to the Disk page. This distinguishes
-  # page state from any BM_CLICK automation side effects on an owner-drawn button.
+  # Send exactly one BN_CLICKED command to the visible Disk page.
   [void][DPop035DiskWin32]::SendMessage($diskPage,0x0111,[IntPtr]3303,$scan)
 
   $deadline=(Get-Date).AddSeconds(20)
@@ -121,7 +124,7 @@ try {
   if([DPop035DiskWin32]::IsWindowEnabled($stop)){
     $status=Text ([DPop035DiskWin32]::GetDlgItem($main,1201))
     $log=Text ([DPop035DiskWin32]::GetDlgItem($main,1202))
-    throw "Disk fixture scan did not finish in time. Path=$(Text $edit) Status=$status Log=$log"
+    throw "Disk fixture scan did not finish in time. Path=$(Text $edit) PageClass=$(Class $diskPage) PageVisible=$([DPop035DiskWin32]::IsWindowVisible($diskPage)) Status=$status Log=$log"
   }
   if(-not [DPop035DiskWin32]::IsWindowEnabled($scan)){throw 'Scan button was not restored after completion'}
 
