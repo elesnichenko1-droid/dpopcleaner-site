@@ -69,5 +69,38 @@ namespace DPop.DiskAnalyzer.Tests
             Assert.IsFalse(linkNode.AllocatedComplete);
             Assert.IsNull(linkNode.AllocatedBytes);
         }
+
+        [TestMethod]
+        public async Task ScanReportsProgressAndHonorsCancellation()
+        {
+            const string root = @"C:\fixture";
+            var entries = Enumerable.Range(1, 200)
+                .Select(i => new FileSystemEntry
+                {
+                    FullPath = root + @"\file" + i + ".bin",
+                    Name = "file" + i + ".bin",
+                    Length = i,
+                    ModifiedUtc = DateTime.UtcNow,
+                })
+                .ToArray();
+
+            var fs = new FakeFileSystemView();
+            fs.AddDirectory(root, entries);
+            var scanner = new DiskScanner(new FakeAllocationProvider(), fs);
+            var seen = new List<ScanProgress>();
+            var cts = new CancellationTokenSource();
+
+            await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () =>
+                await scanner.ScanAsync(root, cts.Token, progress =>
+                {
+                    seen.Add(progress);
+                    if (progress.FilesScanned >= 10)
+                        cts.Cancel();
+                }));
+
+            Assert.IsTrue(seen.Count > 0);
+            Assert.IsTrue(seen.Any(x => x.FilesScanned >= 10));
+            Assert.IsTrue(seen.All(x => !string.IsNullOrWhiteSpace(x.CurrentPath)));
+        }
     }
 }
