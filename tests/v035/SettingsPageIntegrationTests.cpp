@@ -1,4 +1,5 @@
 #include "modules/SettingsStore.h"
+#include "ui/Controls.h"
 #include "ui/SessionLog.h"
 #include "ui/pages/SettingsPage.h"
 
@@ -96,7 +97,7 @@ void SavePage(dpop::ui::SettingsPage& page) {
         reinterpret_cast<LPARAM>(save));
 }
 
-void TestSettingsPageHandlesOwnerDrawButtons() {
+void TestSettingsPageHandlesOwnerDrawButtonsAndTracksActiveSection() {
     TempSettingsRoot temp;
     InitPageControls();
 
@@ -106,8 +107,14 @@ void TestSettingsPageHandlesOwnerDrawButtons() {
     Require(page.Create(host, log), "SettingsPage::Create failed for owner-draw test");
     page.Layout({0, 0, 1200, 850});
 
-    HWND button = GetDlgItem(page.Hwnd(), 3300);
-    Require(button != nullptr, "General section button 3300 missing");
+    HWND general = GetDlgItem(page.Hwnd(), 3300);
+    HWND cleaning = GetDlgItem(page.Hwnd(), 3301);
+    Require(general != nullptr, "General section button 3300 missing");
+    Require(cleaning != nullptr, "Cleaning section button 3301 missing");
+    Require(dpop::ui::ButtonVisualFor(general) == dpop::ui::ButtonVisual::Accent,
+            "General section is not initially accented");
+    Require(dpop::ui::ButtonVisualFor(cleaning) == dpop::ui::ButtonVisual::Normal,
+            "Cleaning section is unexpectedly accented initially");
 
     HDC windowDc = GetDC(page.Hwnd());
     Require(windowDc != nullptr, "GetDC failed for owner-draw test");
@@ -121,7 +128,7 @@ void TestSettingsPageHandlesOwnerDrawButtons() {
     draw.CtlType = ODT_BUTTON;
     draw.CtlID = 3300;
     draw.itemAction = ODA_DRAWENTIRE;
-    draw.hwndItem = button;
+    draw.hwndItem = general;
     draw.hDC = memoryDc;
     draw.rcItem = RECT{0, 0, 240, 48};
 
@@ -138,6 +145,13 @@ void TestSettingsPageHandlesOwnerDrawButtons() {
 
     Require(handled == TRUE,
             "PageBase did not handle WM_DRAWITEM for a page-owned button");
+
+    SelectCleaning(page);
+    Require(dpop::ui::ButtonVisualFor(general) == dpop::ui::ButtonVisual::Normal,
+            "General section kept the accent after selecting Cleaning");
+    Require(dpop::ui::ButtonVisualFor(cleaning) == dpop::ui::ButtonVisual::Accent,
+            "Cleaning section did not receive the accent after selection");
+
     Require(DestroyWindow(host) != FALSE, "could not destroy owner-draw integration host");
 }
 
@@ -205,7 +219,7 @@ void TestSettingsPagePersistsAndRestoresLargeFileThreshold() {
 
 int main() {
     try {
-        TestSettingsPageHandlesOwnerDrawButtons();
+        TestSettingsPageHandlesOwnerDrawButtonsAndTracksActiveSection();
         TestSettingsPagePersistsAndRestoresLargeFileThreshold();
         return 0;
     } catch (const std::exception& ex) {
