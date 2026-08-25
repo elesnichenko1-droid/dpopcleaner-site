@@ -81,6 +81,14 @@ jobs:
           ctest --test-dir $build -C Release -R '^SettingsPageIntegrationTests$' --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw 'SettingsPage same-process persistence gate failed.' }
 
+      - name: Capture Settings at supported release sizes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:DPOP035_OUTPUT 'artifacts/DPopCleaner.exe'
+          $evidence = Join-Path $env:DPOP035_OUTPUT 'evidence/settings'
+          ./tools/dpop035_settings_visual_smoke.ps1 -ExePath $exe -OutputDir $evidence
+
       - name: Verify TreeSize-style Disk UI on controlled fixture
         shell: pwsh
         run: |
