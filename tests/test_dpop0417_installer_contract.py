@@ -23,6 +23,7 @@ class DPop0417InstallerContractTests(unittest.TestCase):
         self.assertIn('shell\\*', lowered)
         self.assertIn('documentation\\*', lowered)
         self.assertIn('resources\\*', lowered)
+        self.assertIn('name: "{app}\\documentation"; permissions: users-modify', lowered)
         self.assertNotIn('downloads\\dpopcleaner_0.2.14_beta.exe', lowered)
 
         smoke_text = smoke.read_text(encoding="utf-8").lower()
