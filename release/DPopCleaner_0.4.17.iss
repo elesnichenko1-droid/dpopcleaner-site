@@ -47,7 +47,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Dirs]
 Name: "{app}\Languages"
 Name: "{app}\Shell"
-Name: "{app}\Documentation"
+Name: "{app}\Documentation"; Permissions: users-modify
 Name: "{app}\Modules"
 Name: "{app}\Resources"
 
