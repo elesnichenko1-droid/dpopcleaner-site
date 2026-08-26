@@ -45,6 +45,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_dpop0417_release_contract.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_zapret_screen_fix_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run DPop.Common tests
         shell: pwsh
@@ -58,23 +60,27 @@ jobs:
           dotnet test v0417/tests/DiskAnalyzer.Tests/DiskAnalyzer.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build DPop.Common
+      - name: Run Zapret Screen Fix unit tests
         shell: pwsh
         run: |
-          dotnet build v0417/src/DPop.Common/DPop.Common.csproj -c Release --nologo
+          dotnet test v0417/tests/ZapretScreenFix.Tests/ZapretScreenFix.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build DPop.Common
+        shell: pwsh
+        run: dotnet build v0417/src/DPop.Common/DPop.Common.csproj -c Release --nologo
 
       - name: Build Disk Analyzer
         shell: pwsh
-        run: |
-          dotnet build v0417/src/DiskAnalyzer/DiskAnalyzer.csproj -c Release --nologo
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: dotnet build v0417/src/DiskAnalyzer/DiskAnalyzer.csproj -c Release --nologo
 
       - name: Build Restore Center
         shell: pwsh
-        run: |
-          dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
+
+      - name: Build Zapret Screen Fix
+        shell: pwsh
+        run: dotnet build v0417/src/ZapretScreenFix/ZapretScreenFix.csproj -c Release --nologo
 
       - name: Stage approved 0.4.17 package payload
         shell: pwsh
@@ -82,43 +88,30 @@ jobs:
 
       - name: Run Disk Analyzer staged UI smoke
         shell: pwsh
-        run: |
-          ./tools/dpop0417_disk_smoke.ps1 `
-            -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' `
-            -OutputDir '_release/0.4.17/evidence/disk'
+        run: ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.17/evidence/disk'
 
       - name: Run Restore Center staged roundtrip smoke
         shell: pwsh
-        run: |
-          ./tools/dpop0417_restore_smoke.ps1 `
-            -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' `
-            -OutputDir '_release/0.4.17/evidence/restore'
+        run: ./tools/dpop0417_restore_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' -OutputDir '_release/0.4.17/evidence/restore'
 
       - name: Verify staged original core is byte-identical
         shell: pwsh
         run: |
           $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
           $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
-          if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) {
-            throw "Staged original core changed: $blob"
-          }
+          if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Staged original core changed: $blob" }
           Write-Host "Immutable original core verified: $blob"
 
       - name: Build DPopCleaner 0.4.17 installer
         shell: pwsh
         run: |
-          $candidates = @(
-            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
-            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
-          )
+          $candidates = @((Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'), (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'))
           $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
           if (-not $iscc) { throw 'Inno Setup 6 ISCC.exe was not found on windows-2022.' }
           New-Item -ItemType Directory -Path '_release/0.4.17/installer' -Force | Out-Null
           & $iscc 'release/DPopCleaner_0.4.17.iss'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path -LiteralPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' -PathType Leaf)) {
-            throw 'Expected DPopCleaner_Setup_0.4.17.exe was not produced.'
-          }
+          if (-not (Test-Path -LiteralPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' -PathType Leaf)) { throw 'Expected installer was not produced.' }
 
       - name: Record installer SHA-256
         shell: pwsh
@@ -126,20 +119,11 @@ jobs:
           $installer = '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe'
           $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToUpperInvariant()
           $size = (Get-Item -LiteralPath $installer).Length
-          [pscustomobject]@{
-            file = 'DPopCleaner_Setup_0.4.17.exe'
-            sha256 = $hash
-            size = $size
-          } | ConvertTo-Json | Set-Content -LiteralPath '_release/0.4.17/installer/installer-metadata.json' -Encoding utf8
-          Write-Host "Installer SHA-256: $hash"
-          Write-Host "Installer size: $size"
+          [pscustomobject]@{ file='DPopCleaner_Setup_0.4.17.exe'; sha256=$hash; size=$size } | ConvertTo-Json | Set-Content '_release/0.4.17/installer/installer-metadata.json' -Encoding utf8
 
       - name: Run installed package smoke
         shell: pwsh
-        run: |
-          ./tools/dpop0417_install_smoke.ps1 `
-            -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' `
-            -OutputDir '_release/0.4.17/evidence/install'
+        run: ./tools/dpop0417_install_smoke.ps1 -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' -OutputDir '_release/0.4.17/evidence/install'
 
       - name: Upload 0.4.17 candidate evidence
         uses: actions/upload-artifact@v4

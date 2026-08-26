@@ -10,16 +10,15 @@ class DPop0417LayoutContractTests(unittest.TestCase):
         base = ROOT / "v0417" / "payload"
         shell = json.loads((base / "Shell" / "shell.json").read_text(encoding="utf-8"))
         self.assertEqual(shell["version"], "0.4.17")
-        self.assertEqual(shell["commands"], ["disk-analyzer", "restore-center"])
+        self.assertEqual(shell["commands"], ["disk-analyzer", "restore-center", "zapret-screen-fix"])
 
         expected_commands = {
             "disk-analyzer.json": ("disk-analyzer", r"Modules\DiskAnalyzer.exe"),
             "restore-center.json": ("restore-center", r"Modules\RestoreCenter.exe"),
+            "zapret-screen-fix.json": ("zapret-screen-fix", r"Modules\ZapretScreenFix.exe"),
         }
         for filename, (command_id, executable) in expected_commands.items():
-            command = json.loads(
-                (base / "Shell" / "commands" / filename).read_text(encoding="utf-8")
-            )
+            command = json.loads((base / "Shell" / "commands" / filename).read_text(encoding="utf-8"))
             self.assertEqual(command["id"], command_id)
             self.assertEqual(command["executable"], executable)
             self.assertEqual(command["arguments"], [])

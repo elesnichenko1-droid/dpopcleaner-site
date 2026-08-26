@@ -16,10 +16,10 @@ AppPublisher=DPopCleaner Project
 AppPublisherURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
 AppSupportURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
 AppUpdatesURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
-VersionInfoVersion=0.4.17.0
-VersionInfoProductVersion=0.4.17.0
+VersionInfoVersion=0.4.17.2
+VersionInfoProductVersion=0.4.17.2
 VersionInfoCompany=DPopCleaner Project
-VersionInfoDescription=DPopCleaner 0.4.17 Setup
+VersionInfoDescription=DPopCleaner 0.4.17 Setup Revision 2
 VersionInfoProductName=DPopCleaner
 DefaultDirName={autopf}\DPopCleaner
 DefaultGroupName=DPopCleaner
@@ -66,6 +66,7 @@ Name: "desktopicon"; Description: "Создать ярлык на рабочем
 Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Анализатор диска"; Filename: "{app}\Modules\DiskAnalyzer.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Центр восстановления"; Filename: "{app}\Modules\RestoreCenter.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\DPopCleaner\Zapret — фикс демонстрации экрана"; Filename: "{app}\Modules\ZapretScreenFix.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]

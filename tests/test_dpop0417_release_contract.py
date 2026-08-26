@@ -21,14 +21,14 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         self.assertEqual(version['version'], '0.4.17')
         self.assertEqual(version['version_code'], 417)
-        self.assertEqual(version['revision'], 1)
+        self.assertEqual(version['revision'], 2)
         self.assertEqual(version['channel'], 'stable')
         self.assertEqual(version['manifest'], './update/stable.json')
 
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
         self.assertEqual(stable['version'], '0.4.17')
         self.assertEqual(stable['version_code'], 417)
-        self.assertEqual(stable['revision'], 1)
+        self.assertEqual(stable['revision'], 2)
         self.assertEqual(stable['channel'], 'stable')
 
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
@@ -44,6 +44,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('ядро 0.2.14', index)
         self.assertIn('центр восстановления', index)
         self.assertIn('анализатор диска', index)
+        self.assertIn('zapret', index)
         self.assertNotIn('beta', index)
 
         script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
@@ -51,6 +52,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertNotIn('beta', script)
 
         notes_text = notes.read_text(encoding='utf-8').lower()
+        self.assertIn('zapret', notes_text)
         self.assertNotIn('beta', notes_text)
 
         workflow = publisher.read_text(encoding='utf-8').lower()
@@ -60,8 +62,12 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
             'dpop0417_stage.ps1 -requirecompanions',
             'dpop0417_install_smoke.ps1',
             'test_dpop0417_release_contract.py',
+            'zapretscreenfix.tests.csproj',
+            'zapretscreenfix.csproj',
+            'revision = 2',
             'get-filehash',
             'gh release upload',
+            'gh release edit',
             'update/stable.json',
             'actions/deploy-pages',
             'invoke-restmethod',

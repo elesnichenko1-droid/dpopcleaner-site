@@ -29,6 +29,7 @@ $expectedAllowlist = @(
     'Modules/DPop.Common.dll',
     'Modules/DiskAnalyzer.exe',
     'Modules/RestoreCenter.exe',
+    'Modules/ZapretScreenFix.exe',
     'Resources/'
 )
 $actualAllowlist = @(Get-Content -LiteralPath $allowlistPath | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -84,7 +85,8 @@ Copy-Item -LiteralPath $commonDll -Destination (Join-Path $stageRoot 'Modules/DP
 
 $companions = @(
     @{ Name = 'DiskAnalyzer.exe'; Path = 'v0417/src/DiskAnalyzer/bin/Release/net48/DiskAnalyzer.exe' },
-    @{ Name = 'RestoreCenter.exe'; Path = 'v0417/src/RestoreCenter/bin/Release/net48/RestoreCenter.exe' }
+    @{ Name = 'RestoreCenter.exe'; Path = 'v0417/src/RestoreCenter/bin/Release/net48/RestoreCenter.exe' },
+    @{ Name = 'ZapretScreenFix.exe'; Path = 'v0417/src/ZapretScreenFix/bin/Release/net48/ZapretScreenFix.exe' }
 )
 foreach ($companion in $companions) {
     $source = Join-Path $root $companion.Path
