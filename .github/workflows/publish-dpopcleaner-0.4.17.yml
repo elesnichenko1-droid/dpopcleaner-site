@@ -82,12 +82,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Contract failed: $($test.Name)" }
           }
 
-      - name: Run Common and Disk tests
+      - name: Run companion tests
         shell: pwsh
         run: |
           dotnet test v0417/tests/DPop.Common.Tests/DPop.Common.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet test v0417/tests/DiskAnalyzer.Tests/DiskAnalyzer.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test v0417/tests/ZapretScreenFix.Tests/ZapretScreenFix.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build companion modules
@@ -99,6 +101,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/ZapretScreenFix/ZapretScreenFix.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Stage verified payload
         shell: pwsh
@@ -109,6 +113,7 @@ jobs:
         run: |
           ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.17/evidence/disk'
           ./tools/dpop0417_restore_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' -OutputDir '_release/0.4.17/evidence/restore'
+          if (-not (Test-Path '_release/0.4.17/stage/Modules/ZapretScreenFix.exe')) { throw 'ZapretScreenFix.exe missing from stage.' }
           $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
           $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
           if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }
@@ -116,10 +121,7 @@ jobs:
       - name: Build DPopCleaner 0.4.17 installer
         shell: pwsh
         run: |
-          $candidates = @(
-            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
-            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
-          )
+          $candidates = @((Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'), (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'))
           $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
           if (-not $iscc) { choco install innosetup --no-progress -y; $iscc = (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe') }
           New-Item -ItemType Directory -Path '_release/0.4.17/installer' -Force | Out-Null
@@ -148,11 +150,11 @@ jobs:
           $sha256 = (Get-FileHash -LiteralPath $env:DPOP0417_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
           $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
           [ordered]@{
-            product = 'DPopCleaner'; channel = 'stable'; version = '0.4.17'; version_code = 417; revision = 1; mandatory = $false
+            product = 'DPopCleaner'; channel = 'stable'; version = '0.4.17'; version_code = 417; revision = 2; mandatory = $false
             download_url = $url; sha256 = $sha256; size = [int64]$item.Length; signed = $false; available = $true
             notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args = '/SILENT /NORESTART'
           } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
-          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=1; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
+          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=2; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload verified release candidate
@@ -187,6 +189,7 @@ jobs:
           asset="publish/${RELEASE_ASSET}"
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release upload "${RELEASE_TAG}" "$asset" --clobber
+            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.17" --notes-file release/RELEASE_NOTES_0.4.17.md
           else
             gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17" --notes-file release/RELEASE_NOTES_0.4.17.md
           fi
@@ -213,10 +216,10 @@ jobs:
           $expected = Get-Content -Raw 'publish/update/stable.json' | ConvertFrom-Json
           $live = $null
           for ($i = 0; $i -lt 12; $i++) {
-            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.sha256 -eq $expected.sha256) { break } } catch {}
+            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.revision -eq 2 -and $live.sha256 -eq $expected.sha256) { break } } catch {}
             Start-Sleep -Seconds 10
           }
-          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 1) { throw 'Live stable manifest mismatch.' }
+          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 2) { throw 'Live stable manifest mismatch.' }
           $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.17.exe'
           Invoke-WebRequest -Uri $live.download_url -OutFile $download
           $sha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
