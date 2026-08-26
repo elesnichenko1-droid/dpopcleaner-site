@@ -1,0 +1,37 @@
+name: DPopCleaner 0.4.18 Foundation
+
+on:
+  push:
+    branches:
+      - feat/dpopcleaner-0.4.18-core-update
+    paths:
+      - 'v0418/**'
+      - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
+  pull_request:
+    paths:
+      - 'v0418/**'
+      - 'tools/dpop0418_*.ps1'
+      - 'tests/test_dpop0418_*.py'
+      - 'release/DPopCleaner_0.4.18.iss'
+      - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-foundation:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure 0.4.18 native tests
+        shell: pwsh
+        run: cmake -S v0418 -B build0418 -A x64
+
+      - name: Build 0.4.18 native tests
+        shell: pwsh
+        run: cmake --build build0418 --config Release
+
+      - name: Run 0.4.18 native tests
+        shell: pwsh
+        run: ctest --test-dir build0418 -C Release --output-on-failure
