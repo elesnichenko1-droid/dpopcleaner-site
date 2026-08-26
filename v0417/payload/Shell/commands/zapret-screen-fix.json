@@ -1,0 +1,5 @@
+{
+  "id": "zapret-screen-fix",
+  "executable": "Modules\\ZapretScreenFix.exe",
+  "arguments": []
+}
