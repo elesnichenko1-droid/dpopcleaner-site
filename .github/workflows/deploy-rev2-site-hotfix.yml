@@ -1,5 +1,6 @@
 name: Deploy DPopCleaner rev.2 site hotfix
 # Trigger run from a fresh, conflict-free branch.
+# Synchronize event for the one-off deployment.
 
 on:
   pull_request:
