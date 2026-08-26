@@ -3,8 +3,8 @@
   "version": "0.4.17",
   "version_code": 417,
   "revision": 1,
-  "channel": "beta",
+  "channel": "stable",
   "platform": "windows",
   "architecture": "x86-64",
-  "manifest": "./update/beta.json"
+  "manifest": "./update/stable.json"
 }
