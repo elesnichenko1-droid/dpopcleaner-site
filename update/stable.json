@@ -1,7 +1,15 @@
 {
   "product": "DPopCleaner",
   "channel": "stable",
-  "version": "0.0.0",
-  "version_code": 0,
-  "available": false
+  "version": "0.4.17",
+  "version_code": 417,
+  "revision": 1,
+  "mandatory": false,
+  "download_url": "",
+  "sha256": "",
+  "size": 0,
+  "signed": false,
+  "available": false,
+  "notes_url": "https://elesnichenko1-droid.github.io/dpopcleaner-site/",
+  "install_args": "/SILENT /NORESTART"
 }
