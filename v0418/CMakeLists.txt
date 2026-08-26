@@ -35,3 +35,7 @@ dpop0418_test(UpdateManifestTests)
 add_executable(PackageVerificationTests tests/PackageVerificationTests.cpp core/Hash.cpp)
 target_link_libraries(PackageVerificationTests PRIVATE bcrypt)
 dpop0418_test(PackageVerificationTests)
+
+add_executable(UpdateClientContractTests tests/UpdateClientContractTests.cpp)
+target_compile_definitions(UpdateClientContractTests PRIVATE DPOP0418_SOURCE_DIR=L"${CMAKE_CURRENT_SOURCE_DIR}")
+dpop0418_test(UpdateClientContractTests)
