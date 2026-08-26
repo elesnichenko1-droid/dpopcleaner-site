@@ -14,7 +14,10 @@ endif()
 
 enable_testing()
 
-add_executable(AppSettingsTests tests/AppSettingsTests.cpp)
+add_executable(AppSettingsTests
+    tests/AppSettingsTests.cpp
+    core/AppSettings.cpp
+)
 target_include_directories(AppSettingsTests PRIVATE core)
 target_compile_definitions(AppSettingsTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 if(MSVC)
@@ -22,7 +25,10 @@ if(MSVC)
 endif()
 add_test(NAME AppSettingsTests COMMAND AppSettingsTests)
 
-add_executable(UpdatePolicyTests tests/UpdatePolicyTests.cpp)
+add_executable(UpdatePolicyTests
+    tests/UpdatePolicyTests.cpp
+    core/UpdatePolicy.cpp
+)
 target_include_directories(UpdatePolicyTests PRIVATE core)
 target_compile_definitions(UpdatePolicyTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 if(MSVC)
