@@ -1,4 +1,5 @@
 name: Deploy DPopCleaner rev.2 site hotfix
+# Fresh trigger after the workflow has been registered on main.
 
 on:
   pull_request:
