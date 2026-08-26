@@ -6,6 +6,9 @@ on:
       - feat/dpopcleaner-0.4.18-core-update
     paths:
       - 'v0418/**'
+      - 'tools/dpop0418_*.ps1'
+      - 'tests/test_dpop0418_*.py'
+      - 'release/DPopCleaner_0.4.18.iss'
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
   pull_request:
     paths:
@@ -28,10 +31,18 @@ jobs:
         shell: pwsh
         run: cmake -S v0418 -B build0418 -A x64
 
-      - name: Build 0.4.18 native tests
+      - name: Build 0.4.18 native tests and executables
         shell: pwsh
         run: cmake --build build0418 --config Release
 
       - name: Run 0.4.18 native tests
         shell: pwsh
         run: ctest --test-dir build0418 -C Release --output-on-failure
+
+      - name: Verify 0.4.18 UI contract
+        shell: pwsh
+        run: python tests/test_dpop0418_ui_contract.py
+
+      - name: Verify non-blocking close while update check is slow
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tools/dpop0418_close_smoke.ps1 -Exe build0418/bin/Release/DPopCleaner.exe
