@@ -16,6 +16,7 @@ class DPop0417StageContractTests(unittest.TestCase):
             "Modules/DPop.Common.dll",
             "Modules/DiskAnalyzer.exe",
             "Modules/RestoreCenter.exe",
+            "Modules/ZapretScreenFix.exe",
             "Resources/",
         ])
 
@@ -32,6 +33,7 @@ class DPop0417StageContractTests(unittest.TestCase):
         self.assertIn("dpop.common.dll", lowered)
         self.assertIn("diskanalyzer.exe", lowered)
         self.assertIn("restorecenter.exe", lowered)
+        self.assertIn("zapretscreenfix.exe", lowered)
         self.assertIn("-requirecompanions", lowered)
         self.assertNotIn("v035_overlay", lowered)
         self.assertNotIn("mainwindow.cpp", lowered)
