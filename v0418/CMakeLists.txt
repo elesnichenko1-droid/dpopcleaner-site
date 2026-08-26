@@ -14,12 +14,16 @@ endif()
 
 enable_testing()
 
-function(dpop0418_test target)
+function(dpop0418_target target)
     target_include_directories(${target} PRIVATE core)
     target_compile_definitions(${target} PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
     endif()
+endfunction()
+
+function(dpop0418_test target)
+    dpop0418_target(${target})
     add_test(NAME ${target} COMMAND ${target})
 endfunction()
 
@@ -36,6 +40,27 @@ add_executable(PackageVerificationTests tests/PackageVerificationTests.cpp core/
 target_link_libraries(PackageVerificationTests PRIVATE bcrypt)
 dpop0418_test(PackageVerificationTests)
 
-add_executable(UpdateClientContractTests tests/UpdateClientContractTests.cpp)
-target_compile_definitions(UpdateClientContractTests PRIVATE DPOP0418_SOURCE_DIR=L"${CMAKE_CURRENT_SOURCE_DIR}")
+add_executable(UpdateClientContractTests
+    tests/UpdateClientContractTests.cpp
+    core/UpdateClient.cpp
+    core/UpdateManifest.cpp
+    core/UpdatePolicy.cpp
+    core/Hash.cpp
+    core/Signature.cpp
+)
+target_compile_definitions(UpdateClientContractTests PRIVATE DPOP0418_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(UpdateClientContractTests PRIVATE winhttp bcrypt wintrust crypt32 shell32)
 dpop0418_test(UpdateClientContractTests)
+
+add_executable(DPopUpdater WIN32
+    updater/UpdaterMain.cpp
+    core/Hash.cpp
+    core/Signature.cpp
+)
+target_link_libraries(DPopUpdater PRIVATE user32 shell32 bcrypt wintrust crypt32)
+dpop0418_target(DPopUpdater)
+set_target_properties(DPopUpdater PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${cfg}" cfg_upper)
+    set_target_properties(DPopUpdater PROPERTIES "RUNTIME_OUTPUT_DIRECTORY_${cfg_upper}" "${CMAKE_BINARY_DIR}/bin/${cfg}")
+endforeach()
