@@ -76,9 +76,9 @@ try {
         catch {
             $ruleSid = ''
         }
-        $hasModify = (($rule.FileSystemRights -band [IO.FileSystemRights]::Modify) -eq [IO.FileSystemRights]::Modify)
+        $hasModify = (($rule.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::Modify) -eq [System.Security.AccessControl.FileSystemRights]::Modify)
         if ($ruleSid -eq $usersSidValue -and
-            $rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+            $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
             $hasModify) {
             $documentationAclModify = $true
             break
