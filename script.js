@@ -27,14 +27,16 @@ function setDownloadState(available, url, version){
   });
   const status=document.getElementById('releaseStatus');
   if(status){
-    status.textContent = available ? `Чистая сборка DPopCleaner ${version} BETA R1 опубликована и готова к загрузке.` : `Чистая сборка DPopCleaner ${version} BETA R1 готовится на GitHub. Кнопка скачивания включится автоматически после проверки и публикации релиза.`;
+    status.textContent = available
+      ? `DPopCleaner ${version} BETA опубликован и готов к загрузке.`
+      : `DPopCleaner ${version} BETA проходит проверку на GitHub. Кнопка скачивания включится автоматически после публикации проверенного manifest.`;
     status.classList.toggle('ready', !!available);
   }
 }
 
 function applyManifest(m){
   const available = globalThis.DPopReleaseManifest?.isUsableManifest(m) === true;
-  const version = '0.2.14';
+  const version = '0.4.17';
   document.querySelectorAll('.js-version').forEach(el => el.textContent = version);
   document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(available ? Number(m.size) : 0));
   setDownloadState(available, available ? m.download_url : '', version);
@@ -45,7 +47,7 @@ function applyManifest(m){
   }else{
     currentHash='';
     const hv = document.getElementById('hashValue');
-    if(hv) hv.textContent = 'появится автоматически после сборки';
+    if(hv) hv.textContent = 'появится автоматически после финальной сборки';
   }
 }
 
