@@ -14,10 +14,7 @@ endif()
 
 enable_testing()
 
-add_executable(AppSettingsTests
-    tests/AppSettingsTests.cpp
-    core/AppSettings.cpp
-)
+add_executable(AppSettingsTests tests/AppSettingsTests.cpp core/AppSettings.cpp)
 target_include_directories(AppSettingsTests PRIVATE core)
 target_compile_definitions(AppSettingsTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 if(MSVC)
@@ -25,13 +22,26 @@ if(MSVC)
 endif()
 add_test(NAME AppSettingsTests COMMAND AppSettingsTests)
 
-add_executable(UpdatePolicyTests
-    tests/UpdatePolicyTests.cpp
-    core/UpdatePolicy.cpp
-)
+add_executable(UpdatePolicyTests tests/UpdatePolicyTests.cpp core/UpdatePolicy.cpp)
 target_include_directories(UpdatePolicyTests PRIVATE core)
 target_compile_definitions(UpdatePolicyTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 if(MSVC)
     target_compile_options(UpdatePolicyTests PRIVATE /W4 /permissive- /utf-8)
 endif()
 add_test(NAME UpdatePolicyTests COMMAND UpdatePolicyTests)
+
+add_executable(UpdateManifestTests tests/UpdateManifestTests.cpp)
+target_include_directories(UpdateManifestTests PRIVATE core)
+target_compile_definitions(UpdateManifestTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+if(MSVC)
+    target_compile_options(UpdateManifestTests PRIVATE /W4 /permissive- /utf-8)
+endif()
+add_test(NAME UpdateManifestTests COMMAND UpdateManifestTests)
+
+add_executable(PackageVerificationTests tests/PackageVerificationTests.cpp)
+target_include_directories(PackageVerificationTests PRIVATE core)
+target_compile_definitions(PackageVerificationTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+if(MSVC)
+    target_compile_options(PackageVerificationTests PRIVATE /W4 /permissive- /utf-8)
+endif()
+add_test(NAME PackageVerificationTests COMMAND PackageVerificationTests)
