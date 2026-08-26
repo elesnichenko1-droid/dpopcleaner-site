@@ -4,29 +4,30 @@ const { isUsableManifest } = require('../release-manifest.js');
 
 const validManifest = Object.freeze({
   product: 'DPopCleaner',
-  channel: 'beta',
-  version: '0.2.14',
-  version_code: 214,
-  revision: 1,
+  channel: 'stable',
+  version: '0.4.17',
+  version_code: 417,
+  revision: 2,
   available: true,
   signed: false,
-  download_url: 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.2.14-clean-r1/DPopCleaner_Setup_0.2.14_BETA_CLEAN_R1.exe',
+  download_url: 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.17/DPopCleaner_Setup_0.4.17.exe',
   sha256: 'a'.repeat(64),
-  size: 1,
+  size: 2241131,
 });
 
-test('accepts the exact published 0.2.14 R1 release contract', () => {
+test('accepts the exact published 0.4.17 rev.2 release contract', () => {
   assert.equal(isUsableManifest(validManifest), true);
 });
 
 const invalidCases = [
   ['missing manifest', null],
   ['unavailable release', { ...validManifest, available: false }],
-  ['wrong version', { ...validManifest, version: '0.3.1' }],
-  ['wrong revision', { ...validManifest, revision: 2 }],
+  ['wrong version', { ...validManifest, version: '0.4.16' }],
+  ['wrong revision', { ...validManifest, revision: 1 }],
+  ['future revision', { ...validManifest, revision: 3 }],
   ['HTTP URL', { ...validManifest, download_url: validManifest.download_url.replace('https://', 'http://') }],
-  ['wrong release tag', { ...validManifest, download_url: validManifest.download_url.replace('v0.2.14-clean-r1', 'v0.2.14-beta') }],
-  ['wrong asset name', { ...validManifest, download_url: validManifest.download_url.replace('_CLEAN_R1', '') }],
+  ['wrong release tag', { ...validManifest, download_url: validManifest.download_url.replace('v0.4.17', 'v0.4.16') }],
+  ['wrong asset name', { ...validManifest, download_url: validManifest.download_url.replace('DPopCleaner_Setup_0.4.17.exe', 'DPopCleaner_Setup.exe') }],
   ['zero size', { ...validManifest, size: 0 }],
   ['non-numeric size', { ...validManifest, size: 'unknown' }],
   ['short SHA-256', { ...validManifest, sha256: 'a'.repeat(63) }],
