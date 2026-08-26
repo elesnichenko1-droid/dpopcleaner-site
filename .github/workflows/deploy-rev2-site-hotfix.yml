@@ -1,0 +1,94 @@
+name: Deploy DPopCleaner rev.2 site hotfix
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-rev2-site-hotfix.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: dpopcleaner-rev2-site-hotfix
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.pull_request.head.ref == 'deploy/rev2-site-hotfix'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout hotfix revision
+        uses: actions/checkout@v5
+
+      - name: Verify rev.2 site contract and published installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/release-manifest.test.cjs
+          grep -F "Number(m.revision) === 2" release-manifest.js
+          curl -fL --retry 4 --retry-delay 2 \
+            -o "$RUNNER_TEMP/DPopCleaner_Setup_0.4.17.exe" \
+            'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.17/DPopCleaner_Setup_0.4.17.exe'
+          echo '5b76e72db4e29c9e3db86ebbfb74a6c18a697533f4f178f11eae06d83a485266  '"$RUNNER_TEMP/DPopCleaner_Setup_0.4.17.exe" | sha256sum -c -
+          test "$(stat -c%s "$RUNNER_TEMP/DPopCleaner_Setup_0.4.17.exe")" = '2241131'
+
+      - name: Stage verified GitHub Pages site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site/assets _site/update
+          cp index.html styles.css script.js release-manifest.js version.json _site/
+          cp assets/dpopcleaner-0.4.17-disk.png assets/dpopcleaner-0.4.17-restore.png _site/assets/
+          cat > _site/update/stable.json <<'JSON'
+          {
+            "product": "DPopCleaner",
+            "channel": "stable",
+            "version": "0.4.17",
+            "version_code": 417,
+            "revision": 2,
+            "mandatory": false,
+            "download_url": "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.17/DPopCleaner_Setup_0.4.17.exe",
+            "sha256": "5b76e72db4e29c9e3db86ebbfb74a6c18a697533f4f178f11eae06d83a485266",
+            "size": 2241131,
+            "signed": false,
+            "available": true,
+            "notes_url": "https://elesnichenko1-droid.github.io/dpopcleaner-site/",
+            "install_args": "/SILENT /NORESTART"
+          }
+          JSON
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live rev.2 download state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://elesnichenko1-droid.github.io/dpopcleaner-site'
+          for i in $(seq 1 18); do
+            js="$(curl -fsSL -H 'Cache-Control: no-cache' "${base}/release-manifest.js?t=${GITHUB_RUN_ID}-${i}" || true)"
+            manifest="$(curl -fsSL -H 'Cache-Control: no-cache' "${base}/update/stable.json?t=${GITHUB_RUN_ID}-${i}" || true)"
+            if grep -Fq 'Number(m.revision) === 2' <<<"$js" && \
+               grep -Fq '"revision": 2' <<<"$manifest" && \
+               grep -Fq '"available": true' <<<"$manifest" && \
+               grep -Fq '5b76e72db4e29c9e3db86ebbfb74a6c18a697533f4f178f11eae06d83a485266' <<<"$manifest"; then
+              echo 'Live rev.2 site is verified.'
+              exit 0
+            fi
+            sleep 10
+          done
+          echo 'Live rev.2 site did not converge in time.' >&2
+          exit 1
