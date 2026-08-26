@@ -1,10 +1,10 @@
 {
   "product": "DPopCleaner",
-  "version": "0.3.1",
-  "version_code": 3014,
-  "revision": 4,
-  "channel": "beta",
+  "version": "0.4.17",
+  "version_code": 417,
+  "revision": 1,
+  "channel": "stable",
   "platform": "windows",
   "architecture": "x86-64",
-  "manifest": "./update/beta.json"
+  "manifest": "./update/stable.json"
 }

@@ -1,6 +1,5 @@
 #include "modules/ZapretManager.h"
 #include "core/Paths.h"
-#include "modules/ZapretPolicy.h"
 #include <windows.h>
 #include <tlhelp32.h>
 #include <winsvc.h>
@@ -21,47 +20,11 @@ fs::path ProcessPath(DWORD pid) {
     CloseHandle(p);
     return path;
 }
-
-fs::path BundleRoot() {
-    return dpop::zapret::ResolveBundledRoot(dpop::paths::ExecutableDir());
-}
-
-bool RequireValidBundle(fs::path& root, std::wstring& error) {
-    root = BundleRoot();
-    const auto validation = dpop::zapret::ValidateBundle(root);
-    if (!validation.valid) {
-        error = L"Комплект Zapret повреждён или неполон. Не найден файл: " + validation.missing.wstring();
-        return false;
-    }
-    return true;
-}
-
-bool LaunchBatch(const wchar_t* relativeScript, std::wstring& error) {
-    fs::path root;
-    if (!RequireValidBundle(root, error)) return false;
-    const fs::path script = root / relativeScript;
-    const std::wstring arguments = L"/d /c \"\"" + script.wstring() + L"\"\"";
-    SHELLEXECUTEINFOW execute{};
-    execute.cbSize = sizeof(execute);
-    execute.lpFile = L"cmd.exe";
-    execute.lpParameters = arguments.c_str();
-    execute.lpDirectory = root.c_str();
-    execute.nShow = SW_SHOWNORMAL;
-    if (!ShellExecuteExW(&execute)) {
-        error = L"Не удалось запустить " + script.wstring();
-        return false;
-    }
-    return true;
-}
 }
 
 namespace dpop::zapret {
 Status QueryStatus() {
     Status s{};
-    s.bundleFolder = BundleRoot();
-    const auto validation = ValidateBundle(s.bundleFolder);
-    s.bundleValid = validation.valid;
-    s.missingBundleFile = validation.missing;
     SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
     if (scm) {
         SC_HANDLE svc = OpenServiceW(scm, L"zapret", SERVICE_QUERY_STATUS);
@@ -80,32 +43,32 @@ Status QueryStatus() {
         if (Process32FirstW(snap, &pe)) {
             do {
                 if (_wcsicmp(pe.szExeFile, L"winws.exe") == 0) {
+                    s.winwsRunning = true;
                     const auto p = ProcessPath(pe.th32ProcessID);
-                    if (IsBundledWinwsPath(s.bundleFolder, p)) {
-                        s.winwsRunning = true;
-                        break;
-                    }
+                    if (!p.empty()) s.detectedFolder = p.parent_path();
+                    break;
                 }
             } while (Process32NextW(snap, &pe));
         }
         CloseHandle(snap);
     }
 
+    if (s.detectedFolder.empty()) {
+        const auto exe = dpop::paths::ExecutableDir();
+        const fs::path candidates[] = { exe / L"zapret", exe / L"Zapret", exe / L"bin" };
+        std::error_code ec;
+        for (const auto& c : candidates) {
+            if (fs::exists(c / L"winws.exe", ec) || fs::exists(c / L"service.bat", ec)) { s.detectedFolder = c; break; }
+            ec.clear();
+        }
+    }
     return s;
 }
 
-bool LaunchDefaultStrategy(std::wstring& error) {
-    return LaunchBatch(L"general.bat", error);
-}
-
-bool OpenServiceManager(std::wstring& error) {
-    return LaunchBatch(L"service.bat", error);
-}
-
-bool OpenBundledFolder(std::wstring& error) {
-    fs::path root;
-    if (!RequireValidBundle(root, error)) return false;
-    if (reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", root.c_str(), nullptr, nullptr, SW_SHOWNORMAL)) <= 32) {
+bool OpenDetectedFolder(std::wstring& error) {
+    const auto s = QueryStatus();
+    if (s.detectedFolder.empty()) { error = L"Папка Zapret не обнаружена автоматически."; return false; }
+    if (reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", s.detectedFolder.c_str(), nullptr, nullptr, SW_SHOWNORMAL)) <= 32) {
         error = L"Не удалось открыть папку Zapret.";
         return false;
     }

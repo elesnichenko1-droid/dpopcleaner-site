@@ -1,53 +1,24 @@
-# DPopCleaner 0.3.4 BETA R2
+# DPopCleaner 0.3.1 BETA — Stage 3
 
-DPopCleaner — Windows x64 utility для очистки, диагностики, защиты и повседневного обслуживания системы.
+DPopCleaner 0.3.1 is a Windows x64 maintenance utility reconstructed as a maintainable C++/Win32 project.
 
-## Архитектура 0.3.4
+## What changed in 0.3.1
 
-Версия 0.3.4 строится по схеме:
+- Real installed-app enumeration from Windows uninstall registry (HKLM/HKCU, 64/32-bit views).
+- Applications page with name, version, publisher and install location.
+- Uses the application's own registered uninstaller/MSI command instead of pretending to remove software.
+- After uninstall, performs a conservative leftover scan in Program Files, ProgramData, Local/Roaming AppData and Start Menu shortcuts.
+- Leftovers are shown to the user and moved to the Recycle Bin only after a second confirmation.
+- Full Inno Setup installer with Add/Remove Programs registration, Start Menu shortcut, optional desktop shortcut and upgrade support.
+- Update check runs automatically after startup.
+- Update package is downloaded over HTTPS and checked with SHA-256. Signed packages are verified with Authenticode.
+- Unsigned BETA packages require an explicit warning/confirmation. Once a code-signing certificate is configured in GitHub secrets, signed updates use the normal automatic path.
+- GitHub Actions builds DPopCleaner.exe, DPopUpdater.exe and DPopCleaner_Setup_0.3.1_BETA.exe and publishes v0.3.1-beta.
 
-**UX и логика 0.2.14 → исправленный donor 0.3.3 → отдельный v034 overlay → DPopCleaner 0.3.4 R2.**
+## Important limitation of leftover cleanup
 
-R2 — functional-parity и safety pass: интерфейс остаётся знакомым по 0.2.x, но проблемные разделы получили реальные Windows-действия, проверки и защиту от случайных изменений.
+No generic uninstaller can know every file an arbitrary third-party application ever created unless that application/installer provides a complete installation log. DPopCleaner therefore deliberately uses a conservative scan to avoid deleting unrelated user data. MSI/vendor uninstallers remain the primary removal mechanism.
 
-## Рабочие разделы
+## Build
 
-- Обзор.
-- Очистка с реальными исключениями файлов/папок.
-- ОЗУ и параметры обслуживания памяти.
-- DPopGuard: собственные эвристики + Windows AMSI + Microsoft Defender при наличии.
-- Автозагрузка: иконки, источник, системность, рекомендации и безопасное включение/отключение пользовательских записей.
-- Диск: встроенная навигация по файловой системе, иконки, крупные файлы и предупреждения для системных путей.
-- Приложения: версия/издатель/путь, штатное удаление, хвосты и WinGet-проверка обновлений при наличии.
-- Windows: Update cache, Component Cleanup и DISM с журналом результата.
-- Дубликаты: «Эталон группы» и конкретные копии, защита системных/исключённых путей и удаление через Корзину.
-- Инструменты.
-- Zapret Center: bundled-стратегии, status/service/winws, verified update и «Исправление трансляций» для Discord/RTC.
-- Обновления DPopCleaner через HTTPS manifest + size + SHA-256 + DPopUpdater.
-- Настройки с startup hooks, автозапуском, RUNASADMIN и исключениями очистки.
-
-## Безопасность R2
-
-- layout рассчитывается от клиентской области и DPI; legacy `top=54` не используется как начало контента;
-- системные/HKLM элементы автозагрузки защищены от автоматического изменения;
-- дубликаты не выдаются за исторический «оригинал»: используется детерминированный «Эталон группы (оставить)»;
-- startup hooks не выполняют автоматическую очистку файлов или Windows Update cache;
-- RTC repair работает только с bundled standalone `winws`, очищает DNS и повторно запускает выбранную стратегию, не отключая Defender/Firewall;
-- Zapret updater принимает только официальный HTTPS ZIP release asset при наличии size + SHA-256 digest, проверяет staging-bundle и делает rollback при ошибке;
-- DPopCleaner updater проверяет manifest, размер и SHA-256 перед передачей пакета DPopUpdater.
-
-## Release identity
-
-- Display version: `0.3.4 BETA R2`
-- Version code: `3042`
-- Revision: `2`
-- Windows resource version: `0.3.4.2`
-- Installer: `DPopCleaner_Setup_0.3.4_BETA_R2.exe`
-
-## CI и публикация
-
-`.github/workflows/DPopCleaner_0.3.4_CANDIDATE.yml` проверяет migration/layout/shell/settings/startup/DPopGuard/storage/applications/duplicates/Zapret/R2 identity contracts, собирает x64 через Visual Studio 2022, запускает CTest и UI smoke.
-
-`.github/workflows/publish-dpopcleaner-0.3.4.yml` повторяет полный contract/build gate, проверяет bundled Zapret, формирует Inno Setup installer, тихо устанавливает его в тестовую папку, повторно проверяет установленное приложение, а после merge публикует `v0.3.4-beta-r2`, GitHub Pages и выполняет live SHA-256 verification скачанного установщика.
-
-Старые установщики не используются как fallback: если R2 manifest не прошёл проверку, кнопка скачивания остаётся отключённой.
+Windows + Visual Studio 2022 Build Tools / CMake, or simply use the included GitHub Actions workflow.

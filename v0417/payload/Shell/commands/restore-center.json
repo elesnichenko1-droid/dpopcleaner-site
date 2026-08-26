@@ -1,0 +1,5 @@
+{
+  "id": "restore-center",
+  "executable": "Modules\\RestoreCenter.exe",
+  "arguments": []
+}

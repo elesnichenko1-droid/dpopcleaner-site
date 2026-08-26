@@ -1,0 +1,5 @@
+{
+  "id": "disk-analyzer",
+  "executable": "Modules\\DiskAnalyzer.exe",
+  "arguments": []
+}

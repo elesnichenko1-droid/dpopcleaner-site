@@ -55,5 +55,3 @@ Snapshot Collect() {
     if (s.gpuName.empty()) s.gpuName = L"Не определён";
     return s;
 }
-
-}

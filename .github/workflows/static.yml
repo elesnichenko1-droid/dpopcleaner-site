@@ -1,22 +1,37 @@
-name: Deploy legacy DPopCleaner site to Pages (manual only)
+# Manual fallback workflow for deploying static content to GitHub Pages.
+# Automatic 0.4.17 publication is owned by publish-dpopcleaner-0.4.17.yml.
+name: Deploy static content to Pages
 
 on:
   workflow_dispatch:
 
 permissions:
-  actions: read
+  contents: read
   pages: write
   id-token: write
 
 concurrency:
-  group: pages-legacy-manual
+  group: "pages"
   cancel-in-progress: false
 
 jobs:
-  legacy-manual-only:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Legacy deployer disabled for automatic releases
-        run: |
-          echo "Automatic legacy Pages deployment is disabled."
-          echo "DPopCleaner 0.3.5+ is published by publish-dpopcleaner-0.3.5.yml."
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Stage public website only
+        shell: pwsh
+        run: ./scripts/Stage-Site.ps1 -Root . -Destination _site
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

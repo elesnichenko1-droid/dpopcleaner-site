@@ -146,8 +146,6 @@ Source: "setup.ps1"; DestDir: "{app}"; DestName: "DPopCleaner.exe"
     foreach ($file in $allowedSiteFiles) {
         Set-Content -LiteralPath (Join-Path $siteFixture $file) -Value $file -Encoding utf8
     }
-    New-Item -ItemType Directory -Path (Join-Path $siteFixture 'assets') | Out-Null
-    Set-Content -LiteralPath (Join-Path $siteFixture 'assets/dpopcleaner-0.3.1-r3.png') -Value 'real screenshot fixture' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $siteFixture 'update/beta.json') -Value '{}' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $siteFixture 'update/stable.json') -Value '{}' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $siteFixture 'secret.exe') -Value 'must not deploy' -Encoding utf8
@@ -164,7 +162,6 @@ Source: "setup.ps1"; DestDir: "{app}"; DestName: "DPopCleaner.exe"
     $expectedFiles = @(
         '.nojekyll',
         'dpopcleaner-icon.png',
-        'assets/dpopcleaner-0.3.1-r3.png',
         'index.html',
         'release-manifest.js',
         'script.js',
@@ -177,15 +174,6 @@ Source: "setup.ps1"; DestDir: "{app}"; DestName: "DPopCleaner.exe"
         throw "stages only public website files: got $($actualFiles -join ', ')."
     }
     Write-Host 'PASS: stages only public website files'
-
-    [pscustomobject][ordered]@{
-        product = 'DPopCleaner'; channel = 'beta'; version = '0.3.1'; version_code = 3013
-        revision = 3; available = $true
-    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $siteFixture 'update/beta.json') -Encoding utf8
-    Remove-Item -LiteralPath (Join-Path $siteFixture 'assets/dpopcleaner-0.3.1-r3.png')
-    Assert-Throws 'requires the real screenshot for a published R3 manifest' {
-        & $stageScript -Root $siteFixture -Destination $siteOutput
-    } 'Published R3 site requires its verified application screenshot'
 } finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force
 }

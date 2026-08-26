@@ -2,7 +2,6 @@
 #include "update/UpdateConfig.h"
 #include "update/Hash.h"
 #include "update/Signature.h"
-#include "update/UpdatePolicy.h"
 #include "core/Paths.h"
 #include "core/Version.h"
 #include "core/Logger.h"
@@ -95,9 +94,7 @@ CheckResult CheckForUpdates(){
     std::wstring parseError;
     if(!ParseManifestUtf8(json,result.manifest,parseError)){ result.error=parseError; return result; }
     result.success=true;
-    result.updateAvailable=IsUpdateOfferAllowed(result.manifest.available,
-                                                dpop::version::kVersionCode,
-                                                result.manifest.versionCode);
+    result.updateAvailable=result.manifest.versionCode>dpop::version::kVersionCode;
     return result;
 }
 
@@ -137,14 +134,6 @@ bool DownloadPackage(const Manifest& manifest, fs::path& downloadedFile, std::ws
     FlushFileBuffers(out); CloseHandle(out);
     if(!ok){ DeleteFileW(partPath.c_str()); error=L"Загрузка обновления прервана"; return false; }
 
-    std::error_code sizeError;
-    const auto actualSize = fs::file_size(partPath, sizeError);
-    if(sizeError || actualSize != manifest.size){
-        DeleteFileW(partPath.c_str());
-        error=L"Размер скачанного файла не совпадает с манифестом. Обновление удалено.";
-        return false;
-    }
-
     std::wstring actualHash;
     if(!Sha256File(partPath,actualHash,error)){ DeleteFileW(partPath.c_str()); return false; }
     if(!EqualsNoCase(actualHash,manifest.sha256)){
@@ -172,8 +161,10 @@ bool PrepareAndLaunchUpdater(const Manifest& manifest,const fs::path& package,bo
     if(!fs::exists(updater)){ error=L"DPopUpdater.exe не найден рядом с DPopCleaner.exe"; return false; }
 
     const DWORD pid=GetCurrentProcessId();
-    const std::wstring args=BuildUpdaterArguments(pid, package.wstring(), manifest.sha256,
-                                                  allowUnsigned, manifest.installArgs);
+    const auto restart=dpop::paths::ExecutableDir()/L"DPopCleaner.exe";
+    std::wstring args=L"--parent "+std::to_wstring(pid)+L" --package \""+package.wstring()+L"\" --sha256 \""+manifest.sha256+L"\" --restart \""+restart.wstring()+L"\"";
+    if(allowUnsigned) args += L" --allow-unsigned";
+    if(!manifest.installArgs.empty()) args += L" --args \""+manifest.installArgs+L"\"";
 
     SHELLEXECUTEINFOW sei{}; sei.cbSize=sizeof(sei); sei.lpFile=updater.c_str(); sei.lpParameters=args.c_str(); sei.nShow=SW_SHOWNORMAL;
     if(!ShellExecuteExW(&sei)){ error=L"Не удалось запустить DPopUpdater.exe"; return false; }
