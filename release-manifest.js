@@ -3,6 +3,7 @@
   if(typeof module === 'object' && module.exports) module.exports = api;
   if(root) root.DPopReleaseManifest = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function(){
+  // Stable publication contract for DPopCleaner 0.4.17 rev.2.
   const releaseUrl = /^https:\/\/github\.com\/elesnichenko1-droid\/dpopcleaner-site\/releases\/download\/v0\.4\.17\/DPopCleaner_Setup_0\.4\.17\.exe$/;
 
   function isUsableManifest(m){
