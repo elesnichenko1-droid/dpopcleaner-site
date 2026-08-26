@@ -3,12 +3,12 @@
   if(typeof module === 'object' && module.exports) module.exports = api;
   if(root) root.DPopReleaseManifest = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function(){
-  const releaseUrl = /^https:\/\/github\.com\/elesnichenko1-droid\/dpopcleaner-site\/releases\/download\/v0\.2\.14-clean-r1\/DPopCleaner_Setup_0\.2\.14_BETA_CLEAN_R1\.exe$/;
+  const releaseUrl = /^https:\/\/github\.com\/elesnichenko1-droid\/dpopcleaner-site\/releases\/download\/v0\.4\.17\/DPopCleaner_Setup_0\.4\.17\.exe$/;
 
   function isUsableManifest(m){
     return Boolean(
       m &&
-      m.version === '0.2.14' &&
+      m.version === '0.4.17' &&
       Number(m.revision) === 1 &&
       m.available === true &&
       typeof m.download_url === 'string' &&
