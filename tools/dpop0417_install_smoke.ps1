@@ -59,27 +59,23 @@ try {
     [void](Assert-File 'Modules\DPop.Common.dll')
     $diskExe = Assert-File 'Modules\DiskAnalyzer.exe'
     $restoreExe = Assert-File 'Modules\RestoreCenter.exe'
+    [void](Assert-File 'Modules\ZapretScreenFix.exe')
     [void](Assert-File 'Languages\ru.json')
     [void](Assert-File 'Languages\en.json')
     [void](Assert-File 'Shell\shell.json')
     [void](Assert-File 'Shell\commands\disk-analyzer.json')
     [void](Assert-File 'Shell\commands\restore-center.json')
+    [void](Assert-File 'Shell\commands\zapret-screen-fix.json')
     [void](Assert-File 'Documentation\README.txt')
 
     $documentationPath = Join-Path $installRoot 'Documentation'
     $usersSidValue = 'S-1-5-32-545'
     $acl = Get-Acl -LiteralPath $documentationPath
     foreach ($rule in $acl.Access) {
-        try {
-            $ruleSid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
-        }
-        catch {
-            $ruleSid = ''
-        }
+        try { $ruleSid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }
+        catch { $ruleSid = '' }
         $hasModify = (($rule.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::Modify) -eq [System.Security.AccessControl.FileSystemRights]::Modify)
-        if ($ruleSid -eq $usersSidValue -and
-            $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
-            $hasModify) {
+        if ($ruleSid -eq $usersSidValue -and $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and $hasModify) {
             $documentationAclModify = $true
             break
         }
@@ -93,31 +89,19 @@ try {
         throw "Installed immutable core mismatch: $installedCoreBlob"
     }
 
-    & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') `
-        -ExePath $diskExe `
-        -OutputDir $diskEvidence
+    & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') -ExePath $diskExe -OutputDir $diskEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    & (Join-Path $PSScriptRoot 'dpop0417_restore_smoke.ps1') `
-        -ExePath $restoreExe `
-        -OutputDir $restoreEvidence
+    & (Join-Path $PSScriptRoot 'dpop0417_restore_smoke.ps1') -ExePath $restoreExe -OutputDir $restoreEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     $uninstaller = Assert-File 'unins000.exe'
-    $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
-        '/VERYSILENT',
-        '/SUPPRESSMSGBOXES',
-        '/NORESTART'
-    ) -Wait -PassThru
-    if ($uninstall.ExitCode -ne 0) {
-        throw "Silent uninstall failed with exit code $($uninstall.ExitCode)."
-    }
+    $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+    if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($uninstall.ExitCode)." }
 
     Start-Sleep -Milliseconds 500
     $uninstalled = -not (Test-Path -LiteralPath (Join-Path $installRoot 'DPopCleaner.exe') -PathType Leaf)
-    if (-not $uninstalled) {
-        throw 'Installed DPopCleaner.exe remained after uninstall.'
-    }
+    if (-not $uninstalled) { throw 'Installed DPopCleaner.exe remained after uninstall.' }
 
     [pscustomobject]@{
         installer = $InstallerPath
@@ -125,6 +109,7 @@ try {
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
         documentation_acl_modify = [bool]$documentationAclModify
+        zapret_screen_fix = $true
         disk_smoke = (Test-Path -LiteralPath (Join-Path $diskEvidence 'disk-smoke-report.json') -PathType Leaf)
         restore_smoke = (Test-Path -LiteralPath (Join-Path $restoreEvidence 'restore-smoke-report.json') -PathType Leaf)
         uninstalled = [bool]$uninstalled
@@ -132,6 +117,7 @@ try {
 
     Write-Host "Installed immutable core: $installedCoreBlob"
     Write-Host 'Installed Documentation ACL: BUILTIN\Users Modify PASS'
+    Write-Host 'Installed Zapret Screen Fix payload: PASS'
     Write-Host 'Installed Disk Analyzer smoke: PASS'
     Write-Host 'Installed Restore Center smoke: PASS'
     Write-Host 'Silent uninstall: PASS'
@@ -141,10 +127,7 @@ finally {
     if ($installed -and -not $uninstalled) {
         $uninstaller = Join-Path $installRoot 'unins000.exe'
         if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
-            try {
-                Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait | Out-Null
-            }
-            catch { }
+            try { Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait | Out-Null } catch { }
         }
     }
     if (Test-Path -LiteralPath $installRoot) {
