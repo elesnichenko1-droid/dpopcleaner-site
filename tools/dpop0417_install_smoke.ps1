@@ -28,6 +28,7 @@ $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
 $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
 $uninstalled = $false
+$documentationAclModify = $false
 
 function Assert-File([string]$RelativePath) {
     $path = Join-Path $installRoot $RelativePath
@@ -65,6 +66,28 @@ try {
     [void](Assert-File 'Shell\commands\restore-center.json')
     [void](Assert-File 'Documentation\README.txt')
 
+    $documentationPath = Join-Path $installRoot 'Documentation'
+    $usersSidValue = 'S-1-5-32-545'
+    $acl = Get-Acl -LiteralPath $documentationPath
+    foreach ($rule in $acl.Access) {
+        try {
+            $ruleSid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+        }
+        catch {
+            $ruleSid = ''
+        }
+        $hasModify = (($rule.FileSystemRights -band [IO.FileSystemRights]::Modify) -eq [IO.FileSystemRights]::Modify)
+        if ($ruleSid -eq $usersSidValue -and
+            $rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+            $hasModify) {
+            $documentationAclModify = $true
+            break
+        }
+    }
+    if (-not $documentationAclModify) {
+        throw "Documentation ACL does not grant BUILTIN\Users ($usersSidValue) Modify: $documentationPath"
+    }
+
     $installedCoreBlob = (& git -C $repoRoot hash-object -- $core).Trim()
     if ($LASTEXITCODE -ne 0 -or $installedCoreBlob -ne $expectedCoreBlob) {
         throw "Installed immutable core mismatch: $installedCoreBlob"
@@ -101,12 +124,14 @@ try {
         install_root = $installRoot
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
+        documentation_acl_modify = [bool]$documentationAclModify
         disk_smoke = (Test-Path -LiteralPath (Join-Path $diskEvidence 'disk-smoke-report.json') -PathType Leaf)
         restore_smoke = (Test-Path -LiteralPath (Join-Path $restoreEvidence 'restore-smoke-report.json') -PathType Leaf)
         uninstalled = [bool]$uninstalled
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $reportPath -Encoding utf8
 
     Write-Host "Installed immutable core: $installedCoreBlob"
+    Write-Host 'Installed Documentation ACL: BUILTIN\Users Modify PASS'
     Write-Host 'Installed Disk Analyzer smoke: PASS'
     Write-Host 'Installed Restore Center smoke: PASS'
     Write-Host 'Silent uninstall: PASS'
