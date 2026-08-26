@@ -10,7 +10,7 @@
       m &&
       m.version === '0.4.17' &&
       m.channel === 'stable' &&
-      Number(m.revision) === 1 &&
+      Number(m.revision) === 2 &&
       m.available === true &&
       typeof m.download_url === 'string' &&
       releaseUrl.test(m.download_url) &&
