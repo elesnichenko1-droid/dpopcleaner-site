@@ -35,6 +35,9 @@ class DPop0417InstallerContractTests(unittest.TestCase):
         self.assertIn('modules/restorecenter.exe', smoke_text.replace('\\', '/'))
         self.assertIn('dpop0417_disk_smoke.ps1', smoke_text)
         self.assertIn('dpop0417_restore_smoke.ps1', smoke_text)
+        self.assertIn('get-acl', smoke_text)
+        self.assertIn('s-1-5-32-545', smoke_text)
+        self.assertIn('documentation_acl_modify', smoke_text)
         self.assertIn('unins000.exe', smoke_text)
         self.assertNotIn('invoke-expression', smoke_text)
 
