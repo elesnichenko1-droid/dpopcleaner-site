@@ -65,6 +65,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Pin critical publication contract
+        shell: pwsh
+        run: |
+          python tests/test_dpop0417_release_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run all 0.4.17 contracts
         shell: pwsh
         run: |
@@ -125,8 +131,7 @@ jobs:
 
       - name: Run installed package smoke
         shell: pwsh
-        run: |
-          ./tools/dpop0417_install_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/install'
+        run: ./tools/dpop0417_install_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/install'
 
       - name: Build publication payload
         shell: pwsh
@@ -143,30 +148,11 @@ jobs:
           $sha256 = (Get-FileHash -LiteralPath $env:DPOP0417_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
           $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
           [ordered]@{
-            product = 'DPopCleaner'
-            channel = 'beta'
-            version = '0.4.17'
-            version_code = 417
-            revision = 1
-            mandatory = $false
-            download_url = $url
-            sha256 = $sha256
-            size = [int64]$item.Length
-            signed = $false
-            available = $true
-            notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'
-            install_args = '/SILENT /NORESTART'
+            product = 'DPopCleaner'; channel = 'beta'; version = '0.4.17'; version_code = 417; revision = 1; mandatory = $false
+            download_url = $url; sha256 = $sha256; size = [int64]$item.Length; signed = $false; available = $true
+            notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args = '/SILENT /NORESTART'
           } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/beta.json') -Encoding utf8
-          [ordered]@{
-            installer = $env:RELEASE_ASSET
-            sha256 = $sha256
-            size = [int64]$item.Length
-            version = '0.4.17'
-            version_code = 417
-            revision = 1
-            tag = $env:RELEASE_TAG
-            source_sha = $env:GITHUB_SHA
-          } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
+          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=1; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload verified release candidate
@@ -188,13 +174,11 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-
       - name: Download verified release candidate
         uses: actions/download-artifact@v5
         with:
           name: dpopcleaner-0.4.17-release-candidate
           path: publish
-
       - name: Publish GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -206,9 +190,7 @@ jobs:
           else
             gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 BETA" --notes-file release/RELEASE_NOTES_0.4.17.md --prerelease
           fi
-
       - name: Stage GitHub Pages
-        shell: bash
         run: |
           set -euo pipefail
           rm -rf _site
@@ -216,16 +198,13 @@ jobs:
           cp index.html styles.css script.js release-manifest.js version.json _site/
           cp assets/dpopcleaner-0.4.17-disk.png assets/dpopcleaner-0.4.17-restore.png _site/assets/
           cp publish/update/beta.json _site/update/beta.json
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
       - name: Verify live manifest and installer SHA256
         shell: pwsh
         run: |
@@ -234,10 +213,7 @@ jobs:
           $expected = Get-Content -Raw 'publish/update/beta.json' | ConvertFrom-Json
           $live = $null
           for ($i = 0; $i -lt 12; $i++) {
-            try {
-              $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control' = 'no-cache' }
-              if ($live.version -eq '0.4.17' -and $live.sha256 -eq $expected.sha256) { break }
-            } catch {}
+            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.sha256 -eq $expected.sha256) { break } } catch {}
             Start-Sleep -Seconds 10
           }
           if (-not $live -or $live.version -ne '0.4.17' -or $live.version_code -ne 417 -or $live.revision -ne 1) { throw 'Live beta manifest mismatch.' }
