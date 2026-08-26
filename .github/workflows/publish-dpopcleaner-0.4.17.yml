@@ -18,7 +18,7 @@ on:
       - 'script.js'
       - 'release-manifest.js'
       - 'version.json'
-      - 'update/beta.json'
+      - 'update/stable.json'
   push:
     branches: [main]
     paths:
@@ -35,7 +35,7 @@ on:
       - 'script.js'
       - 'release-manifest.js'
       - 'version.json'
-      - 'update/beta.json'
+      - 'update/stable.json'
 
 permissions:
   contents: write
@@ -148,11 +148,11 @@ jobs:
           $sha256 = (Get-FileHash -LiteralPath $env:DPOP0417_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
           $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
           [ordered]@{
-            product = 'DPopCleaner'; channel = 'beta'; version = '0.4.17'; version_code = 417; revision = 1; mandatory = $false
+            product = 'DPopCleaner'; channel = 'stable'; version = '0.4.17'; version_code = 417; revision = 1; mandatory = $false
             download_url = $url; sha256 = $sha256; size = [int64]$item.Length; signed = $false; available = $true
             notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args = '/SILENT /NORESTART'
-          } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/beta.json') -Encoding utf8
-          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=1; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
+          } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
+          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=1; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload verified release candidate
@@ -179,7 +179,7 @@ jobs:
         with:
           name: dpopcleaner-0.4.17-release-candidate
           path: publish
-      - name: Publish GitHub prerelease
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -188,7 +188,7 @@ jobs:
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release upload "${RELEASE_TAG}" "$asset" --clobber
           else
-            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 BETA" --notes-file release/RELEASE_NOTES_0.4.17.md --prerelease
+            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17" --notes-file release/RELEASE_NOTES_0.4.17.md
           fi
       - name: Stage GitHub Pages
         run: |
@@ -197,7 +197,7 @@ jobs:
           mkdir -p _site/assets _site/update
           cp index.html styles.css script.js release-manifest.js version.json _site/
           cp assets/dpopcleaner-0.4.17-disk.png assets/dpopcleaner-0.4.17-restore.png _site/assets/
-          cp publish/update/beta.json _site/update/beta.json
+          cp publish/update/stable.json _site/update/stable.json
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -209,14 +209,14 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $manifestUrl = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/update/beta.json'
-          $expected = Get-Content -Raw 'publish/update/beta.json' | ConvertFrom-Json
+          $manifestUrl = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/update/stable.json'
+          $expected = Get-Content -Raw 'publish/update/stable.json' | ConvertFrom-Json
           $live = $null
           for ($i = 0; $i -lt 12; $i++) {
-            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.sha256 -eq $expected.sha256) { break } } catch {}
+            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.sha256 -eq $expected.sha256) { break } } catch {}
             Start-Sleep -Seconds 10
           }
-          if (-not $live -or $live.version -ne '0.4.17' -or $live.version_code -ne 417 -or $live.revision -ne 1) { throw 'Live beta manifest mismatch.' }
+          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 1) { throw 'Live stable manifest mismatch.' }
           $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.17.exe'
           Invoke-WebRequest -Uri $live.download_url -OutFile $download
           $sha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
