@@ -29,11 +29,24 @@ jobs:
       - name: Verify 0.4.17 foundation contracts
         shell: pwsh
         run: |
-          $tests = Get-ChildItem tests -Filter 'test_dpop0417_*.py' -File | Sort-Object Name
-          foreach ($test in $tests) {
-            python $test.FullName -v
-            if ($LASTEXITCODE -ne 0) { throw "Contract failed: $($test.Name)" }
-          }
+          python tests/test_dpop0417_core_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_layout_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_stage_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_workflow_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_disk_smoke_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_restore_smoke_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_installer_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_release_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_zapret_screen_fix_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run DPop.Common tests
         shell: pwsh
