@@ -9,6 +9,7 @@
     return Boolean(
       m &&
       m.version === '0.4.17' &&
+      m.channel === 'stable' &&
       Number(m.revision) === 1 &&
       m.available === true &&
       typeof m.download_url === 'string' &&
