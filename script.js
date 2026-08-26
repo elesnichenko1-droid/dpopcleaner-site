@@ -16,7 +16,7 @@ function setDownloadState(available, url, version){
       el.classList.remove('is-disabled');
       el.removeAttribute('aria-disabled');
       el.removeAttribute('data-disabled');
-      if(label) label.textContent = el.classList.contains('button-small') ? 'Скачать' : `Скачать ${version} BETA`;
+      if(label) label.textContent = el.classList.contains('button-small') ? 'Скачать' : `Скачать ${version}`;
     }else{
       el.href = '#release-status';
       el.classList.add('is-disabled');
@@ -28,8 +28,8 @@ function setDownloadState(available, url, version){
   const status=document.getElementById('releaseStatus');
   if(status){
     status.textContent = available
-      ? `DPopCleaner ${version} BETA опубликован и готов к загрузке.`
-      : `DPopCleaner ${version} BETA проходит проверку на GitHub. Кнопка скачивания включится автоматически после публикации проверенного manifest.`;
+      ? `DPopCleaner ${version} опубликован и готов к загрузке.`
+      : `DPopCleaner ${version} проходит финальную проверку на GitHub. Кнопка скачивания включится автоматически после публикации проверенного manifest.`;
     status.classList.toggle('ready', !!available);
   }
 }
@@ -53,11 +53,11 @@ function applyManifest(m){
 
 async function loadManifest(){
   try{
-    const response = await fetch(`./update/beta.json?t=${Date.now()}`, {cache:'no-store'});
+    const response = await fetch(`./update/stable.json?t=${Date.now()}`, {cache:'no-store'});
     if(!response.ok) throw new Error(`HTTP ${response.status}`);
     applyManifest(await response.json());
   }catch(err){
-    console.warn('Update manifest is not available yet:', err);
+    console.warn('Stable release manifest is not available yet:', err);
     applyManifest(null);
   }
 }
