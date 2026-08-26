@@ -118,10 +118,11 @@ namespace DPop.ZapretScreenFix
                     if (string.IsNullOrWhiteSpace(imagePath)) return null;
                     var marker = imagePath.IndexOf("winws.exe", StringComparison.OrdinalIgnoreCase);
                     if (marker < 0) return null;
+
+                    // Prefix is the directory that contains winws.exe, normally
+                    // <zapret-root>\bin\. Removing the final \bin yields the root.
                     var prefix = imagePath.Substring(0, marker).Trim().Trim('"');
-                    var bin = Path.GetDirectoryName(prefix.TrimEnd('\\'));
-                    if (string.IsNullOrWhiteSpace(bin)) return null;
-                    var root = Directory.GetParent(bin)?.FullName;
+                    var root = Path.GetDirectoryName(prefix.TrimEnd('\\'));
                     return root != null && Directory.Exists(root) ? root : null;
                 }
             }
