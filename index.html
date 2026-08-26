@@ -4,207 +4,62 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#07111f" />
-  <meta name="description" content="DPopCleaner — очистка, диагностика и контроль Windows в одном приложении. BETA 0.2.14 для Windows x64." />
-  <meta property="og:title" content="DPopCleaner — контроль Windows без лишнего шума" />
-  <meta property="og:description" content="Очистка, анализ системы, автозагрузка, DPopGuard 2 и инструменты Windows в одном приложении." />
+  <meta name="description" content="DPopCleaner 0.4.17 BETA для Windows x64: ядро 0.2.14, Анализатор диска и Центр восстановления." />
+  <meta property="og:title" content="DPopCleaner 0.4.17 BETA" />
+  <meta property="og:description" content="Проверяемая Windows-сборка с сохранённым ядром 0.2.14, Анализатором диска и Центром восстановления." />
   <meta property="og:type" content="website" />
-  <title>DPopCleaner — очистка и контроль Windows</title>
+  <title>DPopCleaner 0.4.17 BETA — Windows utility</title>
   <link rel="icon" href="./dpopcleaner-icon.png" type="image/png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="ambient ambient-a"></div>
-  <div class="ambient ambient-b"></div>
-
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <header class="site-header" id="top">
     <div class="container nav-wrap">
-      <a class="brand" href="#top" aria-label="DPopCleaner — на главную">
-        <img src="./dpopcleaner-icon.png" alt="" width="42" height="42" />
-        <span>DPopCleaner</span>
-        <small>BETA</small>
-      </a>
-      <nav class="nav" aria-label="Основная навигация">
-        <a href="#features">Возможности</a>
-        <a href="#how">Как работает</a>
-        <a href="#security">О сборке</a>
-        <a href="#faq">FAQ</a>
-      </nav>
-      <a class="button button-small button-ghost js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="js-download-label">Скоро</span></a>
+      <a class="brand" href="#top"><img src="./dpopcleaner-icon.png" alt="" width="42" height="42" /><span>DPopCleaner</span><small>BETA</small></a>
+      <nav class="nav" aria-label="Основная навигация"><a href="#features">Возможности</a><a href="#screens">Интерфейс</a><a href="#security">Проверка</a><a href="#faq">FAQ</a></nav>
+      <a class="button button-small button-ghost js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="js-download-label">Проверяем сборку</span></a>
       <button class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
     </div>
   </header>
-
   <main>
-    <section class="hero">
-      <div class="container hero-grid">
-        <div class="hero-copy reveal">
-          <div class="eyebrow"><span class="dot"></span> DPopCleaner <span class="js-version">0.2.14</span> BETA R1 · Windows x64</div>
-          <h1>Windows под контролем.<br><span>Без лишнего шума.</span></h1>
-          <p class="lead">Очистка, диагностика системы, управление автозагрузкой, DPopGuard 2, полезные инструменты Windows — в одном лёгком приложении.</p>
-          <div class="hero-actions">
-            <a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true">
-              <span class="download-icon">↓</span>
-              <span class="js-download-label">Сборка готовится</span>
-            </a>
-            <a class="button button-secondary" href="#features">Посмотреть возможности</a>
-          </div>
-          <div class="release-meta" aria-label="Сведения о релизе">
-            <span>Windows 10 / 11</span>
-            <i></i>
-            <span>x64</span>
-            <i></i>
-            <span class="js-size">ожидается сборка</span>
-            <i></i>
-            <span>Бесплатная BETA</span>
-          </div>
-        </div>
-
-        <div class="hero-visual reveal delay-1" aria-label="Иллюстрация возможностей DPopCleaner">
-          <div class="glow-ring"></div>
-          <div class="app-shell">
-            <div class="app-topbar">
-              <div class="mini-brand"><img src="./dpopcleaner-icon.png" alt="" /> <span>DPopCleaner</span></div>
-              <div class="window-controls"><b></b><b></b><b></b></div>
-            </div>
-            <div class="app-body">
-              <aside class="app-side">
-                <span class="active">Обзор</span>
-                <span>Очистка</span>
-                <span>DPopGuard 2</span>
-                <span>Автозагрузка</span>
-                <span>Инструменты</span>
-              </aside>
-              <div class="app-content">
-                <div class="status-row">
-                  <div><small>Состояние системы</small><strong>Готово к анализу</strong></div>
-                  <span class="status-pill">BETA</span>
-                </div>
-                <div class="metric-grid">
-                  <div class="metric"><span>CPU</span><strong>Анализ</strong><em style="--p:68%"></em></div>
-                  <div class="metric"><span>RAM</span><strong>Контроль</strong><em style="--p:51%"></em></div>
-                  <div class="metric"><span>Диск</span><strong>Очистка</strong><em style="--p:42%"></em></div>
-                </div>
-                <div class="scan-card">
-                  <div class="scan-icon">✓</div>
-                  <div><strong>DPopGuard 2</strong><p>Быстрая проверка автозапуска</p></div>
-                  <span>Готов</span>
-                </div>
-                <div class="action-strip">
-                  <span>Очистить</span><span>Проверить Windows</span><span>Проверить автозагрузку</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <p class="visual-note">Иллюстрация возможностей, не точный скриншот интерфейса.</p>
-        </div>
+    <section class="hero"><div class="container hero-grid">
+      <div class="hero-copy reveal">
+        <div class="eyebrow"><span class="dot"></span> DPopCleaner <span class="js-version">0.4.17</span> BETA · Windows x64</div>
+        <h1>Знакомое ядро.<br><span>Новые инструменты отдельно.</span></h1>
+        <p class="lead">DPopCleaner 0.4.17 сохраняет ядро 0.2.14 и добавляет companion-модули: Анализатор диска в стиле TreeSize и Центр восстановления с журналом обратимых операций.</p>
+        <div class="hero-actions"><a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span><span class="js-download-label">Сборка проверяется</span></a><a class="button button-secondary" href="#screens">Посмотреть реальные окна</a></div>
+        <div class="release-meta"><span>Windows 10 / 11</span><i></i><span>x64</span><i></i><span class="js-size">ожидается публикация</span><i></i><span>BETA</span></div>
       </div>
-    </section>
+      <div class="hero-visual reveal delay-1"><img src="assets/dpopcleaner-0.4.17-disk.png" alt="Реальный Анализатор диска DPopCleaner 0.4.17" style="width:100%;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.35)" /><p class="visual-note">Реальный скриншот из Windows UI smoke, а не макет.</p></div>
+    </div></section>
 
-    <section class="release-status-section" id="release-status">
-      <div class="container">
-        <div class="release-status-card reveal">
-          <span class="release-status-dot"></span>
-          <div><strong>Статус релиза</strong><p id="releaseStatus">Чистая сборка DPopCleaner 0.2.14 BETA R1 готовится к проверке и публикации.</p></div>
-        </div>
-      </div>
-    </section>
+    <section class="release-status-section" id="release-status"><div class="container"><div class="release-status-card reveal"><span class="release-status-dot"></span><div><strong>Статус релиза</strong><p id="releaseStatus">DPopCleaner 0.4.17 BETA проходит финальную проверку установщика и публикации. Кнопка загрузки активируется только после появления корректного SHA-256 в manifest.</p></div></div></div></section>
 
-    <section class="trust-strip">
-      <div class="container trust-grid reveal">
-        <div><strong class="js-version">0.2.14</strong><span>чистая BETA-сборка R1</span></div>
-        <div><strong>x64</strong><span>64-битная Windows</span></div>
-        <div><strong class="js-size">ожидается сборка</strong><span>размер установщика</span></div>
-        <div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div>
-      </div>
-    </section>
+    <section class="trust-strip"><div class="container trust-grid reveal"><div><strong>0.4.17</strong><span>текущий BETA-релиз</span></div><div><strong>0.2.14</strong><span>замороженное ядро</span></div><div><strong class="js-size">ожидается публикация</strong><span>размер установщика</span></div><div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div></div></section>
 
-    <section class="section" id="features">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker">Возможности</p>
-          <h2>Один центр для повседневного ухода за Windows</h2>
-          <p>DPopCleaner объединяет инструменты, которые обычно приходится искать по разным разделам системы и отдельным утилитам.</p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature-card reveal"><div class="feature-icon">✦</div><h3>Очистка системы</h3><p>Поиск временных данных и ненужных файлов с понятным сценарием очистки.</p><span>Cleaner</span></article>
-          <article class="feature-card reveal delay-1"><div class="feature-icon">◉</div><h3>Анализ ресурсов</h3><p>Обзор CPU, RAM, дисков, GPU и доступных процессов для поиска проблемных мест.</p><span>System analysis</span></article>
-          <article class="feature-card reveal delay-2"><div class="feature-icon">⌁</div><h3>DPopGuard 2</h3><p>Быстрая эвристическая проверка автозапуска. В текущей BETA подозрительные записи только показываются — автоматического удаления нет.</p><span>Quick scan</span></article>
-          <article class="feature-card reveal"><div class="feature-icon">▦</div><h3>Приложения</h3><p>Реальный список установленных программ из Windows. Запускает штатный деинсталлятор, затем ищет оставшиеся папки, данные и ярлыки и предлагает убрать их в Корзину.</p><span>Uninstall + leftovers</span></article>
-          <article class="feature-card reveal"><div class="feature-icon">↗</div><h3>Автозагрузка</h3><p>Просмотр записей автозапуска текущего пользователя из реестра Windows.</p><span>Startup Manager</span></article>
-          <article class="feature-card reveal delay-1"><div class="feature-icon">⌘</div><h3>Инструменты Windows</h3><p>Быстрый доступ к диагностике, обслуживанию и проверке системных компонентов.</p><span>Windows tools</span></article>
-          <article class="feature-card reveal delay-2"><div class="feature-icon">⇄</div><h3>Интеграция Zapret</h3><p>Диагностика состояния службы Zapret и процесса winws.exe без изменения их конфигурации.</p><span>Network tools</span></article>
-        </div>
-      </div>
-    </section>
+    <section class="section" id="features"><div class="container"><div class="section-head reveal"><p class="kicker">Что нового</p><h2>0.4.17 расширяет 0.2.14, не подменяя его</h2><p>Новые функции вынесены в отдельные модули и проходят собственные Windows-тесты.</p></div><div class="feature-grid">
+      <article class="feature-card reveal"><div class="feature-icon">▦</div><h3>Анализатор диска</h3><p>Иерархия каталогов, логический и занятый размер, файлы, папки, процент родителя и время изменения. Длительное сканирование не блокирует интерфейс.</p><span>DiskAnalyzer.exe</span></article>
+      <article class="feature-card reveal delay-1"><div class="feature-icon">↶</div><h3>Центр восстановления</h3><p>История операций, детали и явный статус отката. Необратимые действия не маскируются под восстанавливаемые.</p><span>RestoreCenter.exe</span></article>
+      <article class="feature-card reveal delay-2"><div class="feature-icon">✓</div><h3>Типизированный откат</h3><p>Поддерживаемые файлы и HKCU восстанавливаются через фиксированные провайдеры. Строки команд из history не исполняются.</p><span>RestoreCoordinator</span></article>
+      <article class="feature-card reveal"><div class="feature-icon">◆</div><h3>Ядро 0.2.14</h3><p>Основной DPopCleaner.exe проверяется на byte-identical соответствие исходному замороженному ядру перед упаковкой.</p><span>frozen core</span></article>
+      <article class="feature-card reveal delay-1"><div class="feature-icon">文</div><h3>RU / EN</h3><p>Тексты companion-модулей загружаются из внешних Languages/ru.json и Languages/en.json.</p><span>external localization</span></article>
+      <article class="feature-card reveal delay-2"><div class="feature-icon">#</div><h3>Проверяемый установщик</h3><p>После сборки сайт получает фактический размер и SHA-256 именно опубликованного DPopCleaner_Setup_0.4.17.exe.</p><span>verified manifest</span></article>
+    </div></div></section>
 
-    <section class="section steps-section" id="how">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker">Как это работает</p>
-          <h2>Три шага вместо десятка системных окон</h2>
-        </div>
-        <div class="steps">
-          <article class="step reveal"><b>01</b><h3>Запустите анализ</h3><p>DPopCleaner собирает доступные сведения о состоянии системы и показывает, где требуется внимание.</p></article>
-          <article class="step reveal delay-1"><b>02</b><h3>Проверьте рекомендации</h3><p>Вы выбираете нужные действия: очистка, автозагрузка, системные инструменты или быстрая проверка.</p></article>
-          <article class="step reveal delay-2"><b>03</b><h3>Примените изменения</h3><p>Выполняйте только выбранные действия и возвращайтесь к журналам, если нужно проверить результат.</p></article>
-        </div>
-      </div>
-    </section>
+    <section class="section" id="screens"><div class="container"><div class="section-head reveal"><p class="kicker">Реальный интерфейс</p><h2>Скриншоты из CI на Windows</h2><p>Эти изображения создаются теми же smoke-тестами, которые блокируют релиз при ошибке.</p></div><div class="feature-grid">
+      <article class="feature-card reveal" style="grid-column:span 2"><img src="assets/dpopcleaner-0.4.17-disk.png" alt="Анализатор диска DPopCleaner 0.4.17" style="width:100%;border-radius:14px" /><h3>Анализатор диска</h3><p>TreeSize-подобная таблица и контролируемое сканирование.</p></article>
+      <article class="feature-card reveal delay-1" style="grid-column:span 2"><img src="assets/dpopcleaner-0.4.17-restore.png" alt="Центр восстановления DPopCleaner 0.4.17" style="width:100%;border-radius:14px" /><h3>Центр восстановления</h3><p>История, детали и отключённый откат для необратимых записей.</p></article>
+    </div></div></section>
 
-    <section class="section" id="security">
-      <div class="container security-card reveal">
-        <div class="shield-wrap"><img src="./dpopcleaner-icon.png" alt="Иконка DPopCleaner" /></div>
-        <div class="security-copy">
-          <p class="kicker">О текущей сборке</p>
-          <h2>Проверяемый релиз, без громких обещаний</h2>
-          <p>На странице показываются технические данные установщика, чтобы файл можно было сверить после загрузки. Чистый установщик DPopCleaner 0.2.14 BETA R1 содержит только основное приложение и не включает дополнительные компоненты Zapret/WinDivert. Перед серьёзными изменениями системы рекомендуем создать точку восстановления.</p>
-          <div class="hash-box">
-            <div><small>SHA-256</small><code id="hashValue">будет опубликован после сборки</code></div>
-            <button id="copyHash2" class="copy-button" type="button">Копировать</button>
-          </div>
-          <div class="build-facts">
-            <span><b>Формат</b> PE32+ Windows GUI</span>
-            <span><b>Архитектура</b> x86-64</span>
-            <span><b>Сборка</b> GitHub Actions · Windows x64</span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <section class="section" id="security"><div class="container security-card reveal"><div class="shield-wrap"><img src="./dpopcleaner-icon.png" alt="Иконка DPopCleaner" /></div><div class="security-copy"><p class="kicker">Проверка сборки</p><h2>Сначала тесты — потом ссылка</h2><p>Windows pipeline собирает companion-модули, выполняет unit-тесты, staged UI smoke, реальный restore round-trip, проверяет неизменность ядра 0.2.14, собирает Inno Setup и тестирует установленный пакет. Публикация происходит только после этих этапов.</p><div class="hash-box"><div><small>SHA-256</small><code id="hashValue">будет опубликован после финальной сборки</code></div><button id="copyHash2" class="copy-button" type="button">Копировать</button></div><div class="build-facts"><span><b>Релиз</b> 0.4.17 BETA</span><span><b>Архитектура</b> x86-64</span><span><b>Сборка</b> GitHub Actions · Windows 2022</span></div></div></div></section>
 
-    <section class="section" id="faq">
-      <div class="container faq-layout">
-        <div class="section-head reveal">
-          <p class="kicker">FAQ</p>
-          <h2>Перед установкой</h2>
-          <p>Короткие ответы на вопросы, которые особенно важны для BETA-версии.</p>
-        </div>
-        <div class="faq-list reveal delay-1">
-          <details open><summary>Для какой Windows предназначен DPopCleaner?</summary><p>Текущий установщик собран под 64-битную Windows. Для сайта мы позиционируем релиз для Windows 10 и Windows 11 x64.</p></details>
-          <details><summary>Почему некоторые действия требуют администратора?</summary><p>Управление системными списками памяти, компонентами Windows и частью обслуживающих операций требует повышенных прав. Приложение запрашивает их только для таких сценариев.</p></details>
-          <details><summary>DPopGuard 2 заменяет антивирус?</summary><p>Нет. В 0.2.14 BETA это дополнительная эвристическая проверка автозапуска. Она ничего не удаляет автоматически и не заменяет Microsoft Defender или другой антивирус.</p></details>
-          <details><summary>Как проверить скачанный установщик?</summary><p>Вычислите SHA-256 файла и сравните его со значением на этой странице. Для текущего BETA-релиза ожидаемый хеш загружается из update/beta.json и отображается выше.</p></details>
-        </div>
-      </div>
-    </section>
+    <section class="section" id="faq"><div class="container faq-layout"><div class="section-head reveal"><p class="kicker">FAQ</p><h2>Перед установкой</h2><p>Коротко о том, что именно входит в 0.4.17.</p></div><div class="faq-list reveal delay-1"><details open><summary>0.4.17 — это переписанный DPopCleaner?</summary><p>Нет. Основное ядро 0.2.14 сохраняется неизменным; новые возможности поставляются отдельными companion-модулями.</p></details><details><summary>Можно ли восстановить любое действие?</summary><p>Нет. Центр восстановления явно различает обратимые и необратимые записи. Кнопка восстановления недоступна там, где безопасный откат не определён.</p></details><details><summary>Как проверить установщик?</summary><p>После публикации SHA-256 из update/beta.json отображается на этой странице. Ссылка активируется только при корректном manifest с ненулевым размером и 64-символьным SHA-256.</p></details></div></div></section>
 
-    <section class="cta-section">
-      <div class="container cta reveal">
-        <div><p class="kicker">DPopCleaner 0.2.14 BETA R1</p><h2>Скачать чистую сборку</h2><p>Для Windows x64 · установщик <span class="js-size">ожидается сборка</span></p></div>
-        <a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span> <span class="js-download-label">Сборка готовится</span></a>
-      </div>
-    </section>
+    <section class="cta-section"><div class="container cta reveal"><div><p class="kicker">DPopCleaner 0.4.17 BETA</p><h2>Скачать проверенную сборку</h2><p>Windows x64 · <span class="js-size">ожидается публикация</span></p></div><a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span> <span class="js-download-label">Сборка проверяется</span></a></div></section>
   </main>
-
-  <footer class="footer">
-    <div class="container footer-grid">
-      <div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · BETA</span></div></div>
-      <div class="footer-links"><a href="#features">Возможности</a><a href="#security">О сборке</a><a href="#faq">FAQ</a><a href="#top">Наверх ↑</a></div>
-      <p>© 2026 DPopCleaner. BETA software.</p>
-    </div>
-  </footer>
-
+  <footer class="footer"><div class="container footer-grid"><div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · BETA</span></div></div><div class="footer-links"><a href="#features">Возможности</a><a href="#screens">Интерфейс</a><a href="#security">Проверка</a><a href="#top">Наверх ↑</a></div><p>© 2026 DPopCleaner.</p></div></footer>
   <div class="toast" id="toast" role="status" aria-live="polite">SHA-256 скопирован</div>
-  <script src="release-manifest.js"></script>
-  <script src="script.js"></script>
+  <script src="release-manifest.js"></script><script src="script.js"></script>
 </body>
 </html>
