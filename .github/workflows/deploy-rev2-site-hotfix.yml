@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event.pull_request.head.ref == 'deploy/rev2-site-hotfix'
+    if: github.event.pull_request.head.ref == 'deploy/rev2-site-hotfix-run'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
