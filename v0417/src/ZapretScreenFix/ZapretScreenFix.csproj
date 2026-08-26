@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ZapretScreenFix</AssemblyName>
+    <RootNamespace>DPop.ZapretScreenFix</RootNamespace>
+    <Version>0.4.17</Version>
+    <FileVersion>0.4.17.2</FileVersion>
+  </PropertyGroup>
+</Project>
