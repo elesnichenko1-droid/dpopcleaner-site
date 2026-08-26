@@ -34,6 +34,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
         self.assertIn("m.version === '0.4.17'", manifest)
         self.assertIn("m.channel === 'stable'", manifest)
+        self.assertIn('number(m.revision) === 2', manifest)
         self.assertIn('v0\\.4\\.17', manifest)
         self.assertIn('dpopcleaner_setup_0\\.4\\.17\\.exe', manifest)
 
