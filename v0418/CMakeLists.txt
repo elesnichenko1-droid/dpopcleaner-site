@@ -35,6 +35,7 @@ add_executable(AppSettingsTests tests/AppSettingsTests.cpp core/AppSettings.cpp)
 dpop0418_test(AppSettingsTests)
 
 add_executable(ZapretControllerTests tests/ZapretControllerTests.cpp core/ZapretController.cpp)
+target_link_libraries(ZapretControllerTests PRIVATE advapi32 shell32)
 dpop0418_test(ZapretControllerTests)
 
 add_executable(UpdatePolicyTests tests/UpdatePolicyTests.cpp core/UpdatePolicy.cpp)
