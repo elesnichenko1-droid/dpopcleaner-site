@@ -10,7 +10,7 @@ namespace DPopCleaner.SimpleUpdate
         // the release contract treats scrolling as behavior, not as a one-off coordinate shift.
         private const bool AutoScroll = true;
         private const int AutoScrollMinSize = 270;
-        private const int ContentHeight = 260;
+        private const int ContentHeight = 280;
         private const int WheelStep = 48;
 
         private const uint WS_CHILD = 0x40000000;
