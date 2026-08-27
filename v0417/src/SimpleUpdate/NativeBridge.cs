@@ -10,11 +10,13 @@ namespace DPopCleaner.SimpleUpdate
         internal const int SettingsGearId = 906;
         internal const int AdminCheckboxId = 1410;
         internal const int AutoUpdateCheckboxId = 1490;
+        internal const int CheckNowButtonId = 1491;
         internal const uint BM_GETCHECK = 0x00F0;
         internal const uint BM_SETCHECK = 0x00F1;
         internal const int BST_UNCHECKED = 0;
         internal const int BST_CHECKED = 1;
         internal const uint WM_SETICON = 0x0080;
+        internal const uint WM_CLOSE = 0x0010;
         internal const int ICON_SMALL = 0;
         internal const int ICON_BIG = 1;
         internal const int SW_HIDE = 0;
@@ -71,6 +73,9 @@ namespace DPopCleaner.SimpleUpdate
 
         [DllImport("user32.dll")]
         internal static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
         [DllImport("user32.dll")]
         internal static extern bool ShowWindow(IntPtr hWnd, int command);
@@ -134,6 +139,23 @@ namespace DPopCleaner.SimpleUpdate
             if (checkbox != IntPtr.Zero)
                 SendMessage(checkbox, BM_SETCHECK, new IntPtr(isChecked ? BST_CHECKED : BST_UNCHECKED), IntPtr.Zero);
             return checkbox;
+        }
+
+        internal static IntPtr CreateCheckNowButton(IntPtr parent, IntPtr adminAnchor)
+        {
+            RECT rect;
+            if (!GetWindowRect(adminAnchor, out rect)) return IntPtr.Zero;
+            var point = new POINT { X = rect.Left, Y = rect.Bottom + 6 };
+            if (!ScreenToClient(parent, ref point)) return IntPtr.Zero;
+
+            const uint WS_CHILD = 0x40000000;
+            const uint WS_VISIBLE = 0x10000000;
+            const uint WS_TABSTOP = 0x00010000;
+            const uint BS_AUTOCHECKBOX = 0x00000003;
+            const uint BS_PUSHLIKE = 0x00001000;
+            return CreateWindowEx(0, "Button", "Проверить сейчас",
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | BS_PUSHLIKE,
+                point.X + 300, point.Y, 160, 27, parent, new IntPtr(CheckNowButtonId), GetModuleHandle(null), IntPtr.Zero);
         }
 
         internal static void MakeRoomForAutoUpdate(IntPtr parent)
