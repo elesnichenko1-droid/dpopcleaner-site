@@ -18,12 +18,9 @@ def extract_strings_with_offsets(data):
 
 def extract_core_zapret_strings():
     values = extract_strings_with_offsets(CORE.read_bytes())
-    return sorted({
-        value for _, value, _ in values
-        if any(token in value.lower() for token in (
-            "zapret", "winws", "service.bat", "strategy", "strateg", "update", "updater"
-        ))
-    })
+    return sorted({value for _, value, _ in values if any(token in value.lower() for token in (
+        "zapret", "winws", "service.bat", "strategy", "strateg", "update", "updater"
+    ))})
 
 
 def parse_pe_sections(data):
@@ -111,32 +108,37 @@ def rip_relative_lea_refs(data, sections, start_offset, end_offset):
     return refs
 
 
+def find_string_offsets(data, value):
+    needles = [value.encode("ascii", errors="ignore"), value.encode("utf-16le")]
+    offsets = []
+    for needle in needles:
+        start = 0
+        while True:
+            pos = data.find(needle, start)
+            if pos < 0:
+                break
+            offsets.append(pos)
+            start = pos + 1
+    return sorted(set(offsets))
+
+
 def print_updater_code_refs():
     data = CORE.read_bytes()
     sections = parse_pe_sections(data)
-    needle = "Zapret updater module is missing. Reinstall DPopCleaner.".encode("utf-16le")
-    error_offset = data.find(needle)
+    text = next((s for s in sections if s["name"] == ".text"), None)
+    refs = rip_relative_lea_refs(data, sections, text["raw_offset"], text["raw_offset"] + text["raw_size"])
     print("FROZEN_CORE_ZAPRET_UPDATER_CODE_REFS_BEGIN")
-    print(f"ERROR_STRING_OFFSET=0x{error_offset:08x}")
-    if error_offset >= 0:
-        error_rva = file_offset_to_rva(sections, error_offset)
-        print(f"ERROR_STRING_RVA=0x{error_rva:08x}" if error_rva is not None else "ERROR_STRING_RVA=NONE")
-        text = next((s for s in sections if s["name"] == ".text"), None)
-        if text and error_rva is not None:
-            refs = rip_relative_lea_refs(data, sections, text["raw_offset"], text["raw_offset"] + text["raw_size"])
-            xrefs = [item for item in refs if item[1] == error_offset]
-            print("ERROR_XREFS=" + ",".join(f"0x{item[0]:08x}" for item in xrefs))
-            for xref, _, _ in xrefs:
-                print(f"XREF_CONTEXT=0x{xref:08x}")
-                nearby = rip_relative_lea_refs(data, sections, xref - 4096, xref + 4096)
-                seen = set()
-                for insn_offset, target_offset, value in nearby:
-                    if value in seen:
-                        continue
-                    seen.add(value)
-                    lower = value.lower()
-                    if any(token in lower for token in ("zapret", "winws", "service", "update", "general", "module", "dpop")) or re.search(r"(?i)\.(?:exe|bat|cmd|ps1|dll)$", value):
-                        print(f"LEA@0x{insn_offset:08x}->0x{target_offset:08x}: {ascii(value)}")
+    for label, value in (
+        ("UPDATER_ERROR", "Zapret updater module is missing. Reinstall DPopCleaner."),
+        ("DPOPUPDATE", "DPopUpdate.bat"),
+        ("ZAPRET_FOLDER", "zapret-discord-youtube"),
+        ("WINWS", "bin\\winws.exe"),
+        ("SERVICE", "service.bat"),
+    ):
+        offsets = find_string_offsets(data, value)
+        print(label + "_STRING_OFFSETS=" + ",".join(f"0x{x:08x}" for x in offsets))
+        xrefs = [item[0] for item in refs if item[1] in offsets]
+        print(label + "_XREFS=" + ",".join(f"0x{x:08x}" for x in xrefs))
     print("FROZEN_CORE_ZAPRET_UPDATER_CODE_REFS_END")
 
 
