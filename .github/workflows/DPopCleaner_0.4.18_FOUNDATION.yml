@@ -5,6 +5,7 @@ on:
     branches:
       - feat/dpopcleaner-0.4.18-core-update
     paths:
+      - '.gitattributes'
       - 'v0418/**'
       - 'v0417/**'
       - 'tools/dpop0418_*.ps1'
@@ -22,6 +23,7 @@ on:
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
   pull_request:
     paths:
+      - '.gitattributes'
       - 'v0418/**'
       - 'v0417/**'
       - 'tools/dpop0418_*.ps1'
