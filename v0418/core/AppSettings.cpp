@@ -21,6 +21,35 @@ std::wstring Win32Error(const wchar_t* prefix) {
     return std::wstring(prefix) + L" (код " + std::to_wstring(GetLastError()) + L")";
 }
 
+std::wstring FromUtf8(const std::string& value) {
+    if (value.empty()) return {};
+    const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                                          static_cast<int>(value.size()), nullptr, 0);
+    if (count <= 0) return {};
+    std::wstring result(static_cast<size_t>(count), L'\0');
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                            static_cast<int>(value.size()), result.data(), count) != count) return {};
+    return result;
+}
+
+std::string ToUtf8(const std::wstring& value) {
+    if (value.empty()) return {};
+    const int count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
+                                          static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
+    if (count <= 0) return {};
+    std::string result(static_cast<size_t>(count), '\0');
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
+                            static_cast<int>(value.size()), result.data(), count,
+                            nullptr, nullptr) != count) return {};
+    return result;
+}
+
+std::wstring SafeStrategyName(const std::wstring& value) {
+    if (value.empty() || value.find(L'\r') != std::wstring::npos || value.find(L'\n') != std::wstring::npos)
+        return L"general.bat";
+    return value;
+}
+
 } // namespace
 
 AppSettings LoadSettings(const std::filesystem::path& path) {
@@ -28,25 +57,34 @@ AppSettings LoadSettings(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) return settings;
 
-    bool inUpdates = false;
+    enum class Section { None, Updates, Zapret };
+    Section section = Section::None;
     std::string line;
     while (std::getline(input, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         const std::string trimmed = Trim(line);
         if (trimmed.empty() || trimmed.front() == ';' || trimmed.front() == '#') continue;
         if (trimmed.front() == '[' && trimmed.back() == ']') {
-            inUpdates = Trim(trimmed.substr(1, trimmed.size() - 2)) == "updates";
+            const std::string name = Trim(trimmed.substr(1, trimmed.size() - 2));
+            if (name == "updates") section = Section::Updates;
+            else if (name == "zapret") section = Section::Zapret;
+            else section = Section::None;
             continue;
         }
-        if (!inUpdates) continue;
+
         const auto eq = trimmed.find('=');
         if (eq == std::string::npos) continue;
         const std::string key = Trim(trimmed.substr(0, eq));
         const std::string value = Trim(trimmed.substr(eq + 1));
-        if (key != "auto_check") continue;
-        if (value == "0") settings.autoCheckUpdates = false;
-        else if (value == "1") settings.autoCheckUpdates = true;
-        else settings.autoCheckUpdates = true;
+
+        if (section == Section::Updates && key == "auto_check") {
+            if (value == "0") settings.autoCheckUpdates = false;
+            else if (value == "1") settings.autoCheckUpdates = true;
+            else settings.autoCheckUpdates = true;
+        } else if (section == Section::Zapret && key == "strategy") {
+            const std::wstring decoded = FromUtf8(value);
+            settings.zapretStrategy = SafeStrategyName(decoded);
+        }
     }
     return settings;
 }
@@ -63,8 +101,15 @@ bool SaveSettingsAtomic(const std::filesystem::path& path, const AppSettings& se
     }
 
     const std::filesystem::path temp = path.wstring() + L".tmp";
+    const std::wstring strategy = SafeStrategyName(settings.zapretStrategy);
+    const std::string strategyUtf8 = ToUtf8(strategy);
+    if (strategyUtf8.empty()) {
+        error = L"Не удалось кодировать выбранную стратегию Zapret";
+        return false;
+    }
     const std::string bytes = std::string("[updates]\r\nauto_check=") +
-                              (settings.autoCheckUpdates ? "1" : "0") + "\r\n";
+                              (settings.autoCheckUpdates ? "1" : "0") +
+                              "\r\n\r\n[zapret]\r\nstrategy=" + strategyUtf8 + "\r\n";
 
     HANDLE file = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                               FILE_ATTRIBUTE_NORMAL, nullptr);

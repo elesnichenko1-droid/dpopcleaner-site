@@ -34,8 +34,7 @@ endfunction()
 add_executable(AppSettingsTests tests/AppSettingsTests.cpp core/AppSettings.cpp)
 dpop0418_test(AppSettingsTests)
 
-# RED first: this test intentionally references the not-yet-implemented ZapretController API.
-add_executable(ZapretControllerTests tests/ZapretControllerTests.cpp)
+add_executable(ZapretControllerTests tests/ZapretControllerTests.cpp core/ZapretController.cpp)
 dpop0418_test(ZapretControllerTests)
 
 add_executable(UpdatePolicyTests tests/UpdatePolicyTests.cpp core/UpdatePolicy.cpp)
@@ -73,6 +72,7 @@ add_executable(DPopCleaner WIN32
     core/main.cpp
     core/MainWindow.cpp
     core/AppSettings.cpp
+    core/ZapretController.cpp
     core/UpdateClient.cpp
     core/UpdateManifest.cpp
     core/UpdatePolicy.cpp
