@@ -86,9 +86,9 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
             'dpopcleaner-0.4.18-zapret.png', 'dpopcleaner-0.4.18-settings.png',
             'test_dpop0418_release_contract.py', 'node --test tests/release-manifest.test.cjs',
             'ctest --test-dir build0418', 'zapretscreenfix.tests.csproj', 'version_code = 418',
-            'revision = 2', 'get-filehash', 'gh release', 'update/stable.json',
+            'revision = 2', 'get-filehash', 'gh release', 'gh release download', 'update/stable.json',
             'actions/upload-pages-artifact', 'actions/deploy-pages', 'invoke-restmethod',
-            'invoke-webrequest', 'sha256',
+            'sha256',
         ):
             self.assertIn(token, workflow)
         self.assertNotIn('assets/dpopcleaner-0.4.17-disk.png', workflow)

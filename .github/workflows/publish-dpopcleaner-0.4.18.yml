@@ -57,7 +57,7 @@ permissions:
 
 concurrency:
   group: dpopcleaner-0-4-18-publish-${{ github.event_name }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   RELEASE_TAG: v0.4.18
@@ -236,6 +236,7 @@ jobs:
     if: github.event_name == 'push'
     needs: build-package
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -286,6 +287,8 @@ jobs:
 
       - name: Verify live release screenshots and installer SHA256
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           $base = 'https://elesnichenko1-droid.github.io/dpopcleaner-site'
@@ -294,42 +297,36 @@ jobs:
           $live = $null
           for ($i = 0; $i -lt 18; $i++) {
             try {
-              $live = Invoke-RestMethod -Uri ($manifestUrl + '?t=' + $env:GITHUB_RUN_ID + '-' + $i) -Headers @{ 'Cache-Control'='no-cache' }
+              $live = Invoke-RestMethod -Uri ($manifestUrl + '?t=' + $env:GITHUB_RUN_ID + '-' + $i) -Headers @{ 'Cache-Control'='no-cache' } -TimeoutSec 15
               if ($live.version -eq '0.4.18' -and $live.channel -eq 'stable' -and $live.version_code -eq 418 -and $live.revision -eq 2 -and $live.available -eq $true -and $live.sha256 -eq $expected.sha256) { break }
             } catch {}
             Start-Sleep -Seconds 10
           }
           if (-not $live -or $live.version -ne '0.4.18' -or $live.channel -ne 'stable' -or $live.version_code -ne 418 -or $live.revision -ne 2 -or $live.available -ne $true -or $live.sha256 -ne $expected.sha256 -or [int64]$live.size -ne [int64]$expected.size) { throw 'Live stable manifest mismatch.' }
 
+          $downloadDir = Join-Path $env:RUNNER_TEMP 'dpop0418-live-release'
+          Remove-Item -LiteralPath $downloadDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
           $shots = @(
-            [pscustomobject]@{ Name='dpopcleaner-0.4.18-overview.png'; Url='https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/dpopcleaner-0.4.18-overview.png' },
-            [pscustomobject]@{ Name='dpopcleaner-0.4.18-zapret.png'; Url='https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/dpopcleaner-0.4.18-zapret.png' },
-            [pscustomobject]@{ Name='dpopcleaner-0.4.18-settings.png'; Url='https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/dpopcleaner-0.4.18-settings.png' }
+            'dpopcleaner-0.4.18-overview.png',
+            'dpopcleaner-0.4.18-zapret.png',
+            'dpopcleaner-0.4.18-settings.png'
           )
-          foreach ($shot in $shots) {
-            $expectedShot = Join-Path 'publish/assets' $shot.Name
+          foreach ($name in $shots) {
+            $expectedShot = Join-Path 'publish/assets' $name
             $expectedShotSha = (Get-FileHash -LiteralPath $expectedShot -Algorithm SHA256).Hash.ToLowerInvariant()
-            $target = Join-Path $env:RUNNER_TEMP $shot.Name
-            $shotReady = $false
-            for ($shotAttempt = 0; $shotAttempt -lt 12; $shotAttempt++) {
-              try {
-                Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
-                Invoke-WebRequest -Uri ($shot.Url + '?t=' + $env:GITHUB_RUN_ID + '-' + $shotAttempt) -Headers @{ 'Cache-Control'='no-cache' } -OutFile $target
-                if (Test-Path -LiteralPath $target -PathType Leaf) {
-                  $liveShotSha = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
-                  if ((Get-Item -LiteralPath $target).Length -ge 15000 -and $liveShotSha -eq $expectedShotSha) {
-                    $shotReady = $true
-                    break
-                  }
-                }
-              } catch {}
-              Start-Sleep -Seconds 5
-            }
-            if (-not $shotReady) { throw "Live release screenshot mismatch: $($shot.Name)" }
+            gh release download $env:RELEASE_TAG --pattern "$name" --dir $downloadDir --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Unable to download release screenshot: $name" }
+            $target = Join-Path $downloadDir $name
+            if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw "Live release screenshot missing: $name" }
+            $liveShotSha = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ((Get-Item -LiteralPath $target).Length -lt 15000 -or $liveShotSha -ne $expectedShotSha) { throw "Live release screenshot mismatch: $name" }
           }
 
-          $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.18.exe'
-          Invoke-WebRequest -Uri ($live.download_url + '?t=' + $env:GITHUB_RUN_ID) -OutFile $download
+          gh release download $env:RELEASE_TAG --pattern "$env:RELEASE_ASSET" --dir $downloadDir --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to download live installer release asset.' }
+          $download = Join-Path $downloadDir $env:RELEASE_ASSET
+          if (-not (Test-Path -LiteralPath $download -PathType Leaf)) { throw 'Live installer release asset missing.' }
           $sha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
           $size = (Get-Item -LiteralPath $download).Length
           if ($sha256 -ne $expected.sha256) { throw "Live installer SHA256 mismatch: $sha256" }
