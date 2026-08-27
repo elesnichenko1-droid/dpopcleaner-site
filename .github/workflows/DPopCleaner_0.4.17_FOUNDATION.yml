@@ -46,6 +46,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_dpop0417_release_contract.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_zapret_screen_fix_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run DPop.Common tests
         shell: pwsh
@@ -57,6 +59,12 @@ jobs:
         shell: pwsh
         run: |
           dotnet test v0417/tests/DiskAnalyzer.Tests/DiskAnalyzer.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run Zapret Screen Fix tests
+        shell: pwsh
+        run: |
+          dotnet test v0417/tests/ZapretScreenFix.Tests/ZapretScreenFix.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build DPop.Common
@@ -75,6 +83,12 @@ jobs:
         shell: pwsh
         run: |
           dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build Zapret Screen Fix
+        shell: pwsh
+        run: |
+          dotnet build v0417/src/ZapretScreenFix/ZapretScreenFix.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build SimpleUpdate launcher
@@ -100,6 +114,16 @@ jobs:
           ./tools/dpop0417_restore_smoke.ps1 `
             -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' `
             -OutputDir '_release/0.4.17/evidence/restore'
+
+      - name: Verify staged Zapret Screen Fix companion
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath '_release/0.4.17/stage/Modules/ZapretScreenFix.exe' -PathType Leaf)) {
+            throw 'Staged ZapretScreenFix.exe is missing.'
+          }
+          if (-not (Test-Path -LiteralPath '_release/0.4.17/stage/Shell/commands/zapret-screen-fix.json' -PathType Leaf)) {
+            throw 'Staged Zapret screen-fix shell command is missing.'
+          }
 
       - name: Verify staged original core is byte-identical
         shell: pwsh

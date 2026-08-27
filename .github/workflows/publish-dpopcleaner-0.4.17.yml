@@ -82,12 +82,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Contract failed: $($test.Name)" }
           }
 
-      - name: Run Common and Disk tests
+      - name: Run Common, Disk and Zapret Screen Fix tests
         shell: pwsh
         run: |
           dotnet test v0417/tests/DPop.Common.Tests/DPop.Common.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet test v0417/tests/DiskAnalyzer.Tests/DiskAnalyzer.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test v0417/tests/ZapretScreenFix.Tests/ZapretScreenFix.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build companion modules and SimpleUpdate
@@ -98,6 +100,8 @@ jobs:
           dotnet build v0417/src/DiskAnalyzer/DiskAnalyzer.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/ZapretScreenFix/ZapretScreenFix.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build v0417/src/SimpleUpdate/SimpleUpdate.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -111,6 +115,8 @@ jobs:
         run: |
           ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.17/evidence/disk'
           ./tools/dpop0417_restore_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' -OutputDir '_release/0.4.17/evidence/restore'
+          if (-not (Test-Path -LiteralPath '_release/0.4.17/stage/Modules/ZapretScreenFix.exe' -PathType Leaf)) { throw 'Staged ZapretScreenFix.exe missing.' }
+          if (-not (Test-Path -LiteralPath '_release/0.4.17/stage/Shell/commands/zapret-screen-fix.json' -PathType Leaf)) { throw 'Staged Zapret screen-fix command missing.' }
           $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
           $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
           if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }

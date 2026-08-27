@@ -1,6 +1,6 @@
 # DPopCleaner 0.4.17 rev.3
 
-DPopCleaner 0.4.17 rev.3 сохраняет оригинальное ядро DPopCleaner 0.2.14 без переписывания. Старый `DPopCleaner.exe` остаётся byte-identical, а автообновление и новые функции подключаются отдельными компонентами.
+DPopCleaner 0.4.17 rev.3 сохраняет оригинальное ядро DPopCleaner 0.2.14 без переписывания. Старый `DPopCleaner.exe` остаётся byte-identical, а автообновление и новые функции подключаются отдельными компонентами. Revision 3 также полностью сохраняет исправление демонстрации экрана через Zapret, выпущенное в revision 2.
 
 ## Revision 3
 
@@ -13,11 +13,13 @@ DPopCleaner 0.4.17 rev.3 сохраняет оригинальное ядро DP
 - Только после успешной проверки DPopCleaner закрывается и запускается проверенный установщик.
 - Основные ярлыки меню «Пуск», рабочего стола и post-install запуск теперь ведут на `SimpleUpdate.exe`; оригинальный `DPopCleaner.exe` остаётся рядом как неизменяемое ядро.
 - `SimpleUpdate.exe` использует фирменную иконку DPopCleaner и передаёт её старому окну через Win32.
+- **Сохранена функциональность revision 2:** `Modules/ZapretScreenFix.exe` и команда `zapret-screen-fix` остаются в пакете для исправления проблем демонстрации экрана при использовании Zapret.
 
 ## Что входит в 0.4.17
 
 - **Анализатор диска** — отдельный `Modules/DiskAnalyzer.exe` с древовидным представлением в стиле TreeSize и колонками: имя, размер, занято, файлы, папки, % родителя, изменено.
 - **Центр восстановления** — отдельный `Modules/RestoreCenter.exe` с историей операций и явным статусом доступности отката.
+- **Zapret Screen Fix** — отдельный `Modules/ZapretScreenFix.exe`, сохраняющий исправление демонстрации экрана из revision 2.
 - **Documentation и резервные состояния** — append-only история и backup-хранилище для поддерживаемых обратимых операций.
 - **Русская и английская локализация** companion-модулей через внешние JSON-файлы в `Languages`.
 
@@ -27,10 +29,10 @@ DPopCleaner 0.4.17 rev.3 сохраняет оригинальное ядро DP
 
 ## Проверка релиза
 
-Windows CI проверяет контракты SimpleUpdate, настоящий launcher/Settings bridge, fast-close, Common/Restore и Disk Analyzer tests, staged UI smoke, реальный Restore round-trip, неизменность оригинального ядра 0.2.14, сборку Inno Setup и smoke уже установленного пакета. SHA-256 и размер установщика вычисляются из фактически собранного `DPopCleaner_Setup_0.4.17.exe` и только после этого публикуются в stable manifest.
+Windows CI проверяет контракты SimpleUpdate, настоящий launcher/Settings bridge, fast-close, Common/Restore, Disk Analyzer и Zapret Screen Fix tests, staged UI smoke, наличие Zapret Screen Fix в staged-пакете, реальный Restore round-trip, неизменность оригинального ядра 0.2.14, сборку Inno Setup и smoke уже установленного пакета. Installed smoke отдельно подтверждает наличие `Modules/ZapretScreenFix.exe` и `Shell/commands/zapret-screen-fix.json`. SHA-256 и размер установщика вычисляются из фактически собранного `DPopCleaner_Setup_0.4.17.exe` и только после этого публикуются в stable manifest.
 
 ## Установка
 
-Запустите `DPopCleaner_Setup_0.4.17.exe`. Установщик размещает `SimpleUpdate.exe`, неизменный `DPopCleaner.exe`, companion-модули, `Languages`, `Shell` и `Documentation` в одном каталоге. Обычные ярлыки запускают `SimpleUpdate.exe`, который затем открывает оригинальный DPopCleaner.
+Запустите `DPopCleaner_Setup_0.4.17.exe`. Установщик размещает `SimpleUpdate.exe`, неизменный `DPopCleaner.exe`, companion-модули включая `ZapretScreenFix.exe`, `Languages`, `Shell` и `Documentation` в одном каталоге. Обычные ярлыки запускают `SimpleUpdate.exe`, который затем открывает оригинальный DPopCleaner; Zapret Screen Fix также доступен отдельным ярлыком в группе DPopCleaner.
 
 Перед системными изменениями рекомендуется иметь актуальную точку восстановления Windows или резервную копию важных данных.

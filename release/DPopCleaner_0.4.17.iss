@@ -67,6 +67,7 @@ Name: "desktopicon"; Description: "Создать ярлык на рабочем
 Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\SimpleUpdate.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Анализатор диска"; Filename: "{app}\Modules\DiskAnalyzer.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Центр восстановления"; Filename: "{app}\Modules\RestoreCenter.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\DPopCleaner\Исправление демонстрации экрана Zapret"; Filename: "{app}\Modules\ZapretScreenFix.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\SimpleUpdate.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]

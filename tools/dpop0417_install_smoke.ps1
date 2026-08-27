@@ -63,11 +63,13 @@ try {
     [void](Assert-File 'Modules\DPop.Common.dll')
     $diskExe = Assert-File 'Modules\DiskAnalyzer.exe'
     $restoreExe = Assert-File 'Modules\RestoreCenter.exe'
+    $zapretExe = Assert-File 'Modules\ZapretScreenFix.exe'
     [void](Assert-File 'Languages\ru.json')
     [void](Assert-File 'Languages\en.json')
     [void](Assert-File 'Shell\shell.json')
     [void](Assert-File 'Shell\commands\disk-analyzer.json')
     [void](Assert-File 'Shell\commands\restore-center.json')
+    [void](Assert-File 'Shell\commands\zapret-screen-fix.json')
     [void](Assert-File 'Documentation\README.txt')
 
     $documentationPath = Join-Path $installRoot 'Documentation'
@@ -161,6 +163,7 @@ try {
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
         simpleupdate_launcher_smoke = [bool]$launcherSmoke
+        zapret_screen_fix_present = [bool](Test-Path -LiteralPath $zapretExe -PathType Leaf)
         documentation_acl_modify = [bool]$documentationAclModify
         disk_smoke = (Test-Path -LiteralPath (Join-Path $diskEvidence 'disk-smoke-report.json') -PathType Leaf)
         restore_smoke = (Test-Path -LiteralPath (Join-Path $restoreEvidence 'restore-smoke-report.json') -PathType Leaf)
@@ -169,6 +172,7 @@ try {
 
     Write-Host "Installed immutable core: $installedCoreBlob"
     Write-Host 'Installed SimpleUpdate launcher smoke: PASS'
+    Write-Host 'Installed ZapretScreenFix companion: PASS'
     Write-Host 'Installed Documentation ACL: BUILTIN\Users Modify PASS'
     Write-Host 'Installed Disk Analyzer smoke: PASS'
     Write-Host 'Installed Restore Center smoke: PASS'
