@@ -4,6 +4,7 @@
 #include "UpdateClient.h"
 #include "UpdateManifest.h"
 #include "Version.h"
+#include "ZapretController.h"
 
 #include <windows.h>
 #include <commctrl.h>
@@ -12,10 +13,12 @@
 
 #include <atomic>
 #include <filesystem>
+#include <iterator>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "dwmapi.lib")
@@ -31,8 +34,6 @@ constexpr COLORREF C_CARD2   = RGB(18, 49, 68);
 constexpr COLORREF C_BORDER  = RGB(39, 73, 91);
 constexpr COLORREF C_TEXT    = RGB(239, 247, 250);
 constexpr COLORREF C_MUTED   = RGB(151, 177, 191);
-constexpr COLORREF C_ACCENT  = RGB(103, 237, 119);
-constexpr COLORREF C_ACCENT2 = RGB(54, 199, 206);
 
 constexpr int ID_NAV_BASE = 1000;
 constexpr int ID_ACTION_BASE = 2000;
@@ -40,7 +41,7 @@ constexpr int ID_CONTENT = 3000;
 constexpr UINT WM_UPDATE_EVENT = WM_APP + 41;
 constexpr UINT_PTR ID_STARTUP_UPDATE_TIMER = 4101;
 
-constexpr int NAV_COUNT = 7;
+constexpr int NAV_COUNT = 8;
 constexpr int ACTION_COUNT = 4;
 
 enum class Page {
@@ -48,6 +49,7 @@ enum class Page {
     Cleaning,
     DiskAnalyzer,
     RestoreCenter,
+    Zapret,
     ZapretFix,
     Updates,
     Settings
@@ -55,7 +57,15 @@ enum class Page {
 
 enum class PendingKind {
     Check,
-    Download
+    Download,
+    Zapret
+};
+
+enum class ZapretOperation {
+    Start,
+    Stop,
+    InstallService,
+    RemoveService
 };
 
 struct PendingEvent {
@@ -65,6 +75,7 @@ struct PendingEvent {
     UpdateManifest manifest{};
     bool success{};
     fs::path package;
+    std::wstring message;
     std::wstring error;
 };
 
@@ -86,6 +97,7 @@ Page gPage = Page::Overview;
 AppSettings gSettings{};
 std::atomic_bool gShuttingDown{false};
 std::atomic_bool gUpdateBusy{false};
+std::atomic_bool gZapretBusy{false};
 std::atomic_bool gUpdaterDriven{false};
 std::mutex gPendingMutex;
 std::optional<PendingEvent> gPendingEvent;
@@ -107,6 +119,10 @@ fs::path SettingsPath() {
 
 fs::path LogsDirectory() {
     return AppDataDirectory() / L"Logs";
+}
+
+fs::path ZapretRoot() {
+    return BundledZapretRoot(ExecutableDirectory());
 }
 
 void EnsureUserDirectories() {
@@ -132,8 +148,16 @@ void SetAction(int index, const wchar_t* text, bool visible = true) {
     ShowWindow(gActions[index], visible ? SW_SHOW : SW_HIDE);
 }
 
+void SetActionEnabled(int index, bool enabled) {
+    if (index < 0 || index >= ACTION_COUNT || !gActions[index]) return;
+    EnableWindow(gActions[index], enabled ? TRUE : FALSE);
+}
+
 void HideActions() {
-    for (HWND button : gActions) ShowWindow(button, SW_HIDE);
+    for (HWND button : gActions) {
+        EnableWindow(button, TRUE);
+        ShowWindow(button, SW_HIDE);
+    }
 }
 
 void OpenTarget(const fs::path& target) {
@@ -154,6 +178,12 @@ void OpenModule(const wchar_t* filename) {
     OpenTarget(module);
 }
 
+std::wstring SelectedZapretStrategyLabel() {
+    const fs::path selected(gSettings.zapretStrategy);
+    const std::wstring stem = selected.stem().wstring();
+    return stem.empty() ? std::wstring(L"не выбрана") : stem;
+}
+
 void ShowOverview() {
     HideActions();
     SetAction(0, L"Проверить обновления");
@@ -167,6 +197,7 @@ void ShowOverview() {
         L"• добавлена настройка автоматической проверки обновлений;\r\n"
         L"• обновления идут только по stable-манифесту через HTTPS;\r\n"
         L"• установщик принимается только после проверки размера и SHA-256;\r\n"
+        L"• Flowseal Zapret 1.10.2 встроен как управляемый bundled-компонент;\r\n"
         L"• Disk Analyzer, Restore Center и Zapret Screen Fix остаются отдельными модулями.\r\n\r\n"
         L"Автоматическая проверка обновлений: " +
         std::wstring(gSettings.autoCheckUpdates ? L"ВКЛ" : L"ВЫКЛ") + L".");
@@ -210,6 +241,70 @@ void ShowRestoreCenter() {
         L"Обновление приложения не удаляет пользовательскую историю и backups.");
 }
 
+void ShowZapret() {
+    HideActions();
+    const fs::path root = ZapretRoot();
+    const ZapretStatus status = QueryZapretStatus(root);
+    const auto strategies = EnumerateZapretStrategies(root);
+    const bool busy = gZapretBusy.load(std::memory_order_acquire);
+
+    SetAction(0, L"Запустить Zapret");
+    SetAction(1, L"Остановить Zapret");
+    const std::wstring strategyAction = L"Стратегия Zapret: " + SelectedZapretStrategyLabel();
+    SetAction(2, strategyAction.c_str());
+
+    if (status.serviceInstalled && status.bundledServiceOwned) {
+        SetAction(3, L"Удалить службу");
+    } else if (status.serviceInstalled && !status.bundledServiceOwned) {
+        SetAction(3, L"Внешняя служба zapret");
+        SetActionEnabled(3, false);
+    } else {
+        SetAction(3, L"Установить службу");
+    }
+
+    if (busy) {
+        for (int i = 0; i < ACTION_COUNT; ++i) SetActionEnabled(i, false);
+    } else {
+        SetActionEnabled(0, status.payloadIntegrityOk && !status.serviceRunning && !status.externalWinwsRunning);
+        SetActionEnabled(1, status.bundledWinwsRunning || (status.serviceRunning && status.bundledServiceOwned));
+        SetActionEnabled(2, status.payloadIntegrityOk && strategies.size() > 1 && !status.serviceRunning);
+        if (!status.serviceInstalled) SetActionEnabled(3, status.payloadIntegrityOk && !status.externalWinwsRunning);
+    }
+
+    SetLabel(gPageTitle, L"Zapret");
+    SetLabel(gPageHint, L"Встроенный Flowseal Zapret 1.10.2: запуск, остановка, стратегия и служба без управления внешними экземплярами.");
+
+    std::wstring payloadText = status.payloadIntegrityOk ? L"готов и проверен" :
+                               (status.payloadAvailable ? L"найден, но проверка не пройдена" : L"не установлен");
+    std::wstring runtimeText = status.bundledWinwsRunning ? L"запущен" : L"остановлен";
+    std::wstring serviceText;
+    if (!status.serviceInstalled) serviceText = L"не установлена";
+    else if (!status.bundledServiceOwned) serviceText = L"внешняя — DPopCleaner её не изменяет";
+    else serviceText = status.serviceRunning ? L"установлена и запущена" : L"установлена, остановлена";
+
+    std::wstring content =
+        L"ZAPRET 1.10.2\r\n\r\n"
+        L"Bundled payload: " + payloadText + L"\r\n"
+        L"Standalone winws: " + runtimeText + L"\r\n"
+        L"Служба zapret: " + serviceText + L"\r\n"
+        L"Выбранная стратегия: " + gSettings.zapretStrategy + L"\r\n";
+
+    if (!status.serviceStrategy.empty())
+        content += L"Стратегия службы: " + status.serviceStrategy + L"\r\n";
+    if (status.externalWinwsRunning)
+        content += L"\r\nВНИМАНИЕ: обнаружен внешний winws.exe. DPopCleaner не завершает и не перезаписывает его.\r\n";
+    if (!status.error.empty())
+        content += L"\r\nПроверка bundled payload: " + status.error + L"\r\n";
+    if (busy)
+        content += L"\r\nОперация Zapret выполняется… окно DPopCleaner при этом остаётся неблокирующим.\r\n";
+
+    content +=
+        L"\r\nКнопка «Стратегия Zapret» переключает только стратегии из bundled-каталога и сразу сохраняет выбор.\r\n"
+        L"Установка/удаление службы требует UAC. Служба с тем же именем, но другим путём, считается внешней и не меняется.\r\n"
+        L"Discord Screen Fix остаётся отдельной страницей и не подменяет управление Zapret.";
+    SetContent(content);
+}
+
 void ShowZapretFix() {
     HideActions();
     SetAction(0, L"Открыть Zapret Screen Fix");
@@ -218,7 +313,8 @@ void ShowZapretFix() {
     SetContent(
         L"ZAPRET SCREEN FIX\r\n\r\n"
         L"Модуль исправляет нужный discord.media TCP-фильтр, не переписывая посторонние стратегии.\r\n"
-        L"Перед изменением создаётся backup; повторное применение идемпотентно.");
+        L"Перед изменением создаётся backup; повторное применение идемпотентно.\r\n\r\n"
+        L"Запуск, остановка и установка Flowseal Zapret теперь находятся на отдельной встроенной странице «Zapret»." );
 }
 
 void ShowUpdates() {
@@ -250,11 +346,13 @@ void ShowSettings() {
         L"НАСТРОЙКИ\r\n\r\n"
         L"Автоматически проверять обновления: " +
         std::wstring(gSettings.autoCheckUpdates ? L"Включено" : L"Выключено") +
+        L"\r\n"
+        L"Стратегия Zapret: " + gSettings.zapretStrategy +
         L"\r\n\r\n"
         L"Файл настроек:\r\n" + SettingsPath().wstring() +
         L"\r\n\r\n"
         L"Выключение автоматической проверки не отключает кнопку «Проверить обновления сейчас».\r\n"
-        L"Изменение сохраняется сразу.");
+        L"Изменения настроек сохраняются сразу.");
 }
 
 void SwitchPage(Page page) {
@@ -264,6 +362,7 @@ void SwitchPage(Page page) {
         case Page::Cleaning: ShowCleaning(); break;
         case Page::DiskAnalyzer: ShowDiskAnalyzer(); break;
         case Page::RestoreCenter: ShowRestoreCenter(); break;
+        case Page::Zapret: ShowZapret(); break;
         case Page::ZapretFix: ShowZapretFix(); break;
         case Page::Updates: ShowUpdates(); break;
         case Page::Settings: ShowSettings(); break;
@@ -326,6 +425,46 @@ void StartPackageDownload(HWND hwnd, const UpdateManifest& manifest) {
         event.manifest = manifest;
         event.success = DownloadVerifiedPackage(manifest, event.package, event.error, &gShuttingDown);
         gUpdateBusy.store(false, std::memory_order_release);
+        PublishPending(hwnd, std::move(event));
+    }).detach();
+}
+
+void StartZapretOperation(HWND hwnd, ZapretOperation operation) {
+    if (gShuttingDown.load(std::memory_order_acquire)) return;
+    bool expected = false;
+    if (!gZapretBusy.compare_exchange_strong(expected, true)) {
+        MessageBoxW(hwnd, L"Другая операция Zapret уже выполняется.", L"DPopCleaner Zapret",
+                    MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    const fs::path root = ZapretRoot();
+    const std::wstring selectedStrategy = gSettings.zapretStrategy;
+    if (gPage == Page::Zapret) ShowZapret();
+
+    std::thread([hwnd, operation, root, selectedStrategy] {
+        PendingEvent event{};
+        event.kind = PendingKind::Zapret;
+        event.interactive = true;
+        switch (operation) {
+            case ZapretOperation::Start:
+                event.message = L"Bundled Zapret запущен.";
+                event.success = StartBundledZapret(selectedStrategy, root, event.error);
+                break;
+            case ZapretOperation::Stop:
+                event.message = L"Bundled Zapret остановлен.";
+                event.success = StopBundledZapret(root, event.error);
+                break;
+            case ZapretOperation::InstallService:
+                event.message = L"Служба bundled Zapret установлена для выбранной стратегии.";
+                event.success = InstallBundledZapretService(selectedStrategy, root, event.error);
+                break;
+            case ZapretOperation::RemoveService:
+                event.message = L"Служба bundled Zapret удалена.";
+                event.success = RemoveBundledZapretService(root, event.error);
+                break;
+        }
+        gZapretBusy.store(false, std::memory_order_release);
         PublishPending(hwnd, std::move(event));
     }).detach();
 }
@@ -396,6 +535,16 @@ void HandleDownloadFinished(HWND hwnd, const PendingEvent& event) {
     PostMessageW(hwnd, WM_CLOSE, 0, 0);
 }
 
+void HandleZapretFinished(HWND hwnd, const PendingEvent& event) {
+    if (gShuttingDown.load(std::memory_order_acquire)) return;
+    if (gPage == Page::Zapret) ShowZapret();
+    if (!event.success) {
+        MessageBoxW(hwnd, event.error.c_str(), L"Операция Zapret не выполнена", MB_OK | MB_ICONWARNING);
+    } else if (!event.message.empty()) {
+        MessageBoxW(hwnd, event.message.c_str(), L"DPopCleaner Zapret", MB_OK | MB_ICONINFORMATION);
+    }
+}
+
 void HandlePendingEvent(HWND hwnd) {
     if (gShuttingDown.load(std::memory_order_acquire)) {
         std::lock_guard<std::mutex> guard(gPendingMutex);
@@ -411,7 +560,8 @@ void HandlePendingEvent(HWND hwnd) {
     if (!event || gShuttingDown.load(std::memory_order_acquire)) return;
 
     if (event->kind == PendingKind::Check) HandleCheckFinished(hwnd, *event);
-    else HandleDownloadFinished(hwnd, *event);
+    else if (event->kind == PendingKind::Download) HandleDownloadFinished(hwnd, *event);
+    else HandleZapretFinished(hwnd, *event);
 }
 
 void ToggleAutoUpdate(HWND hwnd) {
@@ -423,6 +573,40 @@ void ToggleAutoUpdate(HWND hwnd) {
         MessageBoxW(hwnd, error.c_str(), L"Не удалось сохранить настройки", MB_OK | MB_ICONERROR);
     }
     ShowSettings();
+}
+
+void CycleZapretStrategy(HWND hwnd) {
+    const auto strategies = EnumerateZapretStrategies(ZapretRoot());
+    if (strategies.empty()) {
+        MessageBoxW(hwnd, L"Bundled Zapret не содержит доступных стратегий.", L"DPopCleaner Zapret",
+                    MB_OK | MB_ICONWARNING);
+        return;
+    }
+
+    const size_t current = FindStrategyMenuIndex(strategies, gSettings.zapretStrategy);
+    const size_t nextIndex = current == 0 ? 0 : (current % strategies.size());
+    const std::wstring oldValue = gSettings.zapretStrategy;
+    gSettings.zapretStrategy = strategies[nextIndex].batchPath.filename().wstring();
+
+    std::wstring error;
+    if (!SaveSettingsAtomic(SettingsPath(), gSettings, error)) {
+        gSettings.zapretStrategy = oldValue;
+        MessageBoxW(hwnd, error.c_str(), L"Не удалось сохранить стратегию Zapret", MB_OK | MB_ICONERROR);
+    }
+    ShowZapret();
+}
+
+void HandleZapretServiceAction(HWND hwnd) {
+    const ZapretStatus status = QueryZapretStatus(ZapretRoot());
+    if (status.serviceInstalled && !status.bundledServiceOwned) {
+        MessageBoxW(hwnd,
+                    L"Служба zapret существует, но её executable не находится в bundled-каталоге DPopCleaner.\n\n"
+                    L"Она считается внешней и не будет изменена.",
+                    L"Внешняя служба zapret", MB_OK | MB_ICONWARNING);
+        return;
+    }
+    StartZapretOperation(hwnd, status.serviceInstalled ? ZapretOperation::RemoveService
+                                                       : ZapretOperation::InstallService);
 }
 
 void HandleAction(int index) {
@@ -445,6 +629,12 @@ void HandleAction(int index) {
             break;
         case Page::RestoreCenter:
             if (index == 0) OpenModule(L"RestoreCenter.exe");
+            break;
+        case Page::Zapret:
+            if (index == 0) StartZapretOperation(gMainWindow, ZapretOperation::Start);
+            else if (index == 1) StartZapretOperation(gMainWindow, ZapretOperation::Stop);
+            else if (index == 2) CycleZapretStrategy(gMainWindow);
+            else if (index == 3) HandleZapretServiceAction(gMainWindow);
             break;
         case Page::ZapretFix:
             if (index == 0) OpenModule(L"ZapretScreenFix.exe");
@@ -479,6 +669,7 @@ void DrawOwnerButton(const DRAWITEMSTRUCT* item) {
     if (id >= ID_ACTION_BASE && id < ID_ACTION_BASE + ACTION_COUNT) {
         fill = id == ID_ACTION_BASE ? RGB(42, 118, 79) : C_CARD2;
     }
+    if (item->itemState & ODS_DISABLED) fill = RGB(20, 42, 55);
     if (item->itemState & ODS_SELECTED) fill = RGB(35, 95, 76);
 
     HBRUSH fillBrush = CreateSolidBrush(fill);
@@ -489,7 +680,7 @@ void DrawOwnerButton(const DRAWITEMSTRUCT* item) {
     DeleteObject(borderBrush);
 
     SetBkMode(item->hDC, TRANSPARENT);
-    SetTextColor(item->hDC, C_TEXT);
+    SetTextColor(item->hDC, (item->itemState & ODS_DISABLED) ? C_MUTED : C_TEXT);
     HFONT oldFont = reinterpret_cast<HFONT>(SelectObject(item->hDC, gFont));
     RECT rect = item->rcItem;
     rect.left += 12;
@@ -530,7 +721,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
             const wchar_t* navText[NAV_COUNT] = {
                 L"Обзор", L"Очистка", L"Анализатор диска", L"Восстановление",
-                L"Zapret Fix", L"Обновления", L"Настройки"
+                L"Zapret", L"Zapret Fix", L"Обновления", L"Настройки"
             };
             for (int i = 0; i < NAV_COUNT; ++i) {
                 gNav[i] = CreateWindowW(L"BUTTON", navText[i],
@@ -645,6 +836,7 @@ int RunMainWindow(HINSTANCE instance, int showCommand) {
     EnsureUserDirectories();
     gShuttingDown.store(false, std::memory_order_release);
     gUpdateBusy.store(false, std::memory_order_release);
+    gZapretBusy.store(false, std::memory_order_release);
     gUpdaterDriven.store(false, std::memory_order_release);
     {
         std::lock_guard<std::mutex> guard(gPendingMutex);
