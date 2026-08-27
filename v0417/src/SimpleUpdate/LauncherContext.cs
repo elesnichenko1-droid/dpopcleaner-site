@@ -15,6 +15,7 @@ namespace DPopCleaner.SimpleUpdate
         private bool _roomMade;
         private bool _lastSetting;
         private bool _iconApplied;
+        private bool _mainWindowWasVisible;
 
         internal LauncherContext(string corePath, string settingsPath)
         {
@@ -24,7 +25,7 @@ namespace DPopCleaner.SimpleUpdate
             _core = Process.Start(new ProcessStartInfo(corePath) { WorkingDirectory = Path.GetDirectoryName(corePath), UseShellExecute = true });
             if (_core == null) throw new InvalidOperationException("Failed to start DPopCleaner.exe.");
 
-            _timer = new Timer { Interval = 150 };
+            _timer = new Timer { Interval = 100 };
             _timer.Tick += OnTick;
             _timer.Start();
         }
@@ -46,6 +47,21 @@ namespace DPopCleaner.SimpleUpdate
                 if (_mainWindow == IntPtr.Zero)
                     _mainWindow = _core.MainWindowHandle;
                 if (_mainWindow == IntPtr.Zero) return;
+
+                if (NativeBridge.IsWindowVisible(_mainWindow))
+                {
+                    _mainWindowWasVisible = true;
+                }
+                else if (_mainWindowWasVisible)
+                {
+                    // The authentic 0.2.14 window may hide first and leave its process alive
+                    // while shutdown work stalls. Once the visible main window is gone, the
+                    // user's close action is final: terminate the lingering core immediately.
+                    try { _core.Kill(); } catch { }
+                    _timer.Stop();
+                    ExitThread();
+                    return;
+                }
 
                 if (!_iconApplied)
                 {
@@ -86,7 +102,9 @@ namespace DPopCleaner.SimpleUpdate
             }
             catch
             {
-                // The helper must never take down the authentic DPopCleaner process.
+                // The helper must never take down the authentic DPopCleaner process because of
+                // a bridge failure. Only the explicit hidden-main-window shutdown path above may
+                // terminate it, because that represents the user's completed close action.
             }
         }
 
