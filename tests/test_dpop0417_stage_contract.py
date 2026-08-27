@@ -54,7 +54,7 @@ class DPop0417StageContractTests(unittest.TestCase):
         self.assertIn("bin/windivert64.sys", normalized)
         self.assertIn(".service/version.txt", normalized)
         self.assertIn("1.10.2", lowered)
-        self.assertIn("-requirecompanions", lowered)
+        self.assertIn("$requirecompanions", lowered)
         self.assertNotIn("v035_overlay", lowered)
         self.assertNotIn("mainwindow.cpp", lowered)
         self.assertNotIn("fullcore.cpp", lowered)
