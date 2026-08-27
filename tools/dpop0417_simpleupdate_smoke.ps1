@@ -76,20 +76,20 @@ try {
     [void][SmokeNative]::SendMessage($gear.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
 
     $deadline = [DateTime]::UtcNow.AddSeconds(6)
-    $host = $null
+    $scrollHost = $null
     $checkbox = $null
     $checkNow = $null
     $licenseHeading = $null
     do {
         Start-Sleep -Milliseconds 150
         $settingsChildren = [SmokeNative]::Children($coreProcess.MainWindowHandle)
-        $host = $settingsChildren | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
+        $scrollHost = $settingsChildren | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
         $checkbox = $settingsChildren | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление' -and $_.Visible } | Select-Object -First 1
         $checkNow = $settingsChildren | Where-Object { $_.Id -eq 1491 -and $_.Text -eq 'Проверить обновления' -and $_.Visible } | Select-Object -First 1
         $licenseHeading = $settingsChildren | Where-Object { $_.Id -eq 1493 -and $_.Text -eq 'Лицензия' -and $_.Visible } | Select-Object -First 1
-    } while ((-not $host -or -not $checkbox -or -not $checkNow -or -not $licenseHeading) -and [DateTime]::UtcNow -lt $deadline)
+    } while ((-not $scrollHost -or -not $checkbox -or -not $checkNow -or -not $licenseHeading) -and [DateTime]::UtcNow -lt $deadline)
 
-    if (-not $host) { throw 'Scrollable additional-settings host id=1492 was not bridged into authentic Settings.' }
+    if (-not $scrollHost) { throw 'Scrollable additional-settings host id=1492 was not bridged into authentic Settings.' }
     if (-not $checkbox) { throw 'Auto-update checkbox was not bridged into the scroll host.' }
     if (-not $checkNow) { throw 'Check-update button was not bridged into the scroll host.' }
     if (-not $licenseHeading) { throw 'License section was not placed inside the scroll host.' }
@@ -100,7 +100,7 @@ try {
     $beforeScrollTop = $licenseHeading.Top
     $WM_MOUSEWHEEL = 0x020A
     $wheelDown = [IntPtr]::new([long]0xFF880000)
-    [void][SmokeNative]::SendMessage($host.Handle, $WM_MOUSEWHEEL, $wheelDown, [IntPtr]::Zero)
+    [void][SmokeNative]::SendMessage($scrollHost.Handle, $WM_MOUSEWHEEL, $wheelDown, [IntPtr]::Zero)
     Start-Sleep -Milliseconds 400
     $afterWheel = [SmokeNative]::Children($coreProcess.MainWindowHandle)
     $licenseAfter = $afterWheel | Where-Object { $_.Id -eq 1493 -and $_.Text -eq 'Лицензия' } | Select-Object -First 1
