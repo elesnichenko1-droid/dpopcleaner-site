@@ -28,6 +28,9 @@ std::wstring BuildUpdaterArguments(const UpdateManifest& manifest,
                                    bool allowUnsigned,
                                    const std::filesystem::path& restartExe,
                                    unsigned long parentPid);
+bool StageUpdaterForHandoff(const std::filesystem::path& installedUpdater,
+                            std::filesystem::path& stagedUpdater,
+                            std::wstring& error);
 bool LaunchUpdater(const UpdateManifest& manifest,
                    const std::filesystem::path& package,
                    bool allowUnsigned,
