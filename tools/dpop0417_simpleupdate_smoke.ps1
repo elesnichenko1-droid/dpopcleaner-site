@@ -27,21 +27,27 @@ public sealed class SmokeChild {
     public string Text;
     public string ClassName;
     public bool Visible;
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
 }
 public static class SmokeNative {
     private delegate bool EnumProc(IntPtr hwnd, IntPtr p);
+    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr p);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder s, int n);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder s, int n);
     [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
     public static SmokeChild[] Children(IntPtr parent) {
         var list = new List<SmokeChild>();
         EnumProc cb = delegate(IntPtr h, IntPtr _) {
-            var t = new StringBuilder(512); var c = new StringBuilder(128);
-            GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity);
-            list.Add(new SmokeChild { Handle=h, Id=GetDlgCtrlID(h), Text=t.ToString(), ClassName=c.ToString(), Visible=IsWindowVisible(h) });
+            var t = new StringBuilder(512); var c = new StringBuilder(128); RECT r;
+            GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity); GetWindowRect(h,out r);
+            list.Add(new SmokeChild { Handle=h, Id=GetDlgCtrlID(h), Text=t.ToString(), ClassName=c.ToString(), Visible=IsWindowVisible(h), Left=r.Left, Top=r.Top, Right=r.Right, Bottom=r.Bottom });
             return true;
         };
         EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
@@ -70,16 +76,36 @@ try {
     [void][SmokeNative]::SendMessage($gear.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
 
     $deadline = [DateTime]::UtcNow.AddSeconds(6)
+    $host = $null
     $checkbox = $null
     $checkNow = $null
+    $licenseHeading = $null
     do {
         Start-Sleep -Milliseconds 150
         $settingsChildren = [SmokeNative]::Children($coreProcess.MainWindowHandle)
+        $host = $settingsChildren | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
         $checkbox = $settingsChildren | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление' -and $_.Visible } | Select-Object -First 1
-        $checkNow = $settingsChildren | Where-Object { $_.Id -eq 1491 -and $_.Text -eq 'Проверить сейчас' -and $_.Visible } | Select-Object -First 1
-    } while ((-not $checkbox -or -not $checkNow) -and [DateTime]::UtcNow -lt $deadline)
-    if (-not $checkbox) { throw 'Auto-update checkbox was not bridged into authentic Settings.' }
-    if (-not $checkNow) { throw 'Check-now button was not bridged into authentic Settings.' }
+        $checkNow = $settingsChildren | Where-Object { $_.Id -eq 1491 -and $_.Text -eq 'Проверить обновления' -and $_.Visible } | Select-Object -First 1
+        $licenseHeading = $settingsChildren | Where-Object { $_.Id -eq 1493 -and $_.Text -eq 'Лицензия' -and $_.Visible } | Select-Object -First 1
+    } while ((-not $host -or -not $checkbox -or -not $checkNow -or -not $licenseHeading) -and [DateTime]::UtcNow -lt $deadline)
+
+    if (-not $host) { throw 'Scrollable additional-settings host id=1492 was not bridged into authentic Settings.' }
+    if (-not $checkbox) { throw 'Auto-update checkbox was not bridged into the scroll host.' }
+    if (-not $checkNow) { throw 'Check-update button was not bridged into the scroll host.' }
+    if (-not $licenseHeading) { throw 'License section was not placed inside the scroll host.' }
+
+    $legacyVersion = $settingsChildren | Where-Object { $_.Text -eq 'v0.2.11 BETA' -and $_.Visible } | Select-Object -First 1
+    if ($legacyVersion) { throw 'Legacy bottom-right v0.2.11 BETA badge must be hidden by SimpleUpdate.' }
+
+    $beforeScrollTop = $licenseHeading.Top
+    $WM_MOUSEWHEEL = 0x020A
+    $wheelDown = [IntPtr]::new([long]0xFF880000)
+    [void][SmokeNative]::SendMessage($host.Handle, $WM_MOUSEWHEEL, $wheelDown, [IntPtr]::Zero)
+    Start-Sleep -Milliseconds 400
+    $afterWheel = [SmokeNative]::Children($coreProcess.MainWindowHandle)
+    $licenseAfter = $afterWheel | Where-Object { $_.Id -eq 1493 -and $_.Text -eq 'Лицензия' } | Select-Object -First 1
+    if (-not $licenseAfter) { throw 'License heading disappeared after WM_MOUSEWHEEL.' }
+    if ($licenseAfter.Top -ge $beforeScrollTop) { throw "Scrollable Settings did not move on WM_MOUSEWHEEL: before=$beforeScrollTop after=$($licenseAfter.Top)" }
 
     $BM_GETCHECK = 0x00F0
     $BM_CLICK = 0x00F5
@@ -96,7 +122,7 @@ try {
     $coreProcess.WaitForExit(5000) | Out-Null
     if (-not $launcher.WaitForExit(6000)) { throw 'SimpleUpdate did not exit after DPopCleaner closed.' }
 
-    Write-Host 'SIMPLEUPDATE_AUTHENTIC_UI_SMOKE_OK'
+    Write-Host 'SIMPLEUPDATE_SCROLLABLE_SETTINGS_UI_SMOKE_OK'
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
