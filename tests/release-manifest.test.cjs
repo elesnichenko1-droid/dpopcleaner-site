@@ -46,6 +46,7 @@ test('website screenshots are immutable v0.4.18 release assets', () => {
   const root = path.resolve(__dirname, '..');
   const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/publish-dpopcleaner-0.4.18.yml'), 'utf8');
+  const lower = workflow.toLowerCase();
   const releaseBase = 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/';
   const shots = [
     'dpopcleaner-0.4.18-overview.png',
@@ -56,8 +57,11 @@ test('website screenshots are immutable v0.4.18 release assets', () => {
     assert.ok(index.includes(releaseBase + shot), `index must use release asset ${shot}`);
     assert.ok(!index.includes(`src="assets/${shot}"`), `index must not use Pages asset path for ${shot}`);
     assert.ok(workflow.includes(`publish/assets/${shot}`), `publisher must upload ${shot}`);
-    assert.ok(workflow.includes(releaseBase + shot), `verifier must fetch release asset ${shot}`);
+    assert.ok(workflow.includes(shot), `verifier must know exact release asset ${shot}`);
   }
-  assert.ok(workflow.toLowerCase().includes('verify live release screenshots and installer sha256'));
+  assert.ok(lower.includes('release_tag: v0.4.18'));
+  assert.ok(lower.includes('gh release download'));
+  assert.ok(lower.includes('--pattern "$name"'));
+  assert.ok(lower.includes('verify live release screenshots and installer sha256'));
   assert.ok(!workflow.includes('$base/assets/$name'));
 });
