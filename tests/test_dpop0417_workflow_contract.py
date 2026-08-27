@@ -20,6 +20,7 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         self.assertIn("dotnet test", lowered)
         self.assertIn("v0417/tests/dpop.common.tests/dpop.common.tests.csproj", lowered)
         self.assertIn("dotnet build", lowered)
+        self.assertIn("v0417/src/simpleupdate/simpleupdate.csproj", lowered)
         self.assertIn("tools/dpop0417_stage.ps1", lowered)
         self.assertIn("efd0eff1f4962319282363fa85595c25e0cebe11", lowered)
         self.assertIn("actions/upload-artifact", lowered)

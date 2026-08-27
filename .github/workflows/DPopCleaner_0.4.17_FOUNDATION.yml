@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feat/dpopcleaner-0.4.17-0214
+      - fix/restore-0.4.17-simpleupdate
   pull_request:
     branches:
       - main

@@ -10,6 +10,7 @@ class DPop0417StageContractTests(unittest.TestCase):
         entries = [line.strip() for line in allowlist.splitlines() if line.strip()]
         self.assertEqual(entries, [
             "DPopCleaner.exe",
+            "SimpleUpdate.exe",
             "Languages/",
             "Shell/",
             "Documentation/",
@@ -29,6 +30,8 @@ class DPop0417StageContractTests(unittest.TestCase):
         self.assertIn("v0417/contracts/core.json", lowered)
         self.assertIn("& git", lowered)
         self.assertIn("hash-object", lowered)
+        self.assertIn("simpleupdate.exe", lowered)
+        self.assertIn("v0417/src/simpleupdate/bin/release/net48/simpleupdate.exe", lowered.replace("\\", "/"))
         self.assertIn("dpop.common.dll", lowered)
         self.assertIn("diskanalyzer.exe", lowered)
         self.assertIn("restorecenter.exe", lowered)
