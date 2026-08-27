@@ -1,30 +1,36 @@
-# DPopCleaner 0.4.17 rev.4
+# DPopCleaner 0.4.17 rev.5
 
-DPopCleaner 0.4.17 rev.4 сохраняет оригинальное ядро DPopCleaner 0.2.14 без изменения байтов. Revision 4 исправляет компоновку настоящей страницы «Настройки» через `SimpleUpdate.exe`, сохраняя безопасное автообновление revision 3 и `ZapretScreenFix.exe` из revision 2.
+DPopCleaner 0.4.17 rev.5 исправляет регрессию revision 4, из-за которой свежая установка содержала интерфейс Zapret, но не содержала сам runtime Zapret. Оригинальный `DPopCleaner.exe` 0.2.14 по-прежнему не изменяется; `SimpleUpdate.exe`, прокручиваемые Настройки revision 4 и `ZapretScreenFix.exe` revision 2 сохраняются.
 
-## Revision 4
+## Revision 5
 
-- На странице **«Настройки»** добавлен отдельный блок **«Дополнительные настройки»** с вертикальной прокруткой.
-- Прокрутка работает обычным scrollbar и **колесом мыши**, в том числе когда курсор находится над вложенными элементами блока.
-- **«Включить автообновление»** и **«Проверить обновления»** теперь находятся в видимой прокручиваемой области и больше не перекрываются разделом «Лицензия».
-- Раздел **«Лицензия»** перенесён в эту же прокручиваемую область; кнопки сохранения и покупки проксируются к существующим элементам старого интерфейса.
-- Устаревшая надпись **`v0.2.11 BETA`** справа внизу скрывается UI-bridge. Сам `DPopCleaner.exe` не патчится и остаётся byte-identical.
-- Состояние автообновления по-прежнему сохраняется для пользователя, а ручная проверка использует существующий проверенный сетевой update-cycle.
+- В установщик включён полный pinned **Flowseal Zapret 1.10.2**.
+- Старый интерфейс DPopCleaner получает Zapret в ожидаемом layout прямо рядом с `DPopCleaner.exe`.
+- В корне установки присутствуют `service.bat`, `general.bat` и остальные `general*.bat` стратегии.
+- В `bin` присутствуют `bin\winws.exe`, `WinDivert.dll` и `WinDivert64.sys`.
+- Также устанавливаются `.service`, `lists` и `utils` из проверенного Flowseal runtime.
+- Архив Flowseal принимается только после проверки pinned URL, размера и SHA-256.
+- Windows CI открывает настоящий старый **Zapret Center** и проверяет, что стратегии реально обнаружены; релиз без `winws.exe` или `general*.bat` больше не проходит.
 
-## Сохранено из предыдущих revision
+## Сохранено из revision 4
 
-- **SimpleUpdate.exe** запускает оригинальный `DPopCleaner.exe`, проверяет stable manifest только по HTTPS и сравнивает `version_code + revision`.
-- Скачанный установщик принимается только после совпадения обязательных размера и SHA-256.
-- Основные ярлыки меню «Пуск», рабочего стола и post-install запуск ведут через `SimpleUpdate.exe`.
-- **ZapretScreenFix.exe** и команда `zapret-screen-fix` из revision 2 остаются в пакете и сохраняют исправление **демонстрации экрана через Zapret**.
+- На странице **«Настройки»** остаётся прокручиваемый блок **«Дополнительные настройки»**.
+- «Включить автообновление», ручная проверка и лицензия не перекрываются.
+- Устаревшая надпись `v0.2.11 BETA` скрывается UI-bridge без патча ядра.
+- `SimpleUpdate.exe` проверяет stable manifest по HTTPS, сравнивает `version_code + revision`, а скачанный установщик принимает только после совпадения размера и SHA-256.
+
+## Сохранено из revision 2/3
+
+- **ZapretScreenFix.exe** и команда `zapret-screen-fix` остаются в пакете.
 - Анализатор диска и Центр восстановления остаются отдельными companion-модулями.
+- Основные ярлыки и post-install запуск ведут через `SimpleUpdate.exe`.
 
 ## Проверка релиза
 
-Windows CI проверяет immutable core размером 389 632 байта и Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`, unit-тесты SimpleUpdate и companion-модулей, fast-close, настоящий launcher/Settings bridge, реальную прокрутку через `WM_MOUSEWHEEL`, видимость update-controls, скрытие `v0.2.11 BETA`, stage, Inno Setup и smoke уже установленного пакета. Публикация stable manifest выполняется только после вычисления SHA-256 и размера фактически собранного установщика.
+Windows CI проверяет immutable core размером 389 632 байта и Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`, SimpleUpdate, companion-модули, pinned Flowseal Zapret 1.10.2, настоящий Zapret Center UI smoke, stage, Inno Setup и уже установленный пакет. Stable manifest публикуется только после вычисления SHA-256 и размера фактически собранного установщика.
 
 ## Установка
 
-Запустите `DPopCleaner_Setup_0.4.17.exe`. Установщик размещает `SimpleUpdate.exe`, неизменный `DPopCleaner.exe`, `ZapretScreenFix.exe`, остальные companion-модули, `Languages`, `Shell` и `Documentation` в одном каталоге. Обычный запуск DPopCleaner идёт через `SimpleUpdate.exe`.
+Запустите `DPopCleaner_Setup_0.4.17.exe`. После установки рядом с неизменным `DPopCleaner.exe` находятся `SimpleUpdate.exe` и полный Flowseal Zapret runtime, включая `service.bat`, стратегии и `bin\winws.exe`.
 
 Перед системными изменениями рекомендуется иметь актуальную точку восстановления Windows или резервную копию важных данных.

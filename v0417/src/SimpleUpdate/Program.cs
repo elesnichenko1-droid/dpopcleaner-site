@@ -7,7 +7,7 @@ namespace DPopCleaner.SimpleUpdate
     internal static class Program
     {
         internal const int CurrentVersionCode = 417;
-        internal const int CurrentRevision = 4;
+        internal const int CurrentRevision = 5;
         internal const string StableManifestUrl = LauncherOptions.DefaultManifestUrl;
 
         [STAThread]
@@ -32,7 +32,6 @@ namespace DPopCleaner.SimpleUpdate
                     catch (System.Threading.AbandonedMutexException) { acquired = true; }
                     if (!acquired)
                     {
-                        // Let the already running launcher own the bridge; launch the core normally.
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(corePath) { UseShellExecute = true, WorkingDirectory = baseDirectory });
                         return;
                     }
