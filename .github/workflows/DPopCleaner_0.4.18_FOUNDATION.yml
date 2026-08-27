@@ -12,6 +12,13 @@ on:
       - 'tools/dpop0417_restore_smoke.ps1'
       - 'tests/test_dpop0418_*.py'
       - 'release/DPopCleaner_0.4.18.iss'
+      - 'release/RELEASE_NOTES_0.4.18.md'
+      - 'index.html'
+      - 'script.js'
+      - 'release-manifest.js'
+      - 'version.json'
+      - 'update/stable.json'
+      - '.github/workflows/publish-dpopcleaner-0.4.18.yml'
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
   pull_request:
     paths:
@@ -22,6 +29,13 @@ on:
       - 'tools/dpop0417_restore_smoke.ps1'
       - 'tests/test_dpop0418_*.py'
       - 'release/DPopCleaner_0.4.18.iss'
+      - 'release/RELEASE_NOTES_0.4.18.md'
+      - 'index.html'
+      - 'script.js'
+      - 'release-manifest.js'
+      - 'version.json'
+      - 'update/stable.json'
+      - '.github/workflows/publish-dpopcleaner-0.4.18.yml'
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
 
 permissions:
@@ -39,6 +53,10 @@ jobs:
       - name: Verify 0.4.18 package contract
         shell: pwsh
         run: python tests/test_dpop0418_package_contract.py
+
+      - name: Verify 0.4.18 stable release contract
+        shell: pwsh
+        run: python tests/test_dpop0418_release_contract.py
 
       - name: Configure 0.4.18 native tests
         shell: pwsh
