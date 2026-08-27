@@ -101,14 +101,10 @@ try {
     $upgradeSentinelPreserved = (Test-Path -LiteralPath $sentinel -PathType Leaf) -and ((Get-Content -Raw -LiteralPath $sentinel).Trim() -eq 'preserve-me')
     if (-not $upgradeSentinelPreserved) { throw 'In-place reinstall destroyed user Documentation data.' }
 
+    # These PowerShell smoke scripts throw on failure; under StrictMode they do not own $LASTEXITCODE.
     & (Join-Path $PSScriptRoot 'dpop0418_close_smoke.ps1') -Exe $core
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
     & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') -ExePath $diskExe -OutputDir $diskEvidence
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
     & (Join-Path $PSScriptRoot 'dpop0417_restore_smoke.ps1') -ExePath $restoreExe -OutputDir $restoreEvidence
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     $uninstaller = Assert-File 'unins000.exe'
     $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
