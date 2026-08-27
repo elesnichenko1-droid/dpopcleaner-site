@@ -1,8 +1,11 @@
 #include <windows.h>
+#include "resource.h"
+
+IDI_APP_ICON ICON "dpopcleaner.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,4,18,1
- PRODUCTVERSION 0,4,18,1
+ FILEVERSION 0,4,18,2
+ PRODUCTVERSION 0,4,18,2
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -19,10 +22,10 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "DPopCleaner Project\0"
             VALUE "FileDescription", "DPopCleaner 0.4.18 native component\0"
-            VALUE "FileVersion", "0.4.18.1\0"
+            VALUE "FileVersion", "0.4.18.2\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 DPopCleaner\0"
             VALUE "ProductName", "DPopCleaner\0"
-            VALUE "ProductVersion", "0.4.18 rev.1\0"
+            VALUE "ProductVersion", "0.4.18 rev.2\0"
         END
     END
     BLOCK "VarFileInfo"
