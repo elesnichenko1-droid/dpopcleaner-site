@@ -31,6 +31,7 @@ def main() -> None:
         "Modules/DiskAnalyzer.exe",
         "Modules/RestoreCenter.exe",
         "Modules/ZapretScreenFix.exe",
+        "ThirdParty/Zapret/",
         "Resources/",
     ]
     actual = [line.strip() for line in read(allowlist).splitlines() if line.strip()]
@@ -44,6 +45,8 @@ def main() -> None:
         "Modules/DiskAnalyzer.exe",
         "Modules/RestoreCenter.exe",
         "Modules/ZapretScreenFix.exe",
+        "ThirdParty/Zapret",
+        "THIRD_PARTY_NOTICES.txt",
     ):
         require(token in stage_text, f"Stage script missing contract token: {token}")
     require("downloads/DPopCleaner_0.2.14_BETA.exe" not in stage_text,
