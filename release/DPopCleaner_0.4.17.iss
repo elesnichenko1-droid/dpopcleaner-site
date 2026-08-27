@@ -16,10 +16,10 @@ AppPublisher=DPopCleaner Project
 AppPublisherURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
 AppSupportURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
 AppUpdatesURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
-VersionInfoVersion=0.4.17.2
-VersionInfoProductVersion=0.4.17.2
+VersionInfoVersion=0.4.17.0
+VersionInfoProductVersion=0.4.17.0
 VersionInfoCompany=DPopCleaner Project
-VersionInfoDescription=DPopCleaner 0.4.17 Setup Revision 2
+VersionInfoDescription=DPopCleaner 0.4.17 Setup
 VersionInfoProductName=DPopCleaner
 DefaultDirName={autopf}\DPopCleaner
 DefaultGroupName=DPopCleaner
@@ -37,7 +37,7 @@ CloseApplications=yes
 RestartApplications=no
 AllowNoIcons=yes
 MinVersion=10.0
-UninstallDisplayIcon={app}\DPopCleaner.exe
+UninstallDisplayIcon={app}\SimpleUpdate.exe
 UninstallDisplayName=DPopCleaner 0.4.17
 
 [Languages]
@@ -53,6 +53,7 @@ Name: "{app}\Resources"
 
 [Files]
 Source: "{#StageRoot}\DPopCleaner.exe"; DestDir: "{app}"; DestName: "DPopCleaner.exe"; Flags: ignoreversion restartreplace
+Source: "{#StageRoot}\SimpleUpdate.exe"; DestDir: "{app}"; DestName: "SimpleUpdate.exe"; Flags: ignoreversion restartreplace
 Source: "{#StageRoot}\Modules\*"; DestDir: "{app}\Modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Languages\*"; DestDir: "{app}\Languages"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Shell\*"; DestDir: "{app}\Shell"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -63,11 +64,11 @@ Source: "{#StageRoot}\Resources\*"; DestDir: "{app}\Resources"; Flags: ignorever
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Flags: unchecked
 
 [Icons]
-Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\SimpleUpdate.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Анализатор диска"; Filename: "{app}\Modules\DiskAnalyzer.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Центр восстановления"; Filename: "{app}\Modules\RestoreCenter.exe"; WorkingDir: "{app}"
-Name: "{autoprograms}\DPopCleaner\Zapret — фикс демонстрации экрана"; Filename: "{app}\Modules\ZapretScreenFix.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\DPopCleaner\Исправление демонстрации экрана Zapret"; Filename: "{app}\Modules\ZapretScreenFix.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\SimpleUpdate.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\DPopCleaner.exe"; Description: "Запустить DPopCleaner"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\SimpleUpdate.exe"; Description: "Запустить DPopCleaner"; Flags: nowait postinstall skipifsilent

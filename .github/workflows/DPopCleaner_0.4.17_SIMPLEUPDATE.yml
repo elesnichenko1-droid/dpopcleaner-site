@@ -1,0 +1,48 @@
+name: DPopCleaner 0.4.17 SimpleUpdate
+
+on:
+  push:
+    branches:
+      - fix/restore-0.4.17-simpleupdate
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  simpleupdate:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify original 0.4.17 core identity
+        shell: pwsh
+        run: |
+          $core = 'downloads/DPopCleaner_0.2.14_BETA.exe'
+          if (-not (Test-Path -LiteralPath $core -PathType Leaf)) { throw 'Original core missing.' }
+          if ((Get-Item -LiteralPath $core).Length -ne 389632) { throw 'Original core size changed.' }
+          $blob = (& git hash-object -- $core).Trim()
+          if ($blob -ne 'efd0eff1f4962319282363fa85595c25e0cebe11') { throw "Original core blob changed: $blob" }
+
+      - name: Run SimpleUpdate RED-GREEN contracts
+        shell: pwsh
+        run: |
+          dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run fast-close bridge smoke
+        shell: pwsh
+        run: ./tools/dpop0417_close_smoke.ps1
+
+      - name: Run authentic SimpleUpdate launcher and Settings bridge smoke
+        shell: pwsh
+        run: ./tools/dpop0417_simpleupdate_smoke.ps1
+
+      - name: Probe original DPopCleaner UI controls
+        shell: pwsh
+        run: ./tools/dpop0417_ui_probe.ps1

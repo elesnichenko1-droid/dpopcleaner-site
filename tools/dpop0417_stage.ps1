@@ -23,6 +23,7 @@ if (-not (Test-Path -LiteralPath $allowlistPath -PathType Leaf)) {
 
 $expectedAllowlist = @(
     'DPopCleaner.exe',
+    'SimpleUpdate.exe',
     'Languages/',
     'Shell/',
     'Documentation/',
@@ -58,6 +59,12 @@ New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stageRoot 'Modules') -Force | Out-Null
 
 Copy-Item -LiteralPath $corePath -Destination (Join-Path $stageRoot ([string]$core.staged_name)) -Force
+
+$launcher = Join-Path $root 'v0417/src/SimpleUpdate/bin/Release/net48/SimpleUpdate.exe'
+if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+    throw "SimpleUpdate.exe is missing. Build v0417/src/SimpleUpdate first: $launcher"
+}
+Copy-Item -LiteralPath $launcher -Destination (Join-Path $stageRoot 'SimpleUpdate.exe') -Force
 
 function Copy-ApprovedDirectory([string]$Name) {
     $source = Join-Path $payloadRoot $Name
@@ -104,4 +111,5 @@ if ($LASTEXITCODE -ne 0 -or $stagedBlob -ne [string]$core.git_blob_sha1) {
 }
 
 Write-Host "Staged immutable core: $stagedBlob"
+Write-Host "Staged launcher: $(Join-Path $stageRoot 'SimpleUpdate.exe')"
 Write-Host "0.4.17 stage ready: $stageRoot"

@@ -29,6 +29,10 @@ $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
 $uninstalled = $false
 $documentationAclModify = $false
+$launcherSmoke = $false
+$zapretScreenFixPresent = $false
+$launcherProcess = $null
+$launcherCoreProcess = $null
 
 function Assert-File([string]$RelativePath) {
     $path = Join-Path $installRoot $RelativePath
@@ -56,10 +60,12 @@ try {
     $installed = $true
 
     $core = Assert-File 'DPopCleaner.exe'
+    $launcher = Assert-File 'SimpleUpdate.exe'
     [void](Assert-File 'Modules\DPop.Common.dll')
     $diskExe = Assert-File 'Modules\DiskAnalyzer.exe'
     $restoreExe = Assert-File 'Modules\RestoreCenter.exe'
     [void](Assert-File 'Modules\ZapretScreenFix.exe')
+    $zapretScreenFixPresent = $true
     [void](Assert-File 'Languages\ru.json')
     [void](Assert-File 'Languages\en.json')
     [void](Assert-File 'Shell\shell.json')
@@ -72,10 +78,16 @@ try {
     $usersSidValue = 'S-1-5-32-545'
     $acl = Get-Acl -LiteralPath $documentationPath
     foreach ($rule in $acl.Access) {
-        try { $ruleSid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }
-        catch { $ruleSid = '' }
+        try {
+            $ruleSid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+        }
+        catch {
+            $ruleSid = ''
+        }
         $hasModify = (($rule.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::Modify) -eq [System.Security.AccessControl.FileSystemRights]::Modify)
-        if ($ruleSid -eq $usersSidValue -and $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and $hasModify) {
+        if ($ruleSid -eq $usersSidValue -and
+            $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+            $hasModify) {
             $documentationAclModify = $true
             break
         }
@@ -89,45 +101,100 @@ try {
         throw "Installed immutable core mismatch: $installedCoreBlob"
     }
 
-    & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') -ExePath $diskExe -OutputDir $diskEvidence
+    $launcherSettings = Join-Path $OutputDir 'SimpleUpdate-installed-smoke.ini'
+    Remove-Item -LiteralPath $launcherSettings -Force -ErrorAction SilentlyContinue
+    $launcherProcess = Start-Process -FilePath $launcher -ArgumentList @(
+        '--no-update-check',
+        '--settings-path',
+        ('"' + $launcherSettings + '"')
+    ) -WorkingDirectory $installRoot -PassThru
+
+    $launcherDeadline = [DateTime]::UtcNow.AddSeconds(18)
+    do {
+        Start-Sleep -Milliseconds 250
+        foreach ($candidate in @(Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue)) {
+            try {
+                if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($core)) {
+                    $launcherCoreProcess = $candidate
+                    break
+                }
+            }
+            catch { }
+        }
+    } while ($null -eq $launcherCoreProcess -and [DateTime]::UtcNow -lt $launcherDeadline)
+
+    if ($null -eq $launcherCoreProcess) {
+        throw 'Installed SimpleUpdate.exe did not launch the preserved DPopCleaner.exe core.'
+    }
+    Stop-Process -Id $launcherCoreProcess.Id -Force
+    $launcherCoreProcess.WaitForExit(5000) | Out-Null
+    if (-not $launcherProcess.WaitForExit(6000)) {
+        throw 'Installed SimpleUpdate.exe did not exit after its DPopCleaner core closed.'
+    }
+    $launcherSmoke = $true
+
+    & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') `
+        -ExePath $diskExe `
+        -OutputDir $diskEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    & (Join-Path $PSScriptRoot 'dpop0417_restore_smoke.ps1') -ExePath $restoreExe -OutputDir $restoreEvidence
+    & (Join-Path $PSScriptRoot 'dpop0417_restore_smoke.ps1') `
+        -ExePath $restoreExe `
+        -OutputDir $restoreEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     $uninstaller = Assert-File 'unins000.exe'
-    $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
-    if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($uninstall.ExitCode)." }
+    $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART'
+    ) -Wait -PassThru
+    if ($uninstall.ExitCode -ne 0) {
+        throw "Silent uninstall failed with exit code $($uninstall.ExitCode)."
+    }
 
     Start-Sleep -Milliseconds 500
     $uninstalled = -not (Test-Path -LiteralPath (Join-Path $installRoot 'DPopCleaner.exe') -PathType Leaf)
-    if (-not $uninstalled) { throw 'Installed DPopCleaner.exe remained after uninstall.' }
+    if (-not $uninstalled) {
+        throw 'Installed DPopCleaner.exe remained after uninstall.'
+    }
 
     [pscustomobject]@{
         installer = $InstallerPath
         install_root = $installRoot
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
+        simpleupdate_launcher_smoke = [bool]$launcherSmoke
+        zapret_screen_fix_present = [bool]$zapretScreenFixPresent
         documentation_acl_modify = [bool]$documentationAclModify
-        zapret_screen_fix = $true
         disk_smoke = (Test-Path -LiteralPath (Join-Path $diskEvidence 'disk-smoke-report.json') -PathType Leaf)
         restore_smoke = (Test-Path -LiteralPath (Join-Path $restoreEvidence 'restore-smoke-report.json') -PathType Leaf)
         uninstalled = [bool]$uninstalled
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $reportPath -Encoding utf8
 
     Write-Host "Installed immutable core: $installedCoreBlob"
+    Write-Host 'Installed SimpleUpdate launcher smoke: PASS'
+    Write-Host 'Installed ZapretScreenFix companion: PASS'
     Write-Host 'Installed Documentation ACL: BUILTIN\Users Modify PASS'
-    Write-Host 'Installed Zapret Screen Fix payload: PASS'
     Write-Host 'Installed Disk Analyzer smoke: PASS'
     Write-Host 'Installed Restore Center smoke: PASS'
     Write-Host 'Silent uninstall: PASS'
     Write-Host "install-smoke-report.json: $reportPath"
 }
 finally {
+    if ($launcherCoreProcess -and -not $launcherCoreProcess.HasExited) {
+        Stop-Process -Id $launcherCoreProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+    if ($launcherProcess -and -not $launcherProcess.HasExited) {
+        Stop-Process -Id $launcherProcess.Id -Force -ErrorAction SilentlyContinue
+    }
     if ($installed -and -not $uninstalled) {
         $uninstaller = Join-Path $installRoot 'unins000.exe'
         if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
-            try { Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait | Out-Null } catch { }
+            try {
+                Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait | Out-Null
+            }
+            catch { }
         }
     }
     if (Test-Path -LiteralPath $installRoot) {
