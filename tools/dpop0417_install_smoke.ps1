@@ -30,6 +30,7 @@ $installed = $false
 $uninstalled = $false
 $documentationAclModify = $false
 $launcherSmoke = $false
+$zapretScreenFixPresent = $false
 $launcherProcess = $null
 $launcherCoreProcess = $null
 
@@ -63,7 +64,8 @@ try {
     [void](Assert-File 'Modules\DPop.Common.dll')
     $diskExe = Assert-File 'Modules\DiskAnalyzer.exe'
     $restoreExe = Assert-File 'Modules\RestoreCenter.exe'
-    $zapretExe = Assert-File 'Modules\ZapretScreenFix.exe'
+    [void](Assert-File 'Modules\ZapretScreenFix.exe')
+    $zapretScreenFixPresent = $true
     [void](Assert-File 'Languages\ru.json')
     [void](Assert-File 'Languages\en.json')
     [void](Assert-File 'Shell\shell.json')
@@ -163,7 +165,7 @@ try {
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
         simpleupdate_launcher_smoke = [bool]$launcherSmoke
-        zapret_screen_fix_present = [bool](Test-Path -LiteralPath $zapretExe -PathType Leaf)
+        zapret_screen_fix_present = [bool]$zapretScreenFixPresent
         documentation_acl_modify = [bool]$documentationAclModify
         disk_smoke = (Test-Path -LiteralPath (Join-Path $diskEvidence 'disk-smoke-report.json') -PathType Leaf)
         restore_smoke = (Test-Path -LiteralPath (Join-Path $restoreEvidence 'restore-smoke-report.json') -PathType Leaf)
