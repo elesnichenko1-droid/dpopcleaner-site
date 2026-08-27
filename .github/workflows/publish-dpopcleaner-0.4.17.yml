@@ -106,17 +106,33 @@ jobs:
           dotnet build v0417/src/SimpleUpdate/SimpleUpdate.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Prepare pinned Flowseal Zapret 1.10.2
+        shell: pwsh
+        run: ./tools/dpop0417_prepare_zapret.ps1
+
       - name: Stage verified payload
         shell: pwsh
         run: ./tools/dpop0417_stage.ps1 -RequireCompanions
 
-      - name: Verify staged modules and frozen core
+      - name: Verify authentic Zapret Center and staged modules
         shell: pwsh
         run: |
+          ./tools/dpop0417_zapret_ui_smoke.ps1 -RootPath '_release/0.4.17/stage' -OutputDir '_release/0.4.17/evidence/zapret-ui'
           ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.17/evidence/disk'
           ./tools/dpop0417_restore_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' -OutputDir '_release/0.4.17/evidence/restore'
-          if (-not (Test-Path -LiteralPath '_release/0.4.17/stage/Modules/ZapretScreenFix.exe' -PathType Leaf)) { throw 'Staged ZapretScreenFix.exe missing.' }
-          if (-not (Test-Path -LiteralPath '_release/0.4.17/stage/Shell/commands/zapret-screen-fix.json' -PathType Leaf)) { throw 'Staged Zapret screen-fix command missing.' }
+          foreach ($required in @(
+            '_release/0.4.17/stage/service.bat',
+            '_release/0.4.17/stage/general.bat',
+            '_release/0.4.17/stage/bin/winws.exe',
+            '_release/0.4.17/stage/bin/WinDivert.dll',
+            '_release/0.4.17/stage/bin/WinDivert64.sys',
+            '_release/0.4.17/stage/.service/version.txt',
+            '_release/0.4.17/stage/Modules/ZapretScreenFix.exe',
+            '_release/0.4.17/stage/Shell/commands/zapret-screen-fix.json'
+          )) {
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Staged Zapret requirement missing: $required" }
+          }
+          if ((Get-Content -Raw '_release/0.4.17/stage/.service/version.txt').Trim() -ne '1.10.2') { throw 'Staged Flowseal Zapret version is not 1.10.2.' }
           $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
           $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
           if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }
@@ -156,9 +172,9 @@ jobs:
           $sha256 = (Get-FileHash -LiteralPath $env:DPOP0417_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
           $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
           [ordered]@{
-            product = 'DPopCleaner'; channel = 'stable'; version = '0.4.17'; version_code = 417; revision = 4; mandatory = $false
-            download_url = $url; sha256 = $sha256; size = [int64]$item.Length; signed = $false; available = $true
-            notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args = '/SILENT /NORESTART'
+            product='DPopCleaner'; channel='stable'; version='0.4.17'; version_code=417; revision=4; mandatory=$false
+            download_url=$url; sha256=$sha256; size=[int64]$item.Length; signed=$false; available=$true
+            notes_url='https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args='/SILENT /NORESTART'
           } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
           [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=4; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append

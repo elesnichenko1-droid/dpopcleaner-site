@@ -1,0 +1,125 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$RootPath,
+    [string]$OutputDir = '_release/0.4.17/evidence/zapret-ui'
+)
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$RootPath = if ([IO.Path]::IsPathRooted($RootPath)) { $RootPath } else { Join-Path $repoRoot $RootPath }
+$OutputDir = if ([IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path $repoRoot $OutputDir }
+$RootPath = [IO.Path]::GetFullPath($RootPath)
+$OutputDir = [IO.Path]::GetFullPath($OutputDir)
+New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+
+$launcher = Join-Path $RootPath 'SimpleUpdate.exe'
+$core = Join-Path $RootPath 'DPopCleaner.exe'
+$service = Join-Path $RootPath 'service.bat'
+$winws = Join-Path $RootPath 'bin\winws.exe'
+$windivert = Join-Path $RootPath 'bin\WinDivert64.sys'
+foreach ($required in @($launcher, $core, $service, $winws, $windivert)) {
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Zapret UI smoke prerequisite missing: $required" }
+}
+$strategyFiles = @(Get-ChildItem -LiteralPath $RootPath -Filter 'general*.bat' -File | Sort-Object Name)
+if ($strategyFiles.Count -eq 0) { throw 'Zapret UI smoke found no general*.bat strategies beside DPopCleaner.exe.' }
+
+$native = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public sealed class ZapretSmokeChild {
+    public IntPtr Handle;
+    public int Id;
+    public string Text;
+    public string ClassName;
+    public bool Visible;
+}
+public static class ZapretSmokeNative {
+    private delegate bool EnumProc(IntPtr hwnd, IntPtr p);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr p);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder s, int n);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder s, int n);
+    [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+    public static ZapretSmokeChild[] Children(IntPtr parent) {
+        var list = new List<ZapretSmokeChild>();
+        EnumProc cb = delegate(IntPtr h, IntPtr _) {
+            var t = new StringBuilder(512); var c = new StringBuilder(128);
+            GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity);
+            list.Add(new ZapretSmokeChild { Handle=h, Id=GetDlgCtrlID(h), Text=t.ToString(), ClassName=c.ToString(), Visible=IsWindowVisible(h) });
+            return true;
+        };
+        EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
+    }
+}
+'@
+Add-Type -TypeDefinition $native -Language CSharp
+
+$launcherProcess = $null
+$coreProcess = $null
+$selectedStrategy = ''
+$strategyCount = 0
+try {
+    $settings = Join-Path $OutputDir 'SimpleUpdate-zapret-ui.ini'
+    Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue
+    $launcherProcess = Start-Process -FilePath $launcher -ArgumentList @('--no-update-check','--settings-path',('"' + $settings + '"')) -WorkingDirectory $RootPath -PassThru
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(18)
+    do {
+        Start-Sleep -Milliseconds 250
+        foreach ($candidate in @(Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue)) {
+            try {
+                if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($core)) { $coreProcess = $candidate; $coreProcess.Refresh(); break }
+            } catch { }
+        }
+    } while (($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) -and [DateTime]::UtcNow -lt $deadline)
+    if ($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Authentic DPopCleaner window did not appear for Zapret UI smoke.' }
+
+    $children = [ZapretSmokeNative]::Children($coreProcess.MainWindowHandle)
+    $zapretButton = $children | Where-Object { $_.ClassName -eq 'Button' -and $_.Text -eq 'Zapret' } | Select-Object -First 1
+    if (-not $zapretButton) { throw 'Authentic Zapret navigation button was not found.' }
+    [void][ZapretSmokeNative]::SendMessage($zapretButton.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(8)
+    $combo = $null
+    do {
+        Start-Sleep -Milliseconds 200
+        $children = [ZapretSmokeNative]::Children($coreProcess.MainWindowHandle)
+        $combos = @($children | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' })
+        foreach ($candidate in $combos) {
+            $count = [ZapretSmokeNative]::SendMessage($candidate.Handle, 0x0146, [IntPtr]::Zero, [IntPtr]::Zero).ToInt32()
+            if ($count -gt 0) { $combo = $candidate; $strategyCount = $count; break }
+        }
+    } while (-not $combo -and [DateTime]::UtcNow -lt $deadline)
+
+    if (-not $combo) { throw 'Zapret Center did not expose a populated strategy ComboBox.' }
+    $selectedStrategy = $combo.Text
+    if ([string]::IsNullOrWhiteSpace($selectedStrategy)) { throw 'Zapret strategy ComboBox has entries but no selected strategy text.' }
+    if ($selectedStrategy -match 'Стратегии не найдены|No strategies found') { throw "Old-core Zapret Center still reports missing strategies: $selectedStrategy" }
+    if ($selectedStrategy -notmatch '(?i)^general.*\.bat$') { throw "Unexpected Zapret strategy selected by authentic UI: $selectedStrategy" }
+
+    $visibleText = ($children | Where-Object { $_.Visible } | ForEach-Object { $_.Text }) -join "`n"
+    if ($visibleText -match 'Zapret components were not found beside DPopCleaner') { throw 'Authentic Zapret Center still reports missing bundled components.' }
+
+    [pscustomobject]@{
+        root = $RootPath
+        bundled_version = (Get-Content -Raw -LiteralPath (Join-Path $RootPath '.service\version.txt')).Trim()
+        strategy_files = $strategyFiles.Count
+        strategy_combo_count = $strategyCount
+        selected_strategy = $selectedStrategy
+        winws_present = (Test-Path -LiteralPath $winws -PathType Leaf)
+        windivert_present = (Test-Path -LiteralPath $windivert -PathType Leaf)
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'zapret-ui-smoke-report.json') -Encoding utf8
+
+    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK strategy=$selectedStrategy combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
+}
+finally {
+    if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
+    if ($launcherProcess -and -not $launcherProcess.HasExited) { Stop-Process -Id $launcherProcess.Id -Force -ErrorAction SilentlyContinue }
+}

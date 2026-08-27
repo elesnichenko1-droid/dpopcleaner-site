@@ -1,5 +1,11 @@
 DPopCleaner.exe
 SimpleUpdate.exe
+LICENSE.txt
+.service/
+*.bat
+bin/
+lists/
+utils/
 Languages/
 Shell/
 Documentation/
