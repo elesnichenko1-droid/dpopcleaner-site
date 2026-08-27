@@ -47,12 +47,42 @@ int main() {
     if (args.find(L"--restart \"C:\\Program Files\\DPopCleaner\\DPopCleaner.exe\"") == std::wstring::npos)
         return Fail("restart path must be quoted");
 
+    const auto fixtureRoot = std::filesystem::temp_directory_path() / L"dpop0418-updater-handoff-test";
+    std::error_code ec;
+    std::filesystem::remove_all(fixtureRoot, ec);
+    std::filesystem::create_directories(fixtureRoot, ec);
+    const auto installedUpdater = fixtureRoot / L"DPopUpdater.exe";
+    {
+        std::ofstream out(installedUpdater, std::ios::binary | std::ios::trunc);
+        out << "dpop0418-updater-fixture";
+    }
+    std::filesystem::path stagedUpdater;
+    std::wstring stageError;
+    if (!dpop0418::StageUpdaterForHandoff(installedUpdater, stagedUpdater, stageError))
+        return Fail("updater handoff copy must be created");
+    if (stagedUpdater == installedUpdater)
+        return Fail("handoff updater must not execute from the installed path");
+    if (!std::filesystem::exists(stagedUpdater))
+        return Fail("handoff updater copy must exist");
+    if (ReadAll(stagedUpdater) != ReadAll(installedUpdater))
+        return Fail("handoff updater copy must preserve exact bytes");
+    if (stagedUpdater.filename().wstring().find(L"DPopUpdater-handoff-") != 0)
+        return Fail("handoff updater must use an identifiable per-process copy name");
+    std::filesystem::remove(stagedUpdater, ec);
+    std::filesystem::remove_all(fixtureRoot, ec);
+
     const std::filesystem::path sourceRoot = std::filesystem::path(DPOP0418_SOURCE_DIR);
     const std::string updaterSource = ReadAll(sourceRoot / "updater" / "UpdaterMain.cpp");
     const auto hashPos = updaterSource.find("Sha256File");
     const auto launchPos = updaterSource.find("ShellExecuteExW");
     if (hashPos == std::string::npos || launchPos == std::string::npos || hashPos > launchPos)
         return Fail("DPopUpdater must independently hash package before installer launch");
+
+    const std::string clientSource = ReadAll(sourceRoot / "core" / "UpdateClient.cpp");
+    const auto stagePos = clientSource.find("StageUpdaterForHandoff(updaterExe");
+    const auto shellPos = clientSource.find("execute.lpFile = stagedUpdater.c_str()");
+    if (stagePos == std::string::npos || shellPos == std::string::npos || stagePos > shellPos)
+        return Fail("LaunchUpdater must execute the staged handoff copy, not installed DPopUpdater.exe");
 
     return 0;
 }
