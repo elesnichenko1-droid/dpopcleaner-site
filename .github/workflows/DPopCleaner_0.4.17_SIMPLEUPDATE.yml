@@ -29,6 +29,12 @@ jobs:
           $blob = (& git hash-object -- $core).Trim()
           if ($blob -ne 'efd0eff1f4962319282363fa85595c25e0cebe11') { throw "Original core blob changed: $blob" }
 
+      - name: Run SimpleUpdate RED-GREEN contracts
+        shell: pwsh
+        run: |
+          dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Probe original DPopCleaner UI controls
         shell: pwsh
         run: ./tools/dpop0417_ui_probe.ps1
