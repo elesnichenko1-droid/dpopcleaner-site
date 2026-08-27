@@ -13,36 +13,48 @@ def main() -> None:
     require(WORKFLOW.is_file(), "0.4.18 publish workflow must exist")
     text = WORKFLOW.read_text(encoding="utf-8").lower()
 
-    # Pages remains responsible only for the stable manifest. The generated
-    # screenshots are immutable release assets, uploaded together with the
-    # installer and verified byte-for-byte from the v0.4.18 release URLs.
+    # A superseding main push must be able to stop a stuck publisher instead of
+    # waiting behind it indefinitely.
+    require("cancel-in-progress: true" in text,
+            "Production concurrency must cancel an obsolete stuck publisher")
+    require("timeout-minutes: 10" in text,
+            "Publish job must have a hard upper time bound")
+
+    # Pages remains responsible only for the live stable manifest. Every network
+    # request to Pages must have an explicit timeout even inside a retry loop.
     require("for ($i = 0; $i -lt 18; $i++)" in text,
-            "Live stable manifest must receive a bounded Pages propagation retry loop")
+            "Live stable manifest must receive a bounded propagation retry loop")
     require("$manifesturl + '?t=' + $env:github_run_id" in text,
             "Manifest verification must use a cache-busting live Pages URL")
     require("'cache-control'='no-cache'" in text,
             "Live verification must bypass stale cache entries")
+    require("invoke-restmethod" in text and "-timeoutsec 15" in text,
+            "Pages manifest requests must have an explicit short timeout")
 
-    for name in (
-        "dpopcleaner-0.4.18-overview.png",
-        "dpopcleaner-0.4.18-zapret.png",
-        "dpopcleaner-0.4.18-settings.png",
-    ):
-        require(f"releases/download/v0.4.18/{name}" in text,
-                f"{name} must be verified from the v0.4.18 GitHub Release")
-
+    # Generated screenshots are immutable GitHub Release assets. Verification
+    # should use GitHub's release API/download path, not an unbounded web request
+    # against each CDN object.
+    require("gh release download" in text,
+            "Published release assets must be downloaded through GitHub CLI")
+    require("--pattern \"$name\"" in text,
+            "Each screenshot release asset must be selected by exact name")
+    require("--pattern \"$env:release_asset\"" in text,
+            "Installer release asset must be selected by exact name")
     require("expectedshotsha" in text,
             "Release screenshot verifier must hash the candidate screenshot")
     require("liveshotsha" in text,
             "Release screenshot verifier must hash the downloaded release screenshot")
     require("$liveshotsha -eq $expectedshotsha" in text,
             "Release screenshot verification must require exact SHA-256 equality")
-    require("for ($shotattempt = 0; $shotattempt -lt 12; $shotattempt++)" in text,
-            "Each release screenshot must receive a bounded availability retry loop")
-    require("start-sleep -seconds 5" in text,
-            "Release asset availability retries must wait between attempts")
     require("live release screenshot mismatch" in text,
             "Production verifier must fail closed when a release screenshot differs")
+
+    for name in (
+        "dpopcleaner-0.4.18-overview.png",
+        "dpopcleaner-0.4.18-zapret.png",
+        "dpopcleaner-0.4.18-settings.png",
+    ):
+        require(name in text, f"Workflow must know release screenshot {name}")
 
     require("$base/assets/" not in text,
             "Production must not verify generated screenshots through GitHub Pages /assets")
