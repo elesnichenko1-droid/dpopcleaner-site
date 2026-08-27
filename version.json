@@ -1,8 +1,8 @@
 {
   "product": "DPopCleaner",
-  "version": "0.4.18",
-  "version_code": 418,
-  "revision": 2,
+  "version": "0.4.17",
+  "version_code": 417,
+  "revision": 3,
   "channel": "stable",
   "platform": "windows",
   "architecture": "x86-64",

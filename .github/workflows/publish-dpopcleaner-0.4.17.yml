@@ -1,0 +1,228 @@
+name: Build, release and deploy DPopCleaner 0.4.17 rev.3
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-dpopcleaner-0.4.17.yml'
+      - '.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml'
+      - 'release/DPopCleaner_0.4.17.iss'
+      - 'release/RELEASE_NOTES_0.4.17.md'
+      - 'tools/dpop0417_*'
+      - 'tests/test_dpop0417_*'
+      - 'v0417/**'
+      - 'assets/dpopcleaner-0.4.17-*'
+      - 'index.html'
+      - 'styles.css'
+      - 'script.js'
+      - 'release-manifest.js'
+      - 'version.json'
+      - 'update/stable.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-dpopcleaner-0.4.17.yml'
+      - '.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml'
+      - 'release/DPopCleaner_0.4.17.iss'
+      - 'release/RELEASE_NOTES_0.4.17.md'
+      - 'tools/dpop0417_*'
+      - 'tests/test_dpop0417_*'
+      - 'v0417/**'
+      - 'assets/dpopcleaner-0.4.17-*'
+      - 'index.html'
+      - 'styles.css'
+      - 'script.js'
+      - 'release-manifest.js'
+      - 'version.json'
+      - 'update/stable.json'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: dpopcleaner-0-4-17-rev3-publish-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: v0.4.17-rev3
+  RELEASE_ASSET: DPopCleaner_Setup_0.4.17.exe
+
+jobs:
+  build-package:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Pin critical publication contract
+        shell: pwsh
+        run: |
+          python tests/test_dpop0417_release_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run all 0.4.17 contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tests = Get-ChildItem tests -Filter 'test_dpop0417_*.py' -File | Sort-Object Name
+          if (-not $tests) { throw 'No 0.4.17 contract tests found.' }
+          foreach ($test in $tests) {
+            python $test.FullName -v
+            if ($LASTEXITCODE -ne 0) { throw "Contract failed: $($test.Name)" }
+          }
+
+      - name: Run Common and Disk tests
+        shell: pwsh
+        run: |
+          dotnet test v0417/tests/DPop.Common.Tests/DPop.Common.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test v0417/tests/DiskAnalyzer.Tests/DiskAnalyzer.Tests.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build companion modules and SimpleUpdate
+        shell: pwsh
+        run: |
+          dotnet build v0417/src/DPop.Common/DPop.Common.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/DiskAnalyzer/DiskAnalyzer.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/SimpleUpdate/SimpleUpdate.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Stage verified payload
+        shell: pwsh
+        run: ./tools/dpop0417_stage.ps1 -RequireCompanions
+
+      - name: Verify staged modules and frozen core
+        shell: pwsh
+        run: |
+          ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.17/evidence/disk'
+          ./tools/dpop0417_restore_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' -OutputDir '_release/0.4.17/evidence/restore'
+          $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
+          $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
+          if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }
+
+      - name: Build DPopCleaner 0.4.17 installer
+        shell: pwsh
+        run: |
+          $candidates = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+          )
+          $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+          if (-not $iscc) { choco install innosetup --no-progress -y; $iscc = (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe') }
+          New-Item -ItemType Directory -Path '_release/0.4.17/installer' -Force | Out-Null
+          & $iscc 'release/DPopCleaner_0.4.17.iss'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe'
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer missing.' }
+          "DPOP0417_INSTALLER=$((Resolve-Path $installer).Path)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run installed package smoke
+        shell: pwsh
+        run: ./tools/dpop0417_install_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/install'
+
+      - name: Build publication payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $publish = Join-Path $env:RUNNER_TEMP 'dpop0417-rev3-publish'
+          Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $publish, (Join-Path $publish 'assets'), (Join-Path $publish 'update') -Force | Out-Null
+          Copy-Item $env:DPOP0417_INSTALLER (Join-Path $publish $env:RELEASE_ASSET) -Force
+          Copy-Item 'release/RELEASE_NOTES_0.4.17.md' (Join-Path $publish 'RELEASE_NOTES_0.4.17.md') -Force
+          Copy-Item 'assets/dpopcleaner-0.4.17-disk.png' (Join-Path $publish 'assets/dpopcleaner-0.4.17-disk.png') -Force
+          Copy-Item 'assets/dpopcleaner-0.4.17-restore.png' (Join-Path $publish 'assets/dpopcleaner-0.4.17-restore.png') -Force
+          $item = Get-Item $env:DPOP0417_INSTALLER
+          $sha256 = (Get-FileHash -LiteralPath $env:DPOP0417_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
+          $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
+          [ordered]@{
+            product = 'DPopCleaner'; channel = 'stable'; version = '0.4.17'; version_code = 417; revision = 3; mandatory = $false
+            download_url = $url; sha256 = $sha256; size = [int64]$item.Length; signed = $false; available = $true
+            notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args = '/SILENT /NORESTART'
+          } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
+          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=3; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
+          "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload verified release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.4.17-rev3-release-candidate
+          path: ${{ env.DPOP0417_PUBLISH }}/*
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push'
+    needs: build-package
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - name: Download verified release candidate
+        uses: actions/download-artifact@v5
+        with:
+          name: dpopcleaner-0.4.17-rev3-release-candidate
+          path: publish
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset="publish/${RELEASE_ASSET}"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "$asset" --clobber
+            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.17 rev.3" --notes-file release/RELEASE_NOTES_0.4.17.md
+          else
+            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 rev.3" --notes-file release/RELEASE_NOTES_0.4.17.md
+          fi
+      - name: Stage GitHub Pages
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site/assets _site/update
+          cp index.html styles.css script.js release-manifest.js version.json dpopcleaner-icon.png _site/
+          cp assets/dpopcleaner-0.4.17-disk.png assets/dpopcleaner-0.4.17-restore.png _site/assets/
+          cp publish/update/stable.json _site/update/stable.json
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify live manifest and installer SHA256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifestUrl = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/update/stable.json'
+          $expected = Get-Content -Raw 'publish/update/stable.json' | ConvertFrom-Json
+          $live = $null
+          for ($i = 0; $i -lt 12; $i++) {
+            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.revision -eq 3 -and $live.sha256 -eq $expected.sha256) { break } } catch {}
+            Start-Sleep -Seconds 10
+          }
+          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 3) { throw 'Live stable manifest mismatch.' }
+          if ($live.download_url -notmatch '/releases/download/v0\.4\.17-rev3/DPopCleaner_Setup_0\.4\.17\.exe$') { throw 'Live stable download URL mismatch.' }
+          $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.17.exe'
+          Invoke-WebRequest -Uri $live.download_url -OutFile $download
+          if ((Get-Item -LiteralPath $download).Length -ne [int64]$expected.size) { throw 'Live installer size mismatch.' }
+          $sha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha256 -ne $expected.sha256) { throw "Live installer SHA256 mismatch: $sha256" }

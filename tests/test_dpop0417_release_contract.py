@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
-    def test_site_manifest_and_publisher_are_one_stable_0417_release(self):
+    def test_site_manifest_and_publisher_are_one_stable_0417_rev3_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         notes = ROOT / 'release/RELEASE_NOTES_0.4.17.md'
         disk_png = ROOT / 'assets/dpopcleaner-0.4.17-disk.png'
@@ -21,31 +21,37 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         self.assertEqual(version['version'], '0.4.17')
         self.assertEqual(version['version_code'], 417)
-        self.assertEqual(version['revision'], 2)
+        self.assertEqual(version['revision'], 3)
         self.assertEqual(version['channel'], 'stable')
         self.assertEqual(version['manifest'], './update/stable.json')
 
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
         self.assertEqual(stable['version'], '0.4.17')
         self.assertEqual(stable['version_code'], 417)
-        self.assertEqual(stable['revision'], 2)
+        self.assertEqual(stable['revision'], 3)
         self.assertEqual(stable['channel'], 'stable')
+        self.assertFalse(stable['available'])
+        self.assertEqual(stable['download_url'], '')
+        self.assertEqual(stable['sha256'], '')
+        self.assertEqual(stable['size'], 0)
 
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
         self.assertIn("m.version === '0.4.17'", manifest)
+        self.assertIn("number(m.revision) === 3", manifest)
         self.assertIn("m.channel === 'stable'", manifest)
-        self.assertIn('number(m.revision) === 2', manifest)
-        self.assertIn('v0\\.4\\.17', manifest)
+        self.assertIn('v0\\.4\\.17-rev3', manifest)
         self.assertIn('dpopcleaner_setup_0\\.4\\.17\\.exe', manifest)
 
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         self.assertIn('dpopcleaner 0.4.17', index)
+        self.assertIn('rev.3', index)
+        self.assertIn('автообнов', index)
+        self.assertIn('simpleupdate', index)
         self.assertIn('assets/dpopcleaner-0.4.17-disk.png', index)
         self.assertIn('assets/dpopcleaner-0.4.17-restore.png', index)
         self.assertIn('ядро 0.2.14', index)
         self.assertIn('центр восстановления', index)
         self.assertIn('анализатор диска', index)
-        self.assertIn('zapret', index)
         self.assertNotIn('beta', index)
 
         script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
@@ -53,28 +59,29 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertNotIn('beta', script)
 
         notes_text = notes.read_text(encoding='utf-8').lower()
-        self.assertIn('zapret', notes_text)
+        self.assertIn('revision 3', notes_text)
+        self.assertIn('simpleupdate', notes_text)
+        self.assertIn('автообнов', notes_text)
         self.assertNotIn('beta', notes_text)
 
         workflow = publisher.read_text(encoding='utf-8').lower()
         for token in (
-            'v0.4.17',
+            'release_tag: v0.4.17-rev3',
             'dpopcleaner_setup_0.4.17.exe',
+            'v0417/src/simpleupdate/simpleupdate.csproj',
             'dpop0417_stage.ps1 -requirecompanions',
             'dpop0417_install_smoke.ps1',
             'test_dpop0417_release_contract.py',
-            'zapretscreenfix.tests.csproj',
-            'zapretscreenfix.csproj',
-            'revision = 2',
             'get-filehash',
             'gh release upload',
-            'gh release edit',
             'update/stable.json',
+            'revision = 3',
             'actions/deploy-pages',
             'invoke-restmethod',
             'sha256',
         ):
             self.assertIn(token, workflow)
+        self.assertIn("$live.revision -ne 3", workflow)
         self.assertNotIn('--prerelease', workflow)
         self.assertNotIn('update/beta.json', workflow)
         self.assertNotIn('0.4.17 beta', workflow)

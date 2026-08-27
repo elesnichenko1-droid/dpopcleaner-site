@@ -23,13 +23,13 @@ if (-not (Test-Path -LiteralPath $allowlistPath -PathType Leaf)) {
 
 $expectedAllowlist = @(
     'DPopCleaner.exe',
+    'SimpleUpdate.exe',
     'Languages/',
     'Shell/',
     'Documentation/',
     'Modules/DPop.Common.dll',
     'Modules/DiskAnalyzer.exe',
     'Modules/RestoreCenter.exe',
-    'Modules/ZapretScreenFix.exe',
     'Resources/'
 )
 $actualAllowlist = @(Get-Content -LiteralPath $allowlistPath | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -59,6 +59,12 @@ New-Item -ItemType Directory -Path (Join-Path $stageRoot 'Modules') -Force | Out
 
 Copy-Item -LiteralPath $corePath -Destination (Join-Path $stageRoot ([string]$core.staged_name)) -Force
 
+$launcher = Join-Path $root 'v0417/src/SimpleUpdate/bin/Release/net48/SimpleUpdate.exe'
+if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+    throw "SimpleUpdate.exe is missing. Build v0417/src/SimpleUpdate first: $launcher"
+}
+Copy-Item -LiteralPath $launcher -Destination (Join-Path $stageRoot 'SimpleUpdate.exe') -Force
+
 function Copy-ApprovedDirectory([string]$Name) {
     $source = Join-Path $payloadRoot $Name
     $destination = Join-Path $stageRoot $Name
@@ -85,8 +91,7 @@ Copy-Item -LiteralPath $commonDll -Destination (Join-Path $stageRoot 'Modules/DP
 
 $companions = @(
     @{ Name = 'DiskAnalyzer.exe'; Path = 'v0417/src/DiskAnalyzer/bin/Release/net48/DiskAnalyzer.exe' },
-    @{ Name = 'RestoreCenter.exe'; Path = 'v0417/src/RestoreCenter/bin/Release/net48/RestoreCenter.exe' },
-    @{ Name = 'ZapretScreenFix.exe'; Path = 'v0417/src/ZapretScreenFix/bin/Release/net48/ZapretScreenFix.exe' }
+    @{ Name = 'RestoreCenter.exe'; Path = 'v0417/src/RestoreCenter/bin/Release/net48/RestoreCenter.exe' }
 )
 foreach ($companion in $companions) {
     $source = Join-Path $root $companion.Path
@@ -104,4 +109,5 @@ if ($LASTEXITCODE -ne 0 -or $stagedBlob -ne [string]$core.git_blob_sha1) {
 }
 
 Write-Host "Staged immutable core: $stagedBlob"
+Write-Host "Staged launcher: $(Join-Path $stageRoot 'SimpleUpdate.exe')"
 Write-Host "0.4.17 stage ready: $stageRoot"
