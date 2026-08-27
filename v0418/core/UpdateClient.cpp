@@ -367,6 +367,40 @@ std::wstring BuildUpdaterArguments(const UpdateManifest& manifest,
     return args;
 }
 
+bool StageUpdaterForHandoff(const std::filesystem::path& installedUpdater,
+                            std::filesystem::path& stagedUpdater,
+                            std::wstring& error) {
+    error.clear();
+    stagedUpdater.clear();
+
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(installedUpdater, ec) || ec) {
+        error = L"DPopUpdater.exe не найден рядом с DPopCleaner.exe.";
+        return false;
+    }
+
+    const auto directory = UpdatesDirectory();
+    std::filesystem::create_directories(directory, ec);
+    if (ec) {
+        error = L"Не удалось создать папку временного updater (код " + std::to_wstring(ec.value()) + L").";
+        return false;
+    }
+
+    const auto fileName = L"DPopUpdater-handoff-" + std::to_wstring(GetCurrentProcessId()) +
+                          L"-" + std::to_wstring(GetTickCount64()) + L".exe";
+    const auto destination = directory / fileName;
+    std::filesystem::copy_file(installedUpdater, destination,
+                               std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+        error = L"Не удалось подготовить временную копию DPopUpdater.exe (код " +
+                std::to_wstring(ec.value()) + L").";
+        return false;
+    }
+
+    stagedUpdater = destination;
+    return true;
+}
+
 bool LaunchUpdater(const UpdateManifest& manifest,
                    const std::filesystem::path& package,
                    bool allowUnsigned,
@@ -386,15 +420,21 @@ bool LaunchUpdater(const UpdateManifest& manifest,
         return false;
     }
 
+    std::filesystem::path stagedUpdater;
+    if (!StageUpdaterForHandoff(updaterExe, stagedUpdater, error)) return false;
+
     const std::wstring args = BuildUpdaterArguments(
         manifest, package, allowUnsigned, restartExe, GetCurrentProcessId());
     SHELLEXECUTEINFOW execute{};
     execute.cbSize = sizeof(execute);
-    execute.lpFile = updaterExe.c_str();
+    execute.lpFile = stagedUpdater.c_str();
     execute.lpParameters = args.c_str();
     execute.nShow = SW_SHOWNORMAL;
     if (!ShellExecuteExW(&execute)) {
-        error = L"Не удалось запустить DPopUpdater.exe (код " + std::to_wstring(GetLastError()) + L").";
+        const DWORD launchError = GetLastError();
+        std::error_code cleanupError;
+        std::filesystem::remove(stagedUpdater, cleanupError);
+        error = L"Не удалось запустить DPopUpdater.exe (код " + std::to_wstring(launchError) + L").";
         return false;
     }
     return true;
