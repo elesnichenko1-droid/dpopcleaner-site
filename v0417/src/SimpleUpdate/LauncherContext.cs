@@ -18,9 +18,7 @@ namespace DPopCleaner.SimpleUpdate
         private readonly HttpClient _http;
         private readonly UpdateClient _updateClient;
         private IntPtr _mainWindow;
-        private IntPtr _checkbox;
-        private IntPtr _checkNowButton;
-        private bool _roomMade;
+        private AdditionalSettingsHost _settingsHost;
         private bool _lastSetting;
         private bool _iconApplied;
         private bool _mainWindowWasVisible;
@@ -36,7 +34,7 @@ namespace DPopCleaner.SimpleUpdate
             _lastSetting = _settings.LoadAutoUpdateEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev3");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev4");
             _updateClient = new UpdateClient(_http);
 
             _core = Process.Start(new ProcessStartInfo(corePath)
@@ -80,9 +78,6 @@ namespace DPopCleaner.SimpleUpdate
                 }
                 else if (_mainWindowWasVisible)
                 {
-                    // The authentic 0.2.14 window may hide first and leave its process alive
-                    // while shutdown work stalls. Once the visible main window is gone, the
-                    // user's close action is final: terminate the lingering core immediately.
                     try { _core.Kill(); } catch { }
                     _timer.Stop();
                     if (!_updateInstallInProgress) ExitThread();
@@ -95,67 +90,57 @@ namespace DPopCleaner.SimpleUpdate
                     _iconApplied = true;
                 }
 
+                NativeBridge.HideLegacyVersionBadge(_mainWindow);
+
                 var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
                 var settingsVisible = admin != IntPtr.Zero && NativeBridge.IsWindowVisible(admin);
                 if (!settingsVisible)
                 {
-                    if (_checkbox != IntPtr.Zero) NativeBridge.ShowWindow(_checkbox, NativeBridge.SW_HIDE);
-                    if (_checkNowButton != IntPtr.Zero) NativeBridge.ShowWindow(_checkNowButton, NativeBridge.SW_HIDE);
+                    if (_settingsHost != null) _settingsHost.Hide();
                     return;
                 }
 
-                if (!_roomMade)
-                {
-                    NativeBridge.MakeRoomForAutoUpdate(_mainWindow);
-                    _roomMade = true;
-                }
+                var hostBounds = NativeBridge.GetAdditionalSettingsBounds(_mainWindow, admin);
+                if (hostBounds == null) return;
 
-                if (_checkbox == IntPtr.Zero)
+                if (_settingsHost == null)
                 {
-                    _checkbox = NativeBridge.CreateAutoUpdateCheckbox(_mainWindow, admin, _lastSetting);
-                    if (_checkbox == IntPtr.Zero) return;
+                    var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, hostBounds);
+                    var legacySave = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseSaveButtonId);
+                    var legacyBuy = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseBuyButtonId);
+                    _settingsHost = new AdditionalSettingsHost(
+                        _mainWindow,
+                        hostBounds,
+                        admin,
+                        _lastSetting,
+                        OnAutoUpdateSettingChanged,
+                        delegate { BeginUpdateCheck(true); },
+                        legacyKey,
+                        legacySave,
+                        legacyBuy);
                 }
                 else
                 {
-                    NativeBridge.ShowWindow(_checkbox, NativeBridge.SW_SHOW);
+                    _settingsHost.Show(hostBounds);
                 }
 
-                if (_checkNowButton == IntPtr.Zero)
-                {
-                    _checkNowButton = NativeBridge.CreateCheckNowButton(_mainWindow, admin);
-                }
-                else
-                {
-                    NativeBridge.ShowWindow(_checkNowButton, NativeBridge.SW_SHOW);
-                }
-
-                var nowChecked = NativeBridge.SendMessage(_checkbox, NativeBridge.BM_GETCHECK, IntPtr.Zero, IntPtr.Zero).ToInt32() == NativeBridge.BST_CHECKED;
-                if (nowChecked != _lastSetting)
-                {
-                    _settings.SaveAutoUpdateEnabled(nowChecked);
-                    _lastSetting = nowChecked;
-                    if (nowChecked && !_automaticCheckStarted && _options.UpdateCheckEnabled)
-                    {
-                        _automaticCheckStarted = true;
-                        BeginUpdateCheck(false);
-                    }
-                }
-
-                if (_checkNowButton != IntPtr.Zero)
-                {
-                    var manualRequested = NativeBridge.SendMessage(_checkNowButton, NativeBridge.BM_GETCHECK, IntPtr.Zero, IntPtr.Zero).ToInt32() == NativeBridge.BST_CHECKED;
-                    if (manualRequested)
-                    {
-                        NativeBridge.SendMessage(_checkNowButton, NativeBridge.BM_SETCHECK, new IntPtr(NativeBridge.BST_UNCHECKED), IntPtr.Zero);
-                        BeginUpdateCheck(true);
-                    }
-                }
+                NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, hostBounds);
             }
             catch
             {
-                // The bridge must never take down the authentic DPopCleaner process because of
-                // a helper failure. Only the explicit hidden-main-window shutdown path above may
-                // terminate it, because that represents the user's completed close action.
+                // UI bridge failures must never terminate the immutable authentic core.
+            }
+        }
+
+        private void OnAutoUpdateSettingChanged(bool enabled)
+        {
+            if (enabled == _lastSetting) return;
+            _settings.SaveAutoUpdateEnabled(enabled);
+            _lastSetting = enabled;
+            if (enabled && !_automaticCheckStarted && _options.UpdateCheckEnabled)
+            {
+                _automaticCheckStarted = true;
+                BeginUpdateCheck(false);
             }
         }
 
@@ -223,7 +208,6 @@ namespace DPopCleaner.SimpleUpdate
             }
             catch (OperationCanceledException)
             {
-                // Closing DPopCleaner cancels background update I/O immediately.
             }
             catch (Exception ex)
             {
@@ -268,7 +252,6 @@ namespace DPopCleaner.SimpleUpdate
             }
             catch (InvalidOperationException)
             {
-                // Process already exited between refreshes.
             }
         }
 
@@ -299,6 +282,7 @@ namespace DPopCleaner.SimpleUpdate
         protected override void ExitThreadCore()
         {
             try { _updateCancellation.Cancel(); } catch { }
+            if (_settingsHost != null) _settingsHost.Dispose();
             if (_timer != null) _timer.Dispose();
             if (_http != null) _http.Dispose();
             if (_updateCancellation != null) _updateCancellation.Dispose();

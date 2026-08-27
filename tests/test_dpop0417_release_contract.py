@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
-    def test_site_manifest_and_publisher_are_one_stable_0417_rev3_release(self):
+    def test_site_manifest_and_publisher_are_one_stable_0417_rev4_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         notes = ROOT / 'release/RELEASE_NOTES_0.4.17.md'
         disk_png = ROOT / 'assets/dpopcleaner-0.4.17-disk.png'
@@ -21,14 +21,14 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         self.assertEqual(version['version'], '0.4.17')
         self.assertEqual(version['version_code'], 417)
-        self.assertEqual(version['revision'], 3)
+        self.assertEqual(version['revision'], 4)
         self.assertEqual(version['channel'], 'stable')
         self.assertEqual(version['manifest'], './update/stable.json')
 
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
         self.assertEqual(stable['version'], '0.4.17')
         self.assertEqual(stable['version_code'], 417)
-        self.assertEqual(stable['revision'], 3)
+        self.assertEqual(stable['revision'], 4)
         self.assertEqual(stable['channel'], 'stable')
         self.assertFalse(stable['available'])
         self.assertEqual(stable['download_url'], '')
@@ -37,14 +37,20 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
 
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
         self.assertIn("m.version === '0.4.17'", manifest)
-        self.assertIn("number(m.revision) === 3", manifest)
+        self.assertIn("number(m.revision) === 4", manifest)
         self.assertIn("m.channel === 'stable'", manifest)
-        self.assertIn('v0\\.4\\.17-rev3', manifest)
+        self.assertIn('v0\\.4\\.17-rev4', manifest)
         self.assertIn('dpopcleaner_setup_0\\.4\\.17\\.exe', manifest)
+
+        program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
+        launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
+        self.assertIn('currentrevision = 4', program)
+        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev4', launcher)
 
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         self.assertIn('dpopcleaner 0.4.17', index)
-        self.assertIn('rev.3', index)
+        self.assertIn('rev.4', index)
+        self.assertIn('прокрут', index)
         self.assertIn('автообнов', index)
         self.assertIn('simpleupdate', index)
         self.assertIn('assets/dpopcleaner-0.4.17-disk.png', index)
@@ -52,21 +58,22 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('ядро 0.2.14', index)
         self.assertIn('центр восстановления', index)
         self.assertIn('анализатор диска', index)
-        self.assertNotIn('beta', index)
+        self.assertNotIn('0.4.17 beta', index)
 
         script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
         self.assertIn('./update/stable.json', script)
-        self.assertNotIn('beta', script)
+        self.assertNotIn('0.4.17 beta', script)
 
         notes_text = notes.read_text(encoding='utf-8').lower()
-        self.assertIn('revision 3', notes_text)
+        self.assertIn('revision 4', notes_text)
+        self.assertIn('прокрут', notes_text)
         self.assertIn('simpleupdate', notes_text)
         self.assertIn('автообнов', notes_text)
-        self.assertNotIn('beta', notes_text)
+        self.assertIn('zapretscreenfix', notes_text)
 
         workflow = publisher.read_text(encoding='utf-8').lower()
         for token in (
-            'release_tag: v0.4.17-rev3',
+            'release_tag: v0.4.17-rev4',
             'dpopcleaner_setup_0.4.17.exe',
             'v0417/src/simpleupdate/simpleupdate.csproj',
             'dpop0417_stage.ps1 -requirecompanions',
@@ -75,13 +82,13 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
             'get-filehash',
             'gh release upload',
             'update/stable.json',
-            'revision = 3',
+            'revision = 4',
             'actions/deploy-pages',
             'invoke-restmethod',
             'sha256',
         ):
             self.assertIn(token, workflow)
-        self.assertIn("$live.revision -ne 3", workflow)
+        self.assertIn("$live.revision -ne 4", workflow)
         self.assertNotIn('--prerelease', workflow)
         self.assertNotIn('update/beta.json', workflow)
         self.assertNotIn('0.4.17 beta', workflow)

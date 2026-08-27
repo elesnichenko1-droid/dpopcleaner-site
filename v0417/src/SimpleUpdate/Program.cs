@@ -7,7 +7,7 @@ namespace DPopCleaner.SimpleUpdate
     internal static class Program
     {
         internal const int CurrentVersionCode = 417;
-        internal const int CurrentRevision = 3;
+        internal const int CurrentRevision = 4;
         internal const string StableManifestUrl = LauncherOptions.DefaultManifestUrl;
 
         [STAThread]
