@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import struct
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,27 +26,140 @@ def extract_core_zapret_strings():
     })
 
 
-def print_updater_neighborhood():
-    values = extract_strings_with_offsets(CORE.read_bytes())
-    anchors = [
-        offset for offset, value, _ in values
-        if "zapret updater module is missing" in value.lower()
-    ]
-    print("FROZEN_CORE_ZAPRET_UPDATER_NEIGHBORHOOD_BEGIN")
-    for anchor in anchors:
-        print(f"ANCHOR=0x{anchor:08x}")
-        for offset, value, encoding in values:
-            if abs(offset - anchor) <= 8192:
-                lower = value.lower()
-                if (
-                    any(token in lower for token in ("zapret", "winws", "service", "update", "module"))
-                    or re.search(r"(?i)(?:^|[\\/])[a-z0-9_.() -]+\.(?:exe|bat|cmd|ps1|dll)$", value)
-                    or re.search(r"(?i)^[a-z0-9_.() -]+\.(?:exe|bat|cmd|ps1|dll)$", value)
-                    or "bin\\" in lower
-                    or "general" in lower
-                ):
-                    print(f"0x{offset:08x} {encoding}: {value!r}")
-    print("FROZEN_CORE_ZAPRET_UPDATER_NEIGHBORHOOD_END")
+def parse_pe_sections(data):
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    if data[pe:pe + 4] != b"PE\0\0":
+        raise AssertionError("Frozen core is not a PE image")
+    section_count = struct.unpack_from("<H", data, pe + 6)[0]
+    optional_size = struct.unpack_from("<H", data, pe + 20)[0]
+    table = pe + 24 + optional_size
+    sections = []
+    for index in range(section_count):
+        off = table + index * 40
+        name = data[off:off + 8].split(b"\0", 1)[0].decode("ascii", errors="replace")
+        virtual_size, rva, raw_size, raw_offset = struct.unpack_from("<IIII", data, off + 8)
+        sections.append({
+            "name": name,
+            "rva": rva,
+            "virtual_size": virtual_size,
+            "raw_size": raw_size,
+            "raw_offset": raw_offset,
+        })
+    return sections
+
+
+def file_offset_to_rva(sections, file_offset):
+    for section in sections:
+        start = section["raw_offset"]
+        end = start + section["raw_size"]
+        if start <= file_offset < end:
+            return section["rva"] + (file_offset - start)
+    return None
+
+
+def rva_to_file_offset(sections, rva):
+    for section in sections:
+        start = section["rva"]
+        span = max(section["virtual_size"], section["raw_size"])
+        if start <= rva < start + span:
+            delta = rva - start
+            if delta < section["raw_size"]:
+                return section["raw_offset"] + delta
+    return None
+
+
+def decode_string_at(data, offset):
+    if offset is None or offset < 0 or offset >= len(data):
+        return None
+    # Prefer UTF-16LE when the first few code units have zero high bytes.
+    if offset + 8 <= len(data) and data[offset + 1] == 0 and data[offset + 3] == 0:
+        chars = []
+        pos = offset
+        while pos + 1 < len(data) and len(chars) < 300:
+            code = struct.unpack_from("<H", data, pos)[0]
+            if code == 0:
+                break
+            if code < 0x20 and code not in (9, 10, 13):
+                break
+            chars.append(chr(code))
+            pos += 2
+        value = "".join(chars)
+        if len(value) >= 4:
+            return value
+    chars = []
+    pos = offset
+    while pos < len(data) and len(chars) < 300:
+        byte = data[pos]
+        if byte == 0:
+            break
+        if not (0x20 <= byte <= 0x7E):
+            break
+        chars.append(chr(byte))
+        pos += 1
+    value = "".join(chars)
+    return value if len(value) >= 4 else None
+
+
+def rip_relative_lea_refs(data, sections, start_offset, end_offset):
+    refs = []
+    start_offset = max(0, start_offset)
+    end_offset = min(len(data), end_offset)
+    pos = start_offset
+    while pos + 7 <= end_offset:
+        rex = data[pos]
+        opcode = data[pos + 1]
+        modrm = data[pos + 2]
+        # x64 LEA reg,[RIP+disp32]: REX 8D modrm(mod=00,r/m=101) disp32
+        if 0x40 <= rex <= 0x4F and opcode == 0x8D and (modrm & 0xC7) == 0x05:
+            insn_rva = file_offset_to_rva(sections, pos)
+            if insn_rva is not None:
+                disp = struct.unpack_from("<i", data, pos + 3)[0]
+                target_rva = insn_rva + 7 + disp
+                target_offset = rva_to_file_offset(sections, target_rva)
+                value = decode_string_at(data, target_offset)
+                if value:
+                    refs.append((pos, target_offset, value))
+            pos += 7
+            continue
+        pos += 1
+    return refs
+
+
+def print_updater_code_refs():
+    data = CORE.read_bytes()
+    sections = parse_pe_sections(data)
+    needle = "Zapret updater module is missing. Reinstall DPopCleaner.".encode("utf-16le")
+    error_offset = data.find(needle)
+    print("FROZEN_CORE_ZAPRET_UPDATER_CODE_REFS_BEGIN")
+    print(f"ERROR_STRING_OFFSET=0x{error_offset:08x}")
+    if error_offset >= 0:
+        error_rva = file_offset_to_rva(sections, error_offset)
+        print(f"ERROR_STRING_RVA=0x{error_rva:08x}" if error_rva is not None else "ERROR_STRING_RVA=NONE")
+        text = next((s for s in sections if s["name"] == ".text"), None)
+        if text and error_rva is not None:
+            refs = rip_relative_lea_refs(
+                data,
+                sections,
+                text["raw_offset"],
+                text["raw_offset"] + text["raw_size"],
+            )
+            xrefs = [item for item in refs if item[1] == error_offset]
+            print("ERROR_XREFS=" + ",".join(f"0x{item[0]:08x}" for item in xrefs))
+            for xref, _, _ in xrefs:
+                print(f"XREF_CONTEXT=0x{xref:08x}")
+                nearby = rip_relative_lea_refs(data, sections, xref - 2048, xref + 2048)
+                seen = set()
+                for insn_offset, target_offset, value in nearby:
+                    if value in seen:
+                        continue
+                    seen.add(value)
+                    lower = value.lower()
+                    if (
+                        any(token in lower for token in ("zapret", "winws", "service", "update", "general", "module"))
+                        or re.search(r"(?i)\.(?:exe|bat|cmd|ps1|dll)$", value)
+                    ):
+                        print(f"LEA@0x{insn_offset:08x}->0x{target_offset:08x}: {value!r}")
+    print("FROZEN_CORE_ZAPRET_UPDATER_CODE_REFS_END")
 
 
 class DPop0417BundledZapretContractTests(unittest.TestCase):
@@ -55,7 +169,7 @@ class DPop0417BundledZapretContractTests(unittest.TestCase):
         for value in values:
             print(repr(value))
         print("FROZEN_CORE_ZAPRET_STRINGS_END")
-        print_updater_neighborhood()
+        print_updater_code_refs()
         self.assertTrue(values, "Frozen core should contain discoverable Zapret integration strings")
         self.assertIn("bin\\winws.exe", values)
         self.assertIn("service.bat", values)
