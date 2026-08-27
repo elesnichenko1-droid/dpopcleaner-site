@@ -37,7 +37,7 @@ namespace DPopCleaner.SimpleUpdate
                         return;
                     }
 
-                    var context = new LauncherContext(corePath, settingsPath);
+                    var context = new LauncherContext(corePath, settingsPath, options);
                     Application.Run(context);
                     try { mutex.ReleaseMutex(); } catch { }
                 }
