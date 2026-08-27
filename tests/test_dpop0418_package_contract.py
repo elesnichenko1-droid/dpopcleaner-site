@@ -60,9 +60,20 @@ def main() -> None:
         "Modules\\DiskAnalyzer.exe",
         "Modules\\RestoreCenter.exe",
         "Modules\\ZapretScreenFix.exe",
+        "ThirdParty\\Zapret",
+        "{#StageRoot}\\ThirdParty\\Zapret\\*",
+        "ZapretBackup",
+        "*-user.txt",
+        "BackupZapretUserLists",
+        "RestoreZapretUserLists",
+        "CurStepChanged",
+        "ssInstall",
+        "ssPostInstall",
         "VersionInfoVersion=0.4.18.1",
     ):
         require(token in iss, f"Installer contract missing: {token}")
+    require('Type: filesandordirs; Name: "{app}\\ThirdParty\\Zapret"' in iss,
+            "Installer must replace the program-owned bundled Zapret tree after user-list backup")
 
     rc = read(resource)
     require("FILEVERSION 0,4,18,1" in rc, "Native file version must be 0.4.18.1")
@@ -85,6 +96,17 @@ def main() -> None:
         "Modules\\DiskAnalyzer.exe",
         "Modules\\RestoreCenter.exe",
         "Modules\\ZapretScreenFix.exe",
+        "ThirdParty\\Zapret\\LICENSE.txt",
+        "ThirdParty\\Zapret\\service.bat",
+        "ThirdParty\\Zapret\\general.bat",
+        "ThirdParty\\Zapret\\bin\\winws.exe",
+        "ThirdParty\\Zapret\\bin\\WinDivert.dll",
+        "ThirdParty\\Zapret\\bin\\WinDivert64.sys",
+        "ThirdParty\\Zapret\\.service\\version.txt",
+        "Documentation\\THIRD_PARTY_NOTICES.txt",
+        "list-general-user.txt",
+        "ZapretBackup",
+        "zapret_user_list_preserved",
         "0.4.18.1",
         "dpop0418_close_smoke.ps1",
     ):
