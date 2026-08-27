@@ -34,7 +34,7 @@ namespace DPopCleaner.SimpleUpdate
             _lastSetting = _settings.LoadAutoUpdateEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev3");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev4");
             _updateClient = new UpdateClient(_http);
 
             _core = Process.Start(new ProcessStartInfo(corePath)
@@ -78,9 +78,6 @@ namespace DPopCleaner.SimpleUpdate
                 }
                 else if (_mainWindowWasVisible)
                 {
-                    // The authentic 0.2.14 window may hide first and leave its process alive
-                    // while shutdown work stalls. Once the visible main window is gone, the
-                    // user's close action is final: terminate the lingering core immediately.
                     try { _core.Kill(); } catch { }
                     _timer.Stop();
                     if (!_updateInstallInProgress) ExitThread();
@@ -93,9 +90,6 @@ namespace DPopCleaner.SimpleUpdate
                     _iconApplied = true;
                 }
 
-                // The authentic core reports an obsolete v0.2.11 BETA label in the lower-right
-                // corner. The frozen executable remains untouched; the launcher only hides that
-                // stale child window while it is supervising the authentic UI.
                 NativeBridge.HideLegacyVersionBadge(_mainWindow);
 
                 var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
@@ -130,15 +124,11 @@ namespace DPopCleaner.SimpleUpdate
                     _settingsHost.Show(hostBounds);
                 }
 
-                // Hide only the legacy controls covered by the new viewport. Their real handles are
-                // preserved and the proxy License buttons in AdditionalSettingsHost forward to them.
                 NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, hostBounds);
             }
             catch
             {
-                // The bridge must never take down the authentic DPopCleaner process because of
-                // a helper failure. Only the explicit hidden-main-window shutdown path above may
-                // terminate it, because that represents the user's completed close action.
+                // UI bridge failures must never terminate the immutable authentic core.
             }
         }
 
@@ -218,7 +208,6 @@ namespace DPopCleaner.SimpleUpdate
             }
             catch (OperationCanceledException)
             {
-                // Closing DPopCleaner cancels background update I/O immediately.
             }
             catch (Exception ex)
             {
@@ -263,7 +252,6 @@ namespace DPopCleaner.SimpleUpdate
             }
             catch (InvalidOperationException)
             {
-                // Process already exited between refreshes.
             }
         }
 
