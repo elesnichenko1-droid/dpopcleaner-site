@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace DPopCleaner.SimpleUpdate
 {
-    public sealed class UpdateClient
+    public sealed class UpdateClient : IUpdateSource
     {
         private readonly HttpClient _http;
 
