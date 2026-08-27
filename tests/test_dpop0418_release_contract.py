@@ -52,10 +52,12 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
             'dpopcleaner 0.4.18', 'rev.2', 'мгновенное закрытие', 'автообновление',
             'проверить обновления сейчас', 'sha-256', 'dpopupdater.exe', 'анализатор диска',
             'центр восстановления', 'flowseal zapret 1.10.2', 'thirdparty\\zapret', 'windivert',
-            'assets/dpopcleaner-0.4.18-overview.png', 'assets/dpopcleaner-0.4.18-zapret.png',
-            'assets/dpopcleaner-0.4.18-settings.png',
+            'releases/download/v0.4.18/dpopcleaner-0.4.18-overview.png',
+            'releases/download/v0.4.18/dpopcleaner-0.4.18-zapret.png',
+            'releases/download/v0.4.18/dpopcleaner-0.4.18-settings.png',
         ):
             self.assertIn(token, index)
+        self.assertNotIn('src="assets/dpopcleaner-0.4.18-', index)
         self.assertNotIn('dpopcleaner-0.4.17-disk.png', index)
         self.assertNotIn('dpopcleaner-0.4.17-restore.png', index)
         self.assertNotIn('замороженное ядро', index)
