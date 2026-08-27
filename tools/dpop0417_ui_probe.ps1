@@ -150,6 +150,9 @@ try {
     }
 
     $before = Get-Children $p.MainWindowHandle
+    Write-Host '--- INITIAL VISIBLE BUTTONS ---'
+    $before | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' } | Select-Object Id,Text,Left,Top,Right,Bottom | Format-Table -AutoSize | Out-String -Width 260 | Write-Host
+
     $settings = $before | Where-Object { $_.Id -eq 906 -and $_.ClassName -eq 'Button' } | Select-Object -First 1
     if (-not $settings) { throw 'Settings button id=906 was not found.' }
 
