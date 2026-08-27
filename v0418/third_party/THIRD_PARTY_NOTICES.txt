@@ -1,0 +1,30 @@
+DPopCleaner 0.4.18 - Third-Party Notices
+=========================================
+
+This DPopCleaner distribution bundles the verified Flowseal Zapret package below.
+DPopCleaner does not claim ownership of Flowseal, bol-van Zapret, WinDivert, or their binaries.
+
+Flowseal / zapret-discord-youtube
+--------------------------------
+Bundled version: 1.10.2
+Project: https://github.com/Flowseal/zapret-discord-youtube
+Pinned release: https://github.com/Flowseal/zapret-discord-youtube/releases/tag/1.10.2
+The upstream LICENSE.txt is preserved verbatim inside ThirdParty/Zapret/LICENSE.txt.
+
+bol-van / zapret
+----------------
+Project: https://github.com/bol-van/zapret
+Zapret components and attribution are covered by the notices included with the upstream Flowseal package.
+
+WinDivert
+---------
+Project: https://github.com/basil00/WinDivert
+The bundled Flowseal LICENSE.txt documents the WinDivert licensing terms supplied with this package, including the upstream LGPLv3/GPLv2 licensing choice.
+
+DPopCleaner supply-chain pin
+----------------------------
+Archive: zapret-discord-youtube-1.10.2.zip
+Exact size: 1508077 bytes
+SHA-256: 5eaac9fb2e4b1abd693487452a3ff3f4dfe9578a45f9ddddfa4bc1f5a6bb62d5
+
+The archive is downloaded only by the DPopCleaner Windows build/release pipeline, verified by exact byte length and SHA-256 before extraction, and then subjected only to the documented narrow Discord screen-sharing compatibility patch in strategy batch files. The DPopCleaner runtime does not download arbitrary Zapret binaries.
