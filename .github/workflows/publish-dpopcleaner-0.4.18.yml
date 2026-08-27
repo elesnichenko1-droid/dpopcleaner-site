@@ -87,6 +87,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_dpop0418_live_pages_contract.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0418_release_screenshot_assets.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test tests/release-manifest.test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -249,28 +251,28 @@ jobs:
           name: dpopcleaner-0.4.18-release-candidate
           path: publish
 
-      - name: Publish GitHub release
+      - name: Publish GitHub release installer and screenshots
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           asset="publish/${RELEASE_ASSET}"
+          overview="publish/assets/dpopcleaner-0.4.18-overview.png"
+          zapret="publish/assets/dpopcleaner-0.4.18-zapret.png"
+          settings="publish/assets/dpopcleaner-0.4.18-settings.png"
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            gh release upload "${RELEASE_TAG}" "$asset" --clobber
+            gh release upload "${RELEASE_TAG}" "$asset" "$overview" "$zapret" "$settings" --clobber
             gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.18 rev.2" --notes-file release/RELEASE_NOTES_0.4.18.md
           else
-            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.18 rev.2" --notes-file release/RELEASE_NOTES_0.4.18.md
+            gh release create "${RELEASE_TAG}" "$asset" "$overview" "$zapret" "$settings" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.18 rev.2" --notes-file release/RELEASE_NOTES_0.4.18.md
           fi
 
       - name: Stage GitHub Pages
         run: |
           set -euo pipefail
           rm -rf _site
-          mkdir -p _site/assets _site/update
+          mkdir -p _site/update
           cp index.html styles.css script.js release-manifest.js version.json dpopcleaner-icon.png _site/
-          cp publish/assets/dpopcleaner-0.4.18-overview.png _site/assets/
-          cp publish/assets/dpopcleaner-0.4.18-zapret.png _site/assets/
-          cp publish/assets/dpopcleaner-0.4.18-settings.png _site/assets/
           cp publish/update/stable.json _site/update/stable.json
 
       - name: Upload Pages artifact
@@ -282,7 +284,7 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live manifest, screenshots and installer SHA256
+      - name: Verify live release screenshots and installer SHA256
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -299,16 +301,20 @@ jobs:
           }
           if (-not $live -or $live.version -ne '0.4.18' -or $live.channel -ne 'stable' -or $live.version_code -ne 418 -or $live.revision -ne 2 -or $live.available -ne $true -or $live.sha256 -ne $expected.sha256 -or [int64]$live.size -ne [int64]$expected.size) { throw 'Live stable manifest mismatch.' }
 
-          foreach ($name in @('dpopcleaner-0.4.18-overview.png','dpopcleaner-0.4.18-zapret.png','dpopcleaner-0.4.18-settings.png')) {
-            $expectedShot = Join-Path 'publish/assets' $name
+          $shots = @(
+            [pscustomobject]@{ Name='dpopcleaner-0.4.18-overview.png'; Url='https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/dpopcleaner-0.4.18-overview.png' },
+            [pscustomobject]@{ Name='dpopcleaner-0.4.18-zapret.png'; Url='https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/dpopcleaner-0.4.18-zapret.png' },
+            [pscustomobject]@{ Name='dpopcleaner-0.4.18-settings.png'; Url='https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/dpopcleaner-0.4.18-settings.png' }
+          )
+          foreach ($shot in $shots) {
+            $expectedShot = Join-Path 'publish/assets' $shot.Name
             $expectedShotSha = (Get-FileHash -LiteralPath $expectedShot -Algorithm SHA256).Hash.ToLowerInvariant()
-            $target = Join-Path $env:RUNNER_TEMP $name
+            $target = Join-Path $env:RUNNER_TEMP $shot.Name
             $shotReady = $false
-            for ($shotAttempt = 0; $shotAttempt -lt 18; $shotAttempt++) {
+            for ($shotAttempt = 0; $shotAttempt -lt 12; $shotAttempt++) {
               try {
                 Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
-                $shotUrl = "$base/assets/$name?t=" + $env:GITHUB_RUN_ID + '-shot-' + $shotAttempt
-                Invoke-WebRequest -Uri $shotUrl -Headers @{ 'Cache-Control'='no-cache' } -OutFile $target
+                Invoke-WebRequest -Uri ($shot.Url + '?t=' + $env:GITHUB_RUN_ID + '-' + $shotAttempt) -Headers @{ 'Cache-Control'='no-cache' } -OutFile $target
                 if (Test-Path -LiteralPath $target -PathType Leaf) {
                   $liveShotSha = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
                   if ((Get-Item -LiteralPath $target).Length -ge 15000 -and $liveShotSha -eq $expectedShotSha) {
@@ -317,13 +323,13 @@ jobs:
                   }
                 }
               } catch {}
-              Start-Sleep -Seconds 10
+              Start-Sleep -Seconds 5
             }
-            if (-not $shotReady) { throw "Live screenshot did not propagate with expected SHA-256: $name" }
+            if (-not $shotReady) { throw "Live release screenshot mismatch: $($shot.Name)" }
           }
 
           $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.18.exe'
-          Invoke-WebRequest -Uri $live.download_url -OutFile $download
+          Invoke-WebRequest -Uri ($live.download_url + '?t=' + $env:GITHUB_RUN_ID) -OutFile $download
           $sha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
           $size = (Get-Item -LiteralPath $download).Length
           if ($sha256 -ne $expected.sha256) { throw "Live installer SHA256 mismatch: $sha256" }

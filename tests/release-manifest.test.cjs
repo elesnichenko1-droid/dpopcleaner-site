@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { isUsableManifest } = require('../release-manifest.js');
 
 const validManifest = Object.freeze({
@@ -39,3 +41,23 @@ for (const [name, manifest] of invalidCases) {
     assert.equal(isUsableManifest(manifest), false);
   });
 }
+
+test('website screenshots are immutable v0.4.18 release assets', () => {
+  const root = path.resolve(__dirname, '..');
+  const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/publish-dpopcleaner-0.4.18.yml'), 'utf8');
+  const releaseBase = 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/';
+  const shots = [
+    'dpopcleaner-0.4.18-overview.png',
+    'dpopcleaner-0.4.18-zapret.png',
+    'dpopcleaner-0.4.18-settings.png',
+  ];
+  for (const shot of shots) {
+    assert.ok(index.includes(releaseBase + shot), `index must use release asset ${shot}`);
+    assert.ok(!index.includes(`src="assets/${shot}"`), `index must not use Pages asset path for ${shot}`);
+    assert.ok(workflow.includes(`publish/assets/${shot}`), `publisher must upload ${shot}`);
+    assert.ok(workflow.includes(releaseBase + shot), `verifier must fetch release asset ${shot}`);
+  }
+  assert.ok(workflow.toLowerCase().includes('verify live release screenshots and installer sha256'));
+  assert.ok(!workflow.includes('$base/assets/$name'));
+});
