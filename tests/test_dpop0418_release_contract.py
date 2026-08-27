@@ -13,11 +13,13 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
         stable_manifest = ROOT / 'update/stable.json'
         legacy_publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         legacy_hotfix = ROOT / '.github/workflows/deploy-rev2-site-hotfix.yml'
+        legacy_foundation = ROOT / '.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml'
         self.assertTrue(publisher.is_file(), '0.4.18 publisher workflow is required')
         self.assertTrue(notes.is_file(), '0.4.18 release notes are required')
         self.assertTrue(stable_manifest.is_file(), 'stable update manifest is required')
         self.assertFalse(legacy_publisher.exists(), '0.4.17 publisher must be retired before 0.4.18 publication')
         self.assertFalse(legacy_hotfix.exists(), 'temporary rev.2 Pages hotfix must be removed before 0.4.18 publication')
+        self.assertFalse(legacy_foundation.exists(), '0.4.17 Foundation must be retired after its companion checks move into 0.4.18')
 
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         self.assertEqual(version['product'], 'DPopCleaner')
