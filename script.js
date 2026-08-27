@@ -36,8 +36,11 @@ function setDownloadState(available, url, version){
 
 function applyManifest(m){
   const available = globalThis.DPopReleaseManifest?.isUsableManifest(m) === true;
-  const version = '0.4.17';
-  document.querySelectorAll('.js-version').forEach(el => el.textContent = version);
+  const currentVersion = document.querySelector('.js-version')?.textContent?.trim() || '';
+  const version = available && typeof m.version === 'string' ? m.version : currentVersion;
+  if(version){
+    document.querySelectorAll('.js-version').forEach(el => el.textContent = version);
+  }
   document.querySelectorAll('.js-size').forEach(el => el.textContent = formatBytes(available ? Number(m.size) : 0));
   setDownloadState(available, available ? m.download_url : '', version);
   if(available){
