@@ -1,0 +1,11 @@
+DPopCleaner.exe
+DPopUpdater.exe
+Languages/
+Shell/
+Documentation/
+Modules/DPop.Common.dll
+Modules/DiskAnalyzer.exe
+Modules/RestoreCenter.exe
+Modules/ZapretScreenFix.exe
+ThirdParty/Zapret/
+Resources/

@@ -1,0 +1,3 @@
+# Preserve byte-exact upstream metadata used by the 0.4.18 Zapret supply-chain gate.
+v0418/third_party/flowseal-1.10.2/LICENSE.txt -text
+v0418/third_party/flowseal-1.10.2/version.txt -text
