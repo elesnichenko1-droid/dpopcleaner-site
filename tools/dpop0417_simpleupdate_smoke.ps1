@@ -71,11 +71,15 @@ try {
 
     $deadline = [DateTime]::UtcNow.AddSeconds(6)
     $checkbox = $null
+    $checkNow = $null
     do {
         Start-Sleep -Milliseconds 150
-        $checkbox = [SmokeNative]::Children($coreProcess.MainWindowHandle) | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление' -and $_.Visible } | Select-Object -First 1
-    } while (-not $checkbox -and [DateTime]::UtcNow -lt $deadline)
+        $settingsChildren = [SmokeNative]::Children($coreProcess.MainWindowHandle)
+        $checkbox = $settingsChildren | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление' -and $_.Visible } | Select-Object -First 1
+        $checkNow = $settingsChildren | Where-Object { $_.Id -eq 1491 -and $_.Text -eq 'Проверить сейчас' -and $_.Visible } | Select-Object -First 1
+    } while ((-not $checkbox -or -not $checkNow) -and [DateTime]::UtcNow -lt $deadline)
     if (-not $checkbox) { throw 'Auto-update checkbox was not bridged into authentic Settings.' }
+    if (-not $checkNow) { throw 'Check-now button was not bridged into authentic Settings.' }
 
     $BM_GETCHECK = 0x00F0
     $BM_CLICK = 0x00F5
