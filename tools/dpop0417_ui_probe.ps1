@@ -12,48 +12,72 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
+public sealed class DPopUiProbeItem {
+    public IntPtr Handle;
+    public int Id;
+    public string ClassName = "";
+    public string Text = "";
+    public bool Visible;
+}
+
 public static class DPopUiProbeNative {
-    public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
     [DllImport("user32.dll")]
-    public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
     [DllImport("user32.dll")]
-    public static extern int GetDlgCtrlID(IntPtr hWnd);
+    private static extern int GetDlgCtrlID(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
-    [DllImport("user32.dll")]
-    public static extern bool IsWindowVisible(IntPtr hWnd);
+    public static DPopUiProbeItem[] GetChildren(IntPtr parent) {
+        var items = new List<DPopUiProbeItem>();
+        EnumWindowsProc callback = delegate(IntPtr hwnd, IntPtr _) {
+            var text = new StringBuilder(512);
+            var cls = new StringBuilder(256);
+            GetWindowText(hwnd, text, text.Capacity);
+            GetClassName(hwnd, cls, cls.Capacity);
+            items.Add(new DPopUiProbeItem {
+                Handle = hwnd,
+                Id = GetDlgCtrlID(hwnd),
+                ClassName = cls.ToString(),
+                Text = text.ToString(),
+                Visible = IsWindowVisible(hwnd)
+            });
+            return true;
+        };
+        EnumChildWindows(parent, callback, IntPtr.Zero);
+        GC.KeepAlive(callback);
+        return items.ToArray();
+    }
 }
 '@
 Add-Type -TypeDefinition $source -Language CSharp
 
-function Get-ChildWindows([IntPtr]$Parent) {
-    $items = New-Object System.Collections.Generic.List[object]
-    $callback = [DPopUiProbeNative+EnumWindowsProc]{
-        param([IntPtr]$hwnd, [IntPtr]$lParam)
-        $text = New-Object System.Text.StringBuilder 512
-        $class = New-Object System.Text.StringBuilder 256
-        [void][DPopUiProbeNative]::GetWindowText($hwnd, $text, $text.Capacity)
-        [void][DPopUiProbeNative]::GetClassName($hwnd, $class, $class.Capacity)
-        $items.Add([pscustomobject]@{
-            hwnd = ('0x{0:X}' -f $hwnd.ToInt64())
-            id = [DPopUiProbeNative]::GetDlgCtrlID($hwnd)
-            class = $class.ToString()
-            text = $text.ToString()
-            visible = [DPopUiProbeNative]::IsWindowVisible($hwnd)
-        })
-        return $true
+function Show-Children([IntPtr]$Parent, [string]$Title) {
+    Write-Host $Title
+    $items = [DPopUiProbeNative]::GetChildren($Parent)
+    $rows = foreach ($item in $items) {
+        [pscustomobject]@{
+            hwnd = ('0x{0:X}' -f $item.Handle.ToInt64())
+            id = $item.Id
+            class = $item.ClassName
+            text = $item.Text
+            visible = $item.Visible
+        }
     }
-    [void][DPopUiProbeNative]::EnumChildWindows($Parent, $callback, [IntPtr]::Zero)
+    $rows | Format-Table -AutoSize | Out-String -Width 260 | Write-Host
     return @($items)
 }
 
@@ -71,21 +95,17 @@ try {
     }
 
     Write-Host ('MAIN HWND: 0x{0:X}' -f $p.MainWindowHandle.ToInt64())
-    $before = Get-ChildWindows $p.MainWindowHandle
-    Write-Host '--- CHILD CONTROLS BEFORE SETTINGS ---'
-    $before | Format-Table -AutoSize | Out-String -Width 240 | Write-Host
+    $before = Show-Children $p.MainWindowHandle '--- CHILD CONTROLS BEFORE SETTINGS ---'
 
     $settings = $before | Where-Object {
-        $_.class -eq 'Button' -and ($_.text -match '⚙|Настрой|Settings')
+        $_.ClassName -eq 'Button' -and ($_.Text -match '⚙|Настрой|Settings')
     } | Select-Object -First 1
 
     if ($settings) {
-        $settingsHandle = [IntPtr]([Convert]::ToInt64(($settings.hwnd -replace '^0x',''), 16))
-        [void][DPopUiProbeNative]::SendMessage($settingsHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) # BM_CLICK
-        Start-Sleep -Milliseconds 800
-        $after = Get-ChildWindows $p.MainWindowHandle
-        Write-Host '--- CHILD CONTROLS AFTER SETTINGS CLICK ---'
-        $after | Format-Table -AutoSize | Out-String -Width 240 | Write-Host
+        Write-Host ("SETTINGS BUTTON: id={0}, text='{1}'" -f $settings.Id, $settings.Text)
+        [void][DPopUiProbeNative]::SendMessage($settings.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+        Start-Sleep -Milliseconds 1000
+        [void](Show-Children $p.MainWindowHandle '--- CHILD CONTROLS AFTER SETTINGS CLICK ---')
     } else {
         Write-Host 'SETTINGS_BUTTON_NOT_ENUMERATED'
     }
