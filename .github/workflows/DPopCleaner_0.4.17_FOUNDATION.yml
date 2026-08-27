@@ -77,6 +77,12 @@ jobs:
           dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Build SimpleUpdate launcher
+        shell: pwsh
+        run: |
+          dotnet build v0417/src/SimpleUpdate/SimpleUpdate.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Stage approved 0.4.17 package payload
         shell: pwsh
         run: ./tools/dpop0417_stage.ps1 -RequireCompanions

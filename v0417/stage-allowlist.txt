@@ -1,4 +1,5 @@
 DPopCleaner.exe
+SimpleUpdate.exe
 Languages/
 Shell/
 Documentation/

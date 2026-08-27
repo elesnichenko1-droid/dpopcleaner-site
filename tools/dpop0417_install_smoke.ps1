@@ -29,6 +29,9 @@ $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
 $uninstalled = $false
 $documentationAclModify = $false
+$launcherSmoke = $false
+$launcherProcess = $null
+$launcherCoreProcess = $null
 
 function Assert-File([string]$RelativePath) {
     $path = Join-Path $installRoot $RelativePath
@@ -56,6 +59,7 @@ try {
     $installed = $true
 
     $core = Assert-File 'DPopCleaner.exe'
+    $launcher = Assert-File 'SimpleUpdate.exe'
     [void](Assert-File 'Modules\DPop.Common.dll')
     $diskExe = Assert-File 'Modules\DiskAnalyzer.exe'
     $restoreExe = Assert-File 'Modules\RestoreCenter.exe'
@@ -93,6 +97,38 @@ try {
         throw "Installed immutable core mismatch: $installedCoreBlob"
     }
 
+    $launcherSettings = Join-Path $OutputDir 'SimpleUpdate-installed-smoke.ini'
+    Remove-Item -LiteralPath $launcherSettings -Force -ErrorAction SilentlyContinue
+    $launcherProcess = Start-Process -FilePath $launcher -ArgumentList @(
+        '--no-update-check',
+        '--settings-path',
+        ('"' + $launcherSettings + '"')
+    ) -WorkingDirectory $installRoot -PassThru
+
+    $launcherDeadline = [DateTime]::UtcNow.AddSeconds(18)
+    do {
+        Start-Sleep -Milliseconds 250
+        foreach ($candidate in @(Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue)) {
+            try {
+                if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($core)) {
+                    $launcherCoreProcess = $candidate
+                    break
+                }
+            }
+            catch { }
+        }
+    } while ($null -eq $launcherCoreProcess -and [DateTime]::UtcNow -lt $launcherDeadline)
+
+    if ($null -eq $launcherCoreProcess) {
+        throw 'Installed SimpleUpdate.exe did not launch the preserved DPopCleaner.exe core.'
+    }
+    Stop-Process -Id $launcherCoreProcess.Id -Force
+    $launcherCoreProcess.WaitForExit(5000) | Out-Null
+    if (-not $launcherProcess.WaitForExit(6000)) {
+        throw 'Installed SimpleUpdate.exe did not exit after its DPopCleaner core closed.'
+    }
+    $launcherSmoke = $true
+
     & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') `
         -ExePath $diskExe `
         -OutputDir $diskEvidence
@@ -124,6 +160,7 @@ try {
         install_root = $installRoot
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
+        simpleupdate_launcher_smoke = [bool]$launcherSmoke
         documentation_acl_modify = [bool]$documentationAclModify
         disk_smoke = (Test-Path -LiteralPath (Join-Path $diskEvidence 'disk-smoke-report.json') -PathType Leaf)
         restore_smoke = (Test-Path -LiteralPath (Join-Path $restoreEvidence 'restore-smoke-report.json') -PathType Leaf)
@@ -131,6 +168,7 @@ try {
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $reportPath -Encoding utf8
 
     Write-Host "Installed immutable core: $installedCoreBlob"
+    Write-Host 'Installed SimpleUpdate launcher smoke: PASS'
     Write-Host 'Installed Documentation ACL: BUILTIN\Users Modify PASS'
     Write-Host 'Installed Disk Analyzer smoke: PASS'
     Write-Host 'Installed Restore Center smoke: PASS'
@@ -138,6 +176,12 @@ try {
     Write-Host "install-smoke-report.json: $reportPath"
 }
 finally {
+    if ($launcherCoreProcess -and -not $launcherCoreProcess.HasExited) {
+        Stop-Process -Id $launcherCoreProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+    if ($launcherProcess -and -not $launcherProcess.HasExited) {
+        Stop-Process -Id $launcherProcess.Id -Force -ErrorAction SilentlyContinue
+    }
     if ($installed -and -not $uninstalled) {
         $uninstaller = Join-Path $installRoot 'unins000.exe'
         if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
