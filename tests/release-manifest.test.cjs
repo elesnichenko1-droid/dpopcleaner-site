@@ -42,6 +42,13 @@ for (const [name, manifest] of invalidCases) {
   });
 }
 
+test('download button version comes from the accepted manifest', () => {
+  const root = path.resolve(__dirname, '..');
+  const script = fs.readFileSync(path.join(root, 'script.js'), 'utf8');
+  assert.ok(script.includes('m.version'), 'site must derive the downloadable version from the manifest');
+  assert.ok(!script.includes("const version = '0.4.17'"), 'site must not retain the previous release as a hardcoded download label');
+});
+
 test('website screenshots are immutable v0.4.18 release assets', () => {
   const root = path.resolve(__dirname, '..');
   const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
