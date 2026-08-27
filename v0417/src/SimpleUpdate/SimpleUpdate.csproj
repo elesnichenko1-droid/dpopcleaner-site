@@ -6,6 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>SimpleUpdate</AssemblyName>
     <RootNamespace>DPopCleaner.SimpleUpdate</RootNamespace>
+    <ApplicationIcon>../../../dpopcleaner.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Net.Http" />
