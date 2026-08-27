@@ -59,8 +59,25 @@ add_executable(DPopUpdater WIN32
 )
 target_link_libraries(DPopUpdater PRIVATE user32 shell32 bcrypt wintrust crypt32)
 dpop0418_target(DPopUpdater)
-set_target_properties(DPopUpdater PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+add_executable(DPopCleaner WIN32
+    core/main.cpp
+    core/MainWindow.cpp
+    core/AppSettings.cpp
+    core/UpdateClient.cpp
+    core/UpdateManifest.cpp
+    core/UpdatePolicy.cpp
+    core/Hash.cpp
+    core/Signature.cpp
+)
+target_link_libraries(DPopCleaner PRIVATE
+    user32 gdi32 shell32 comctl32 dwmapi advapi32
+    winhttp bcrypt wintrust crypt32
+)
+dpop0418_target(DPopCleaner)
+
+set_target_properties(DPopCleaner DPopUpdater PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
     string(TOUPPER "${cfg}" cfg_upper)
-    set_target_properties(DPopUpdater PROPERTIES "RUNTIME_OUTPUT_DIRECTORY_${cfg_upper}" "${CMAKE_BINARY_DIR}/bin/${cfg}")
+    set_target_properties(DPopCleaner DPopUpdater PROPERTIES "RUNTIME_OUTPUT_DIRECTORY_${cfg_upper}" "${CMAKE_BINARY_DIR}/bin/${cfg}")
 endforeach()
