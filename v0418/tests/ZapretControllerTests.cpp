@@ -14,10 +14,10 @@ int Fail(const char* message) {
     return 1;
 }
 
-void Touch(const fs::path& path) {
+void Write(const fs::path& path, const std::string& text = "fixture") {
     fs::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out << "fixture";
+    out << text;
 }
 }
 
@@ -37,21 +37,21 @@ int main() {
     if (dpop0418::ValidateBundledPayload(root, error))
         return Fail("empty bundled root must fail validation");
 
-    Touch(root / L"LICENSE.txt");
-    Touch(root / L"service.bat");
-    Touch(root / L"bin" / L"winws.exe");
-    Touch(root / L"bin" / L"WinDivert.dll");
-    Touch(root / L"bin" / L"WinDivert64.sys");
+    Write(root / L"LICENSE.txt");
+    Write(root / L"service.bat");
+    Write(root / L"general.bat");
+    Write(root / L".service" / L"version.txt", "1.10.2\n");
+    Write(root / L"bin" / L"winws.exe");
+    Write(root / L"bin" / L"WinDivert.dll");
+    Write(root / L"bin" / L"WinDivert64.sys");
     fs::create_directories(root / L"lists", ec);
     if (!dpop0418::ValidateBundledPayload(root, error))
         return Fail("complete required payload fixture must validate");
 
-    Touch(root / L"general.bat");
-    Touch(root / L"general (ALT2).bat");
-    Touch(root / L"general (ALT13).bat");
-    Touch(root / L"service.bat");
-    Touch(root / L"nested" / L"general nested.bat");
-    Touch(root / L"notes.txt");
+    Write(root / L"general (ALT2).bat");
+    Write(root / L"general (ALT13).bat");
+    Write(root / L"nested" / L"general nested.bat");
+    Write(root / L"notes.txt");
 
     const auto strategies = dpop0418::EnumerateZapretStrategies(root);
     if (strategies.size() != 3)
@@ -69,6 +69,14 @@ int main() {
     if (dpop0418::FindStrategyMenuIndex(strategies, L"missing.bat") != 0)
         return Fail("unknown strategy must not map to an upstream menu index");
 
+    dpop0418::ZapretStrategy resolved{};
+    if (!dpop0418::ResolveBundledStrategy(root, L"general (ALT13).bat", resolved, error))
+        return Fail("known top-level strategy must resolve");
+    if (resolved.batchPath.filename() != L"general (ALT13).bat")
+        return Fail("resolved strategy must retain exact bundled filename");
+    if (dpop0418::ResolveBundledStrategy(root, L"..\\general.bat", resolved, error))
+        return Fail("strategy path traversal must be refused");
+
     const fs::path bundledWinws = root / L"bin" / L"winws.exe";
     if (!dpop0418::IsBundledWinwsPath(bundledWinws, root))
         return Fail("bundled winws path must be recognized as owned");
@@ -77,6 +85,28 @@ int main() {
     if (dpop0418::IsBundledWinwsPath(temp / L"external" / L"winws.exe", root))
         return Fail("external winws path must never be treated as bundled");
 
+    const std::wstring ownedCommand = L"\"" + bundledWinws.wstring() + L"\" --wf-tcp=80,443 --filter-tcp=443";
+    if (!dpop0418::IsOwnedZapretServiceCommand(ownedCommand, root))
+        return Fail("service command pointing at bundled winws must be owned");
+    const std::wstring externalCommand = L"\"" + (temp / L"external" / L"winws.exe").wstring() + L"\" --wf-tcp=443";
+    if (dpop0418::IsOwnedZapretServiceCommand(externalCommand, root))
+        return Fail("external service command must never be treated as owned");
+
+    const std::wstring installInput = dpop0418::BuildPinnedServiceInstallInput(strategies, L"general (ALT13).bat");
+    const size_t menuIndex = dpop0418::FindStrategyMenuIndex(strategies, L"general (ALT13).bat");
+    if (menuIndex == 0 || installInput.find(L"1\r\n" + std::to_wstring(menuIndex) + L"\r\n") != 0)
+        return Fail("pinned service input must select Install Service and exact strategy index");
+    if (dpop0418::BuildPinnedServiceInstallInput(strategies, L"missing.bat").size() != 0)
+        return Fail("service input must not be generated for an unknown strategy");
+
+    Write(root / L".service" / L"version.txt", "9.9.9\n");
+    error.clear();
+    if (dpop0418::ValidateBundledPayload(root, error))
+        return Fail("wrong pinned Flowseal version must fail validation");
+    if (error.find(L"1.10.2") == std::wstring::npos)
+        return Fail("version validation error must name the required pinned version");
+
+    Write(root / L".service" / L"version.txt", "1.10.2\n");
     fs::remove(root / L"bin" / L"WinDivert64.sys", ec);
     error.clear();
     if (dpop0418::ValidateBundledPayload(root, error))
