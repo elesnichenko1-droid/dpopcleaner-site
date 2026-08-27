@@ -85,6 +85,8 @@ jobs:
         run: |
           python tests/test_dpop0418_release_contract.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0418_live_pages_contract.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test tests/release-manifest.test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -296,11 +298,30 @@ jobs:
             Start-Sleep -Seconds 10
           }
           if (-not $live -or $live.version -ne '0.4.18' -or $live.channel -ne 'stable' -or $live.version_code -ne 418 -or $live.revision -ne 2 -or $live.available -ne $true -or $live.sha256 -ne $expected.sha256 -or [int64]$live.size -ne [int64]$expected.size) { throw 'Live stable manifest mismatch.' }
+
           foreach ($name in @('dpopcleaner-0.4.18-overview.png','dpopcleaner-0.4.18-zapret.png','dpopcleaner-0.4.18-settings.png')) {
+            $expectedShot = Join-Path 'publish/assets' $name
+            $expectedShotSha = (Get-FileHash -LiteralPath $expectedShot -Algorithm SHA256).Hash.ToLowerInvariant()
             $target = Join-Path $env:RUNNER_TEMP $name
-            Invoke-WebRequest -Uri "$base/assets/$name?t=$env:GITHUB_RUN_ID" -OutFile $target
-            if ((Get-Item -LiteralPath $target).Length -lt 15000) { throw "Live current screenshot is missing or too small: $name" }
+            $shotReady = $false
+            for ($shotAttempt = 0; $shotAttempt -lt 18; $shotAttempt++) {
+              try {
+                Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+                $shotUrl = "$base/assets/$name?t=" + $env:GITHUB_RUN_ID + '-shot-' + $shotAttempt
+                Invoke-WebRequest -Uri $shotUrl -Headers @{ 'Cache-Control'='no-cache' } -OutFile $target
+                if (Test-Path -LiteralPath $target -PathType Leaf) {
+                  $liveShotSha = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+                  if ((Get-Item -LiteralPath $target).Length -ge 15000 -and $liveShotSha -eq $expectedShotSha) {
+                    $shotReady = $true
+                    break
+                  }
+                }
+              } catch {}
+              Start-Sleep -Seconds 10
+            }
+            if (-not $shotReady) { throw "Live screenshot did not propagate with expected SHA-256: $name" }
           }
+
           $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.18.exe'
           Invoke-WebRequest -Uri $live.download_url -OutFile $download
           $sha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
