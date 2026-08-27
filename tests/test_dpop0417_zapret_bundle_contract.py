@@ -38,13 +38,7 @@ def parse_pe_sections(data):
         off = table + index * 40
         name = data[off:off + 8].split(b"\0", 1)[0].decode("ascii", errors="replace")
         virtual_size, rva, raw_size, raw_offset = struct.unpack_from("<IIII", data, off + 8)
-        sections.append({
-            "name": name,
-            "rva": rva,
-            "virtual_size": virtual_size,
-            "raw_size": raw_size,
-            "raw_offset": raw_offset,
-        })
+        sections.append({"name": name, "rva": rva, "virtual_size": virtual_size, "raw_size": raw_size, "raw_offset": raw_offset})
     return sections
 
 
@@ -71,7 +65,6 @@ def rva_to_file_offset(sections, rva):
 def decode_string_at(data, offset):
     if offset is None or offset < 0 or offset >= len(data):
         return None
-    # Prefer UTF-16LE when the first few code units have zero high bytes.
     if offset + 8 <= len(data) and data[offset + 1] == 0 and data[offset + 3] == 0:
         chars = []
         pos = offset
@@ -90,9 +83,7 @@ def decode_string_at(data, offset):
     pos = offset
     while pos < len(data) and len(chars) < 300:
         byte = data[pos]
-        if byte == 0:
-            break
-        if not (0x20 <= byte <= 0x7E):
+        if byte == 0 or not (0x20 <= byte <= 0x7E):
             break
         chars.append(chr(byte))
         pos += 1
@@ -102,20 +93,15 @@ def decode_string_at(data, offset):
 
 def rip_relative_lea_refs(data, sections, start_offset, end_offset):
     refs = []
-    start_offset = max(0, start_offset)
+    pos = max(0, start_offset)
     end_offset = min(len(data), end_offset)
-    pos = start_offset
     while pos + 7 <= end_offset:
-        rex = data[pos]
-        opcode = data[pos + 1]
-        modrm = data[pos + 2]
-        # x64 LEA reg,[RIP+disp32]: REX 8D modrm(mod=00,r/m=101) disp32
+        rex, opcode, modrm = data[pos], data[pos + 1], data[pos + 2]
         if 0x40 <= rex <= 0x4F and opcode == 0x8D and (modrm & 0xC7) == 0x05:
             insn_rva = file_offset_to_rva(sections, pos)
             if insn_rva is not None:
                 disp = struct.unpack_from("<i", data, pos + 3)[0]
-                target_rva = insn_rva + 7 + disp
-                target_offset = rva_to_file_offset(sections, target_rva)
+                target_offset = rva_to_file_offset(sections, insn_rva + 7 + disp)
                 value = decode_string_at(data, target_offset)
                 if value:
                     refs.append((pos, target_offset, value))
@@ -137,38 +123,26 @@ def print_updater_code_refs():
         print(f"ERROR_STRING_RVA=0x{error_rva:08x}" if error_rva is not None else "ERROR_STRING_RVA=NONE")
         text = next((s for s in sections if s["name"] == ".text"), None)
         if text and error_rva is not None:
-            refs = rip_relative_lea_refs(
-                data,
-                sections,
-                text["raw_offset"],
-                text["raw_offset"] + text["raw_size"],
-            )
+            refs = rip_relative_lea_refs(data, sections, text["raw_offset"], text["raw_offset"] + text["raw_size"])
             xrefs = [item for item in refs if item[1] == error_offset]
             print("ERROR_XREFS=" + ",".join(f"0x{item[0]:08x}" for item in xrefs))
             for xref, _, _ in xrefs:
                 print(f"XREF_CONTEXT=0x{xref:08x}")
-                nearby = rip_relative_lea_refs(data, sections, xref - 2048, xref + 2048)
+                nearby = rip_relative_lea_refs(data, sections, xref - 4096, xref + 4096)
                 seen = set()
                 for insn_offset, target_offset, value in nearby:
                     if value in seen:
                         continue
                     seen.add(value)
                     lower = value.lower()
-                    if (
-                        any(token in lower for token in ("zapret", "winws", "service", "update", "general", "module"))
-                        or re.search(r"(?i)\.(?:exe|bat|cmd|ps1|dll)$", value)
-                    ):
-                        print(f"LEA@0x{insn_offset:08x}->0x{target_offset:08x}: {value!r}")
+                    if any(token in lower for token in ("zapret", "winws", "service", "update", "general", "module", "dpop")) or re.search(r"(?i)\.(?:exe|bat|cmd|ps1|dll)$", value):
+                        print(f"LEA@0x{insn_offset:08x}->0x{target_offset:08x}: {ascii(value)}")
     print("FROZEN_CORE_ZAPRET_UPDATER_CODE_REFS_END")
 
 
 class DPop0417BundledZapretContractTests(unittest.TestCase):
     def test_frozen_core_zapret_expectations_are_visible_in_ci_log(self):
         values = extract_core_zapret_strings()
-        print("FROZEN_CORE_ZAPRET_STRINGS_BEGIN")
-        for value in values:
-            print(repr(value))
-        print("FROZEN_CORE_ZAPRET_STRINGS_END")
         print_updater_code_refs()
         self.assertTrue(values, "Frozen core should contain discoverable Zapret integration strings")
         self.assertIn("bin\\winws.exe", values)
@@ -179,7 +153,6 @@ class DPop0417BundledZapretContractTests(unittest.TestCase):
         stage = (ROOT / "tools" / "dpop0417_stage.ps1").read_text(encoding="utf-8")
         install_smoke = (ROOT / "tools" / "dpop0417_install_smoke.ps1").read_text(encoding="utf-8")
         publisher = (ROOT / ".github" / "workflows" / "publish-dpopcleaner-0.4.17.yml").read_text(encoding="utf-8")
-
         self.assertIn("ZapretScreenFix.exe", allowlist)
         self.assertIn("ZapretScreenFix.exe", stage)
         self.assertIn("winws.exe", stage, "Stage must require the real Zapret runtime")
