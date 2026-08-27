@@ -23,9 +23,12 @@ class ReleaseScreenshotAssetsTests(unittest.TestCase):
         self.assertIn("publish github release installer and screenshots", lower)
         self.assertIn("verify live release screenshots and installer sha256", lower)
         self.assertIn("get-filehash", lower)
+        self.assertIn("release_tag: v0.4.18", lower)
+        self.assertIn("gh release download", lower)
         for name in SHOTS:
             self.assertIn(f"publish/assets/{name}", workflow)
-            self.assertIn(RELEASE_BASE + name, workflow)
+            self.assertIn(name, workflow)
+        self.assertIn('--pattern "$name"', lower)
         self.assertNotIn('cp publish/assets/dpopcleaner-0.4.18-overview.png _site/assets/', lower)
         self.assertNotIn('$base/assets/$name', lower)
 
