@@ -22,8 +22,10 @@ using System.Runtime.InteropServices;
 public static class DPopScreenshotNative {
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint flags);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int width, int height, bool repaint);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool RedrawWindow(IntPtr hWnd, IntPtr updateRect, IntPtr updateRgn, uint flags);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint flags);
     [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -51,21 +53,35 @@ function Capture-Page([int]$NavCommand, [string]$FileName) {
         try { [void]$process.WaitForInputIdle(5000) } catch { }
         $hwnd = Get-MainWindowHandle $process
         [void][DPopScreenshotNative]::ShowWindow($hwnd, 9)
+        if (-not [DPopScreenshotNative]::MoveWindow($hwnd, 10, 10, 1215, 695, $true)) {
+            throw 'MoveWindow failed while forcing the DPopCleaner screenshot viewport.'
+        }
         [void][DPopScreenshotNative]::SetForegroundWindow($hwnd)
         [void][DPopScreenshotNative]::SendMessageW($hwnd, 0x0111, [IntPtr]$NavCommand, [IntPtr]::Zero)
-        Start-Sleep -Milliseconds 650
+
+        # RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW.
+        if (-not [DPopScreenshotNative]::RedrawWindow($hwnd, [IntPtr]::Zero, [IntPtr]::Zero, 0x0185)) {
+            throw 'RedrawWindow failed after switching the DPopCleaner page.'
+        }
+        Start-Sleep -Milliseconds 250
 
         $rect = New-Object DPopScreenshotNative+RECT
         if (-not [DPopScreenshotNative]::GetWindowRect($hwnd, [ref]$rect)) { throw 'GetWindowRect failed.' }
         $width = $rect.Right - $rect.Left
         $height = $rect.Bottom - $rect.Top
-        if ($width -lt 1000 -or $height -lt 600) { throw "Unexpected DPopCleaner window size: ${width}x${height}" }
+        if ($width -lt 1200 -or $height -lt 680) {
+            throw "DPopCleaner screenshot viewport was clipped by the runner: ${width}x${height}"
+        }
 
         $bitmap = New-Object System.Drawing.Bitmap($width, $height, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $hdc = $graphics.GetHdc()
         try {
-            if (-not [DPopScreenshotNative]::PrintWindow($hwnd, $hdc, 2)) { throw 'PrintWindow failed.' }
+            if (-not [DPopScreenshotNative]::PrintWindow($hwnd, $hdc, 2)) {
+                if (-not [DPopScreenshotNative]::PrintWindow($hwnd, $hdc, 0)) {
+                    throw 'PrintWindow failed.'
+                }
+            }
         }
         finally {
             $graphics.ReleaseHdc($hdc)
@@ -76,7 +92,7 @@ function Capture-Page([int]$NavCommand, [string]$FileName) {
         $bitmap.Save($target, [System.Drawing.Imaging.ImageFormat]::Png)
         $bitmap.Dispose()
         if ((Get-Item -LiteralPath $target).Length -lt 15000) { throw "Captured PNG is unexpectedly small: $target" }
-        Write-Host "Captured current UI: $target"
+        Write-Host "Captured current UI (${width}x${height}): $target"
     }
     finally {
         if (-not $process.HasExited) {
