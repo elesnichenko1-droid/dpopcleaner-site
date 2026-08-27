@@ -16,7 +16,7 @@ DPopCleaner 0.4.17 rev.4 сохраняет оригинальное ядро DP
 - **SimpleUpdate.exe** запускает оригинальный `DPopCleaner.exe`, проверяет stable manifest только по HTTPS и сравнивает `version_code + revision`.
 - Скачанный установщик принимается только после совпадения обязательных размера и SHA-256.
 - Основные ярлыки меню «Пуск», рабочего стола и post-install запуск ведут через `SimpleUpdate.exe`.
-- **ZapretScreenFix.exe** и команда `zapret-screen-fix` из revision 2 остаются в пакете.
+- **ZapretScreenFix.exe** и команда `zapret-screen-fix` из revision 2 остаются в пакете и сохраняют исправление **демонстрации экрана через Zapret**.
 - Анализатор диска и Центр восстановления остаются отдельными companion-модулями.
 
 ## Проверка релиза
