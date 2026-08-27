@@ -44,8 +44,8 @@ def main() -> None:
             "Release screenshot verifier must hash the candidate screenshot")
     require("liveshotsha" in text,
             "Release screenshot verifier must hash the downloaded release screenshot")
-    require("$liveshotsha -eq $expectedshotsha" in text,
-            "Release screenshot verification must require exact SHA-256 equality")
+    require("$liveshotsha -ne $expectedshotsha" in text,
+            "Release screenshot verification must fail closed on SHA-256 mismatch")
     require("live release screenshot mismatch" in text,
             "Production verifier must fail closed when a release screenshot differs")
 
