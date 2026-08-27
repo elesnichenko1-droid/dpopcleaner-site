@@ -6,20 +6,46 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "downloads" / "DPopCleaner_0.2.14_BETA.exe"
 
 
+def extract_strings_with_offsets(data):
+    values = []
+    for match in re.finditer(rb"[\x20-\x7e]{4,}", data):
+        values.append((match.start(), match.group().decode("ascii", errors="ignore"), "ascii"))
+    for match in re.finditer(rb"(?:[\x20-\x7e]\x00){4,}", data):
+        values.append((match.start(), match.group().decode("utf-16le", errors="ignore"), "utf16"))
+    return sorted(values, key=lambda item: item[0])
+
+
 def extract_core_zapret_strings():
-    data = CORE.read_bytes()
-    strings = []
-    for raw in re.findall(rb"[\x20-\x7e]{4,}", data):
-        strings.append(raw.decode("ascii", errors="ignore"))
-    for raw in re.findall(rb"(?:[\x20-\x7e]\x00){4,}", data):
-        strings.append(raw.decode("utf-16le", errors="ignore"))
-    interesting = sorted({
-        value for value in strings
+    values = extract_strings_with_offsets(CORE.read_bytes())
+    return sorted({
+        value for _, value, _ in values
         if any(token in value.lower() for token in (
             "zapret", "winws", "service.bat", "strategy", "strateg", "update", "updater"
         ))
     })
-    return interesting
+
+
+def print_updater_neighborhood():
+    values = extract_strings_with_offsets(CORE.read_bytes())
+    anchors = [
+        offset for offset, value, _ in values
+        if "zapret updater module is missing" in value.lower()
+    ]
+    print("FROZEN_CORE_ZAPRET_UPDATER_NEIGHBORHOOD_BEGIN")
+    for anchor in anchors:
+        print(f"ANCHOR=0x{anchor:08x}")
+        for offset, value, encoding in values:
+            if abs(offset - anchor) <= 8192:
+                lower = value.lower()
+                if (
+                    any(token in lower for token in ("zapret", "winws", "service", "update", "module"))
+                    or re.search(r"(?i)(?:^|[\\/])[a-z0-9_.() -]+\.(?:exe|bat|cmd|ps1|dll)$", value)
+                    or re.search(r"(?i)^[a-z0-9_.() -]+\.(?:exe|bat|cmd|ps1|dll)$", value)
+                    or "bin\\" in lower
+                    or "general" in lower
+                ):
+                    print(f"0x{offset:08x} {encoding}: {value!r}")
+    print("FROZEN_CORE_ZAPRET_UPDATER_NEIGHBORHOOD_END")
 
 
 class DPop0417BundledZapretContractTests(unittest.TestCase):
@@ -29,7 +55,10 @@ class DPop0417BundledZapretContractTests(unittest.TestCase):
         for value in values:
             print(repr(value))
         print("FROZEN_CORE_ZAPRET_STRINGS_END")
+        print_updater_neighborhood()
         self.assertTrue(values, "Frozen core should contain discoverable Zapret integration strings")
+        self.assertIn("bin\\winws.exe", values)
+        self.assertIn("service.bat", values)
 
     def test_release_stages_real_zapret_runtime_not_only_screen_fix(self):
         allowlist = (ROOT / "v0417" / "stage-allowlist.txt").read_text(encoding="utf-8")
