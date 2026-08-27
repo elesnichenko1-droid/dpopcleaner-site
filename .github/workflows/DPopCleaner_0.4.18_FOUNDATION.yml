@@ -50,6 +50,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify bundled Zapret supply-chain contract
+        shell: pwsh
+        run: python tests/test_dpop0418_zapret_bundle_contract.py
+
+      - name: Prepare pinned Zapret 1.10.2 payload
+        shell: pwsh
+        run: ./tools/dpop0418_prepare_zapret.ps1 -OutputRoot '_release/0.4.18/third-party/Zapret'
+
       - name: Verify 0.4.18 package contract
         shell: pwsh
         run: python tests/test_dpop0418_package_contract.py
