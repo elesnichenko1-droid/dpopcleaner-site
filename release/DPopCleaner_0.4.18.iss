@@ -49,7 +49,15 @@ Name: "{app}\Languages"
 Name: "{app}\Shell"
 Name: "{app}\Documentation"; Permissions: users-modify
 Name: "{app}\Modules"
+Name: "{app}\ThirdParty"
+Name: "{app}\ThirdParty\Zapret"
 Name: "{app}\Resources"
+
+; The bundled Zapret directory is program-owned. User *-user.txt files are
+; backed up in CurStepChanged(ssInstall) before this exact-tree replacement and
+; restored in ssPostInstall after the new verified tree is installed.
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\ThirdParty\Zapret"
 
 [Files]
 Source: "{#StageRoot}\DPopCleaner.exe"; DestDir: "{app}"; DestName: "DPopCleaner.exe"; Flags: ignoreversion restartreplace
@@ -58,6 +66,7 @@ Source: "{#StageRoot}\Modules\*"; DestDir: "{app}\Modules"; Flags: ignoreversion
 Source: "{#StageRoot}\Languages\*"; DestDir: "{app}\Languages"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Shell\*"; DestDir: "{app}\Shell"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Documentation\*"; DestDir: "{app}\Documentation"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#StageRoot}\ThirdParty\Zapret\*"; DestDir: "{app}\ThirdParty\Zapret"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Resources\*"; DestDir: "{app}\Resources"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 [Tasks]
@@ -72,3 +81,101 @@ Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir
 
 [Run]
 Filename: "{app}\DPopCleaner.exe"; Description: "Запустить DPopCleaner"; Flags: nowait postinstall skipifsilent
+
+[Code]
+var
+  ZapretBackupDir: String;
+
+function NextZapretBackupDir(): String;
+var
+  Base: String;
+  Candidate: String;
+  Counter: Integer;
+begin
+  Base := AddBackslash(ExpandConstant('{localappdata}\DPopCleaner\ZapretBackup')) +
+          GetDateTimeString('yyyymmdd-hhnnss', '-', ':');
+  Candidate := Base;
+  Counter := 1;
+  while DirExists(Candidate) do
+  begin
+    Counter := Counter + 1;
+    Candidate := Base + '-' + IntToStr(Counter);
+  end;
+  Result := Candidate;
+end;
+
+procedure BackupZapretUserLists();
+var
+  ListsDir: String;
+  SourcePath: String;
+  DestPath: String;
+  FindRec: TFindRec;
+begin
+  ZapretBackupDir := '';
+  ListsDir := ExpandConstant('{app}\ThirdParty\Zapret\lists');
+  if not DirExists(ListsDir) then
+    Exit;
+
+  if FindFirst(AddBackslash(ListsDir) + '*-user.txt', FindRec) then
+  begin
+    try
+      ZapretBackupDir := NextZapretBackupDir();
+      if not ForceDirectories(ZapretBackupDir) then
+        RaiseException('Cannot create ZapretBackup directory: ' + ZapretBackupDir);
+
+      repeat
+        if FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY = 0 then
+        begin
+          SourcePath := AddBackslash(ListsDir) + FindRec.Name;
+          DestPath := AddBackslash(ZapretBackupDir) + FindRec.Name;
+          if not CopyFile(SourcePath, DestPath, True) then
+            RaiseException('Cannot back up Zapret user list: ' + SourcePath);
+          Log('Backed up Zapret user list: ' + SourcePath + ' -> ' + DestPath);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+procedure RestoreZapretUserLists();
+var
+  ListsDir: String;
+  SourcePath: String;
+  DestPath: String;
+  FindRec: TFindRec;
+begin
+  if (ZapretBackupDir = '') or (not DirExists(ZapretBackupDir)) then
+    Exit;
+
+  ListsDir := ExpandConstant('{app}\ThirdParty\Zapret\lists');
+  if not ForceDirectories(ListsDir) then
+    RaiseException('Cannot create bundled Zapret lists directory: ' + ListsDir);
+
+  if FindFirst(AddBackslash(ZapretBackupDir) + '*-user.txt', FindRec) then
+  begin
+    try
+      repeat
+        if FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY = 0 then
+        begin
+          SourcePath := AddBackslash(ZapretBackupDir) + FindRec.Name;
+          DestPath := AddBackslash(ListsDir) + FindRec.Name;
+          if not CopyFile(SourcePath, DestPath, False) then
+            RaiseException('Cannot restore Zapret user list: ' + DestPath);
+          Log('Restored Zapret user list: ' + SourcePath + ' -> ' + DestPath);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    BackupZapretUserLists()
+  else if CurStep = ssPostInstall then
+    RestoreZapretUserLists();
+end;
