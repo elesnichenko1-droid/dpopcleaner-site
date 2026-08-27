@@ -24,6 +24,29 @@ def main() -> None:
     require("SaveSettingsAtomic" in text and "LoadSettings" in text,
             "Settings page must use the isolated settings store")
 
+    # Zapret is a first-class page in 0.4.18. The legacy Screen Fix remains available
+    # separately, but starting/stopping/installing the bundled Flowseal payload happens here.
+    for token in (
+        '#include "ZapretController.h"',
+        "Page::Zapret",
+        "Zapret 1.10.2",
+        "QueryZapretStatus",
+        "StartBundledZapret",
+        "StopBundledZapret",
+        "InstallBundledZapretService",
+        "RemoveBundledZapretService",
+        "Стратегия Zapret",
+        "Запустить Zapret",
+        "Остановить Zapret",
+        "Установить службу",
+        "Удалить службу",
+    ):
+        require(token in text, f"Integrated Zapret UI missing contract token: {token}")
+    require("gSettings.zapretStrategy" in text,
+            "Zapret page must use the persisted selected strategy")
+    require("SaveSettingsAtomic(SettingsPath(), gSettings" in text,
+            "Changing Zapret strategy must persist immediately")
+
     close_pos = text.find("case WM_CLOSE:")
     require(close_pos >= 0, "Main window must handle WM_CLOSE explicitly")
     close_block = text[close_pos:close_pos + 1800]
