@@ -25,15 +25,29 @@ $installRoot = Join-Path ([IO.Path]::GetTempPath()) 'dpop0418-installed-smoke'
 $diskEvidence = Join-Path $OutputDir 'disk-installed'
 $restoreEvidence = Join-Path $OutputDir 'restore-installed'
 $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
+$localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+$zapretBackupRoot = Join-Path $localAppData 'DPopCleaner\ZapretBackup'
 $installed = $false
 $uninstalled = $false
 $documentationAclModify = $false
 $upgradeSentinelPreserved = $false
+$zapretUserListPreserved = $false
+$zapretBackupVerified = $false
+$zapretVersion = ''
+$zapretBackupPath = ''
 
 function Assert-File([string]$RelativePath) {
     $path = Join-Path $installRoot $RelativePath
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Installed file missing: $RelativePath"
+    }
+    return $path
+}
+
+function Assert-Directory([string]$RelativePath) {
+    $path = Join-Path $installRoot $RelativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+        throw "Installed directory missing: $RelativePath"
     }
     return $path
 }
@@ -72,6 +86,27 @@ try {
     [void](Assert-File 'Shell\commands\restore-center.json')
     [void](Assert-File 'Shell\commands\zapret-screen-fix.json')
     [void](Assert-File 'Documentation\README.txt')
+    [void](Assert-File 'Documentation\THIRD_PARTY_NOTICES.txt')
+
+    # Bundled Flowseal Zapret must be fully offline after installation.
+    [void](Assert-Directory 'ThirdParty\Zapret')
+    $zapretLists = Assert-Directory 'ThirdParty\Zapret\lists'
+    [void](Assert-Directory 'ThirdParty\Zapret\utils')
+    [void](Assert-File 'ThirdParty\Zapret\LICENSE.txt')
+    [void](Assert-File 'ThirdParty\Zapret\service.bat')
+    $generalStrategy = Assert-File 'ThirdParty\Zapret\general.bat'
+    [void](Assert-File 'ThirdParty\Zapret\bin\winws.exe')
+    [void](Assert-File 'ThirdParty\Zapret\bin\WinDivert.dll')
+    [void](Assert-File 'ThirdParty\Zapret\bin\WinDivert64.sys')
+    $zapretVersionFile = Assert-File 'ThirdParty\Zapret\.service\version.txt'
+    $zapretVersion = (Get-Content -LiteralPath $zapretVersionFile -Raw).Trim()
+    if ($zapretVersion -ne '1.10.2') {
+        throw "Installed bundled Zapret version mismatch: $zapretVersion"
+    }
+    $strategyText = Get-Content -LiteralPath $generalStrategy -Raw
+    if ($strategyText -notmatch 'discord\.media') {
+        throw 'Installed general.bat does not contain the required discord.media strategy section.'
+    }
 
     $coreVersion = (Get-Item -LiteralPath $core).VersionInfo.FileVersion
     $updaterVersion = (Get-Item -LiteralPath $updater).VersionInfo.FileVersion
@@ -94,12 +129,60 @@ try {
         throw "Documentation ACL does not grant BUILTIN\Users ($usersSidValue) Modify: $documentationPath"
     }
 
-    # Reinstall in-place with user-owned data present. The installer must not erase it.
+    # Reinstall in-place with both ordinary user data and a Zapret user list.
+    # [InstallDelete] deliberately replaces the program-owned Zapret tree, so
+    # this sentinel only survives if the installer's ZapretBackup path works.
     $sentinel = Join-Path $documentationPath 'upgrade-preserve-smoke.txt'
     Set-Content -LiteralPath $sentinel -Encoding utf8 -Value 'preserve-me'
+
+    $zapretUserList = Join-Path $zapretLists 'list-general-user.txt'
+    $zapretSentinelValue = 'dpop0418-preserve-zapret-user-list'
+    Set-Content -LiteralPath $zapretUserList -Encoding utf8 -Value $zapretSentinelValue
+
+    $backupsBefore = @()
+    if (Test-Path -LiteralPath $zapretBackupRoot -PathType Container) {
+        $backupsBefore = @(Get-ChildItem -LiteralPath $zapretBackupRoot -Directory -Force | ForEach-Object { $_.FullName })
+    }
+
     Run-Installer
-    $upgradeSentinelPreserved = (Test-Path -LiteralPath $sentinel -PathType Leaf) -and ((Get-Content -Raw -LiteralPath $sentinel).Trim() -eq 'preserve-me')
+
+    $upgradeSentinelPreserved = (Test-Path -LiteralPath $sentinel -PathType Leaf) -and
+        ((Get-Content -Raw -LiteralPath $sentinel).Trim() -eq 'preserve-me')
     if (-not $upgradeSentinelPreserved) { throw 'In-place reinstall destroyed user Documentation data.' }
+
+    $zapretUserListPreserved = (Test-Path -LiteralPath $zapretUserList -PathType Leaf) -and
+        ((Get-Content -Raw -LiteralPath $zapretUserList).Trim() -eq $zapretSentinelValue)
+    if (-not $zapretUserListPreserved) {
+        throw 'In-place reinstall destroyed ThirdParty\Zapret\lists\list-general-user.txt.'
+    }
+
+    if (Test-Path -LiteralPath $zapretBackupRoot -PathType Container) {
+        $newBackup = Get-ChildItem -LiteralPath $zapretBackupRoot -Directory -Force |
+            Where-Object { $backupsBefore -notcontains $_.FullName } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+        if ($newBackup) {
+            $zapretBackupPath = $newBackup.FullName
+            $backupSentinel = Join-Path $newBackup.FullName 'list-general-user.txt'
+            $zapretBackupVerified = (Test-Path -LiteralPath $backupSentinel -PathType Leaf) -and
+                ((Get-Content -Raw -LiteralPath $backupSentinel).Trim() -eq $zapretSentinelValue)
+        }
+    }
+    if (-not $zapretBackupVerified) {
+        throw 'ZapretBackup did not retain the pre-upgrade list-general-user.txt bytes.'
+    }
+
+    # Re-assert the program-owned tree after replacement/restoration.
+    [void](Assert-File 'ThirdParty\Zapret\LICENSE.txt')
+    [void](Assert-File 'ThirdParty\Zapret\service.bat')
+    [void](Assert-File 'ThirdParty\Zapret\general.bat')
+    [void](Assert-File 'ThirdParty\Zapret\bin\winws.exe')
+    [void](Assert-File 'ThirdParty\Zapret\bin\WinDivert.dll')
+    [void](Assert-File 'ThirdParty\Zapret\bin\WinDivert64.sys')
+    $reinstalledZapretVersion = (Get-Content -LiteralPath (Assert-File 'ThirdParty\Zapret\.service\version.txt') -Raw).Trim()
+    if ($reinstalledZapretVersion -ne '1.10.2') {
+        throw "Reinstalled bundled Zapret version mismatch: $reinstalledZapretVersion"
+    }
 
     # These PowerShell smoke scripts throw on failure; under StrictMode they do not own $LASTEXITCODE.
     & (Join-Path $PSScriptRoot 'dpop0418_close_smoke.ps1') -Exe $core
@@ -121,6 +204,10 @@ try {
         updater_file_version = $updaterVersion
         documentation_acl_modify = [bool]$documentationAclModify
         upgrade_sentinel_preserved = [bool]$upgradeSentinelPreserved
+        bundled_zapret_version = $zapretVersion
+        zapret_user_list_preserved = [bool]$zapretUserListPreserved
+        zapret_backup_verified = [bool]$zapretBackupVerified
+        zapret_backup_path = $zapretBackupPath
         close_smoke = $true
         disk_smoke = (Test-Path -LiteralPath (Join-Path $diskEvidence 'disk-smoke-report.json') -PathType Leaf)
         restore_smoke = (Test-Path -LiteralPath (Join-Path $restoreEvidence 'restore-smoke-report.json') -PathType Leaf)
@@ -130,7 +217,9 @@ try {
 
     Write-Host 'Installed DPopCleaner.exe: 0.4.18.1 PASS'
     Write-Host 'Installed DPopUpdater.exe: 0.4.18.1 PASS'
+    Write-Host 'Installed bundled Flowseal Zapret: 1.10.2 PASS'
     Write-Host 'In-place Documentation preservation: PASS'
+    Write-Host 'In-place Zapret *-user.txt preservation + ZapretBackup: PASS'
     Write-Host 'Installed non-blocking close smoke: PASS'
     Write-Host 'Installed companion module smokes: PASS'
     Write-Host 'Silent uninstall: PASS'
