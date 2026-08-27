@@ -3,6 +3,7 @@ param(
     [string]$Stage = '_release/0.4.18/stage',
     [string]$CoreExe = 'build0418/bin/Release/DPopCleaner.exe',
     [string]$UpdaterExe = 'build0418/bin/Release/DPopUpdater.exe',
+    [string]$PreparedZapret = '_release/0.4.18/third-party/Zapret',
     [switch]$RequireCompanions
 )
 
@@ -12,9 +13,11 @@ Set-StrictMode -Version Latest
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $allowlistPath = Join-Path $root 'v0418/stage-allowlist.txt'
 $payloadRoot = Join-Path $root 'v0417/payload'
+$noticesPath = Join-Path $root 'v0418/third_party/THIRD_PARTY_NOTICES.txt'
 $stageRoot = if ([IO.Path]::IsPathRooted($Stage)) { $Stage } else { Join-Path $root $Stage }
 $corePath = if ([IO.Path]::IsPathRooted($CoreExe)) { $CoreExe } else { Join-Path $root $CoreExe }
 $updaterPath = if ([IO.Path]::IsPathRooted($UpdaterExe)) { $UpdaterExe } else { Join-Path $root $UpdaterExe }
+$preparedZapretPath = if ([IO.Path]::IsPathRooted($PreparedZapret)) { $PreparedZapret } else { Join-Path $root $PreparedZapret }
 
 $expectedAllowlist = @(
     'DPopCleaner.exe',
@@ -26,6 +29,7 @@ $expectedAllowlist = @(
     'Modules/DiskAnalyzer.exe',
     'Modules/RestoreCenter.exe',
     'Modules/ZapretScreenFix.exe',
+    'ThirdParty/Zapret/',
     'Resources/'
 )
 if (-not (Test-Path -LiteralPath $allowlistPath -PathType Leaf)) {
@@ -46,6 +50,33 @@ $coreVersion = (Get-Item -LiteralPath $corePath).VersionInfo.FileVersion
 $updaterVersion = (Get-Item -LiteralPath $updaterPath).VersionInfo.FileVersion
 if ($coreVersion -ne '0.4.18.1') { throw "Unexpected DPopCleaner.exe FileVersion: $coreVersion" }
 if ($updaterVersion -ne '0.4.18.1') { throw "Unexpected DPopUpdater.exe FileVersion: $updaterVersion" }
+
+$zapretRequiredFiles = @(
+    'LICENSE.txt',
+    'service.bat',
+    'general.bat',
+    '.service/version.txt',
+    'bin/winws.exe',
+    'bin/WinDivert.dll',
+    'bin/WinDivert64.sys'
+)
+if (-not (Test-Path -LiteralPath $preparedZapretPath -PathType Container)) {
+    throw "Prepared pinned Zapret tree is missing: $preparedZapretPath"
+}
+foreach ($relative in $zapretRequiredFiles) {
+    $candidate = Join-Path $preparedZapretPath ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Prepared pinned Zapret tree missing required file: $relative"
+    }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $preparedZapretPath 'lists') -PathType Container)) {
+    throw 'Prepared pinned Zapret tree missing required lists directory.'
+}
+$zapretVersion = (Get-Content -LiteralPath (Join-Path $preparedZapretPath '.service/version.txt') -Raw).Trim()
+if ($zapretVersion -ne '1.10.2') { throw "Prepared Zapret version must be exactly 1.10.2, got: $zapretVersion" }
+if (-not (Test-Path -LiteralPath $noticesPath -PathType Leaf)) {
+    throw 'Missing v0418/third_party/THIRD_PARTY_NOTICES.txt.'
+}
 
 if (Test-Path -LiteralPath $stageRoot) {
     Remove-Item -LiteralPath $stageRoot -Recurse -Force
@@ -71,6 +102,7 @@ Copy-ApprovedDirectory 'Languages'
 Copy-ApprovedDirectory 'Shell'
 Copy-ApprovedDirectory 'Documentation'
 Copy-ApprovedDirectory 'Resources'
+Copy-Item -LiteralPath $noticesPath -Destination (Join-Path $stageRoot 'Documentation/THIRD_PARTY_NOTICES.txt') -Force
 
 $moduleFiles = @(
     @{ Source = 'v0417/src/DPop.Common/bin/Release/net48/DPop.Common.dll'; Dest = 'Modules/DPop.Common.dll' },
@@ -88,7 +120,11 @@ foreach ($module in $moduleFiles) {
     }
 }
 
-foreach ($required in @('DPopCleaner.exe', 'DPopUpdater.exe')) {
+$thirdPartyRoot = Join-Path $stageRoot 'ThirdParty'
+New-Item -ItemType Directory -Path $thirdPartyRoot -Force | Out-Null
+Copy-Item -LiteralPath $preparedZapretPath -Destination (Join-Path $thirdPartyRoot 'Zapret') -Recurse -Force
+
+foreach ($required in @('DPopCleaner.exe', 'DPopUpdater.exe', 'Documentation/THIRD_PARTY_NOTICES.txt')) {
     if (-not (Test-Path -LiteralPath (Join-Path $stageRoot $required) -PathType Leaf)) {
         throw "Staged file missing: $required"
     }
@@ -100,7 +136,17 @@ if ($RequireCompanions) {
         }
     }
 }
+foreach ($relative in $zapretRequiredFiles) {
+    $candidate = Join-Path (Join-Path $stageRoot 'ThirdParty/Zapret') ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Staged bundled Zapret missing required file: $relative"
+    }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $stageRoot 'ThirdParty/Zapret/lists') -PathType Container)) {
+    throw 'Staged bundled Zapret missing lists directory.'
+}
 
 Write-Host "DPopCleaner 0.4.18 core FileVersion: $coreVersion"
 Write-Host "DPopUpdater 0.4.18 FileVersion: $updaterVersion"
+Write-Host "Bundled Flowseal Zapret version: $zapretVersion"
 Write-Host "0.4.18 stage ready: $stageRoot"
