@@ -6,14 +6,20 @@ on:
       - feat/dpopcleaner-0.4.18-core-update
     paths:
       - 'v0418/**'
+      - 'v0417/**'
       - 'tools/dpop0418_*.ps1'
+      - 'tools/dpop0417_disk_smoke.ps1'
+      - 'tools/dpop0417_restore_smoke.ps1'
       - 'tests/test_dpop0418_*.py'
       - 'release/DPopCleaner_0.4.18.iss'
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
   pull_request:
     paths:
       - 'v0418/**'
+      - 'v0417/**'
       - 'tools/dpop0418_*.ps1'
+      - 'tools/dpop0417_disk_smoke.ps1'
+      - 'tools/dpop0417_restore_smoke.ps1'
       - 'tests/test_dpop0418_*.py'
       - 'release/DPopCleaner_0.4.18.iss'
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
@@ -22,10 +28,13 @@ permissions:
   contents: read
 
 jobs:
-  native-foundation:
+  candidate:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout exact revision
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Verify 0.4.18 package contract
         shell: pwsh
@@ -50,3 +59,76 @@ jobs:
       - name: Verify non-blocking close while update check is slow
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File tools/dpop0418_close_smoke.ps1 -Exe build0418/bin/Release/DPopCleaner.exe
+
+      - name: Run DPop.Common tests
+        shell: pwsh
+        run: dotnet test v0417/tests/DPop.Common.Tests/DPop.Common.Tests.csproj -c Release --nologo
+
+      - name: Run Disk Analyzer tests
+        shell: pwsh
+        run: dotnet test v0417/tests/DiskAnalyzer.Tests/DiskAnalyzer.Tests.csproj -c Release --nologo
+
+      - name: Run Zapret Screen Fix tests
+        shell: pwsh
+        run: dotnet test v0417/tests/ZapretScreenFix.Tests/ZapretScreenFix.Tests.csproj -c Release --nologo
+
+      - name: Build 0.4.17 companion continuity payload
+        shell: pwsh
+        run: |
+          dotnet build v0417/src/DPop.Common/DPop.Common.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/DiskAnalyzer/DiskAnalyzer.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/ZapretScreenFix/ZapretScreenFix.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Stage exact 0.4.18 payload
+        shell: pwsh
+        run: ./tools/dpop0418_stage.ps1 -RequireCompanions
+
+      - name: Verify staged main app close behavior
+        shell: pwsh
+        run: ./tools/dpop0418_close_smoke.ps1 -Exe '_release/0.4.18/stage/DPopCleaner.exe'
+
+      - name: Run staged Disk Analyzer smoke
+        shell: pwsh
+        run: ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.18/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.18/evidence/disk'
+
+      - name: Run staged Restore Center smoke
+        shell: pwsh
+        run: ./tools/dpop0417_restore_smoke.ps1 -ExePath '_release/0.4.18/stage/Modules/RestoreCenter.exe' -OutputDir '_release/0.4.18/evidence/restore'
+
+      - name: Build DPopCleaner 0.4.18 installer
+        shell: pwsh
+        run: |
+          $candidates = @((Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'), (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'))
+          $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+          if (-not $iscc) { throw 'Inno Setup 6 ISCC.exe was not found on windows-2022.' }
+          New-Item -ItemType Directory -Path '_release/0.4.18/installer' -Force | Out-Null
+          & $iscc 'release/DPopCleaner_0.4.18.iss'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath '_release/0.4.18/installer/DPopCleaner_Setup_0.4.18.exe' -PathType Leaf)) { throw 'Expected 0.4.18 installer was not produced.' }
+
+      - name: Record installer SHA-256 and exact size
+        shell: pwsh
+        run: |
+          $installer = '_release/0.4.18/installer/DPopCleaner_Setup_0.4.18.exe'
+          $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $installer).Length
+          [pscustomobject]@{ file='DPopCleaner_Setup_0.4.18.exe'; sha256=$hash; size=$size } | ConvertTo-Json | Set-Content '_release/0.4.18/installer/installer-metadata.json' -Encoding utf8
+
+      - name: Run installed 0.4.18 package smoke
+        shell: pwsh
+        run: ./tools/dpop0418_install_smoke.ps1 -InstallerPath '_release/0.4.18/installer/DPopCleaner_Setup_0.4.18.exe' -OutputDir '_release/0.4.18/evidence/install'
+
+      - name: Upload 0.4.18 candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: DPopCleaner-0.4.18-candidate-${{ github.run_id }}
+          path: |
+            _release/0.4.18/stage
+            _release/0.4.18/installer
+            _release/0.4.18/evidence
+          if-no-files-found: error
