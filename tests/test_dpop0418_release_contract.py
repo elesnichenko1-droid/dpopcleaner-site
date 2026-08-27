@@ -137,6 +137,16 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
         self.assertIn('setup revision 2', iss)
         self.assertIn('iconfilename: "{app}\\dpopcleaner.exe"', iss)
 
+        capture_text = capture.read_text(encoding='utf-8').lower()
+        self.assertIn('movewindow', capture_text,
+                      'Screenshot capture must force the intended full-width window instead of accepting runner clamping')
+        self.assertIn('redrawwindow', capture_text,
+                      'Screenshot capture must synchronously repaint after switching pages')
+        self.assertIn('1215', capture_text,
+                      'Screenshot viewport must preserve the intended 1215px DPopCleaner window width')
+        self.assertIn('$width -lt 1200', capture_text,
+                      'Screenshot capture must reject clipped windows narrower than 1200px')
+
 
 if __name__ == '__main__':
     unittest.main()
