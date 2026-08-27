@@ -22,6 +22,7 @@ using System.Runtime.InteropServices;
 public static class DPopScreenshotNative {
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll", SetLastError=true)] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     [DllImport("user32.dll", SetLastError=true)] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int width, int height, bool repaint);
     [DllImport("user32.dll", SetLastError=true)] public static extern bool RedrawWindow(IntPtr hWnd, IntPtr updateRect, IntPtr updateRgn, uint flags);
@@ -36,6 +37,31 @@ $settingsPath = Join-Path $outputPath 'capture-settings.ini'
 Set-Content -LiteralPath $settingsPath -Encoding utf8 -Value "[updates]`r`nauto_check=0`r`n`r`n[zapret]`r`nstrategy=general.bat`r`n"
 $previousSettings = $env:DPOP0418_SETTINGS_PATH
 $env:DPOP0418_SETTINGS_PATH = $settingsPath
+
+function Ensure-CaptureDesktop {
+    $screenWidth = [DPopScreenshotNative]::GetSystemMetrics(0)
+    $screenHeight = [DPopScreenshotNative]::GetSystemMetrics(1)
+    Write-Host "Screenshot desktop before provisioning: ${screenWidth}x${screenHeight}"
+    if ($screenWidth -ge 1280 -and $screenHeight -ge 720) { return }
+
+    # Never alter an end user's desktop. This is only for the disposable hosted CI desktop.
+    if ($env:GITHUB_ACTIONS -ne 'true') {
+        throw "Desktop is too small for the canonical DPopCleaner capture: ${screenWidth}x${screenHeight}"
+    }
+    $resolutionCommand = Get-Command Set-DisplayResolution -ErrorAction SilentlyContinue
+    if (-not $resolutionCommand) {
+        throw 'Windows runner desktop is too small and Set-DisplayResolution is unavailable.'
+    }
+
+    Set-DisplayResolution -Width 1600 -Height 900 -Force
+    Start-Sleep -Seconds 2
+    $screenWidth = [DPopScreenshotNative]::GetSystemMetrics(0)
+    $screenHeight = [DPopScreenshotNative]::GetSystemMetrics(1)
+    Write-Host "Screenshot desktop after provisioning: ${screenWidth}x${screenHeight}"
+    if ($screenWidth -lt 1280 -or $screenHeight -lt 720) {
+        throw "Unable to provision a large enough CI screenshot desktop: ${screenWidth}x${screenHeight}"
+    }
+}
 
 function Get-MainWindowHandle([Diagnostics.Process]$Process) {
     for ($i = 0; $i -lt 100; $i++) {
@@ -103,6 +129,7 @@ function Capture-Page([int]$NavCommand, [string]$FileName) {
 }
 
 try {
+    Ensure-CaptureDesktop
     Capture-Page 1000 'dpopcleaner-0.4.18-overview.png'
     Capture-Page 1004 'dpopcleaner-0.4.18-zapret.png'
     Capture-Page 1007 'dpopcleaner-0.4.18-settings.png'
