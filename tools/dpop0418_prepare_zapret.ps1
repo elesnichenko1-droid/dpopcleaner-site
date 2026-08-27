@@ -12,13 +12,26 @@ $PinnedArchiveName = 'zapret-discord-youtube-1.10.2.zip'
 $PinnedUrl = 'https://github.com/Flowseal/zapret-discord-youtube/releases/download/1.10.2/zapret-discord-youtube-1.10.2.zip'
 $PinnedSize = [int64]1508077
 $PinnedSha256 = '5eaac9fb2e4b1abd693487452a3ff3f4dfe9578a45f9ddddfa4bc1f5a6bb62d5'
+
+# Flowseal's 1.10.2 release workflow intentionally archives only bin/, lists/,
+# utils/ and *.bat. The exact license/version metadata from the same immutable
+# 1.10.2 tag is vendored in this repository and pinned byte-for-byte here.
+$PinnedLicenseSha256 = 'fe3983a1e91206ad1a530bcfae01fad207020cb61882edd62c1e3cb5f8d5d430'
+$PinnedVersionSha256 = '34d597db43ca53b2fd72ccbdd1af7a0fe238c2c0b8321dad8f43a1613143fc62'
+
 $DiscordToken = '--hostlist-domains=discord.media'
-$FilterTcpRegex = [regex]::new('--filter-tcp=(?<ports>\d+(?:,\d+)*)', [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+$FilterTcpRegex = [regex]::new(
+    '--filter-tcp=(?<ports>\d+(?:,\d+)*)',
+    [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+    [Text.RegularExpressions.RegexOptions]::CultureInvariant)
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $output = if ([IO.Path]::IsPathRooted($OutputRoot)) { $OutputRoot } else { Join-Path $root $OutputRoot }
 $work = Join-Path $root '_release/0.4.18/third-party/work'
 $downloads = Join-Path $root '_release/0.4.18/third-party/downloads'
+$metadataRoot = Join-Path $root 'v0418/third_party/flowseal-1.10.2'
+$pinnedLicense = Join-Path $metadataRoot 'LICENSE.txt'
+$pinnedVersionFile = Join-Path $metadataRoot 'version.txt'
 $archive = if ($ArchivePath) {
     if ([IO.Path]::IsPathRooted($ArchivePath)) { $ArchivePath } else { Join-Path $root $ArchivePath }
 } else {
@@ -27,6 +40,16 @@ $archive = if ($ArchivePath) {
 
 function New-Directory([string]$Path) {
     New-Item -ItemType Directory -Path $Path -Force | Out-Null
+}
+
+function Assert-Sha256([string]$Path, [string]$Expected, [string]$Description) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "$Description is missing: $Path"
+    }
+    $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $Expected) {
+        throw "$Description SHA-256 mismatch. Expected $Expected, got $actual."
+    }
 }
 
 function Test-BytePrefix([byte[]]$Bytes, [byte[]]$Prefix) {
@@ -64,7 +87,11 @@ function Read-TextPreservingEncoding([string]$Path) {
         }
     }
 
-    $text = if ($bytes.Length -eq $offset) { '' } else { $encoding.GetString($bytes, $offset, $bytes.Length - $offset) }
+    $text = if ($bytes.Length -eq $offset) {
+        ''
+    } else {
+        $encoding.GetString($bytes, $offset, $bytes.Length - $offset)
+    }
     return [pscustomobject]@{ Text = $text; Encoding = $encoding; Preamble = $preamble }
 }
 
@@ -82,8 +109,8 @@ function Get-DiscordFilterMatch([string]$Line) {
 
     $sectionStart = $Line.LastIndexOf('--new', $domainIndex, [StringComparison]::OrdinalIgnoreCase)
     if ($sectionStart -lt 0) { $sectionStart = 0 }
-    $searchAfter = $domainIndex + $DiscordToken.Length
-    $sectionEnd = $Line.IndexOf('--new', $searchAfter, [StringComparison]::OrdinalIgnoreCase)
+    $sectionEnd = $Line.IndexOf(
+        '--new', $domainIndex + $DiscordToken.Length, [StringComparison]::OrdinalIgnoreCase)
     if ($sectionEnd -lt 0) { $sectionEnd = $Line.Length }
 
     $selected = $null
@@ -116,7 +143,9 @@ function Patch-DiscordMediaTcp443([string]$Path) {
         $portsGroup = $match.Groups['ports']
         $ports = @($portsGroup.Value.Split(',') | ForEach-Object { $_.Trim() })
         if ($ports -contains '443') { continue }
-        $parts[$i] = $line.Substring(0, $portsGroup.Index) + '443,' + $portsGroup.Value + $line.Substring($portsGroup.Index + $portsGroup.Length)
+        $parts[$i] = $line.Substring(0, $portsGroup.Index) +
+                     '443,' + $portsGroup.Value +
+                     $line.Substring($portsGroup.Index + $portsGroup.Length)
         $changed = $true
     }
 
@@ -135,8 +164,19 @@ function Assert-DiscordMediaTcp443([string]$Path) {
         $match = Get-DiscordFilterMatch $line
         if ($null -eq $match) { throw "discord.media rule has no --filter-tcp after patch: $Path" }
         $ports = @($match.Groups['ports'].Value.Split(',') | ForEach-Object { $_.Trim() })
-        if ($ports -notcontains '443') { throw "discord.media TCP filter still lacks port 443 after patch: $Path" }
+        if ($ports -notcontains '443') {
+            throw "discord.media TCP filter still lacks port 443 after patch: $Path"
+        }
     }
+}
+
+# Verify the exact metadata copied from the same immutable upstream tag before
+# touching the release tree. These Git-tracked files are byte-identical to:
+# Flowseal/zapret-discord-youtube@1.10.2 LICENSE.txt and .service/version.txt.
+Assert-Sha256 $pinnedLicense $PinnedLicenseSha256 'Pinned Flowseal LICENSE.txt'
+Assert-Sha256 $pinnedVersionFile $PinnedVersionSha256 'Pinned Flowseal version.txt'
+if ([Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($pinnedVersionFile)) -ne $PinnedVersion) {
+    throw "Pinned Flowseal version metadata is not exactly $PinnedVersion."
 }
 
 if (-not $ArchivePath) {
@@ -167,19 +207,41 @@ $extractRoot = Join-Path $work 'extract'
 New-Directory $extractRoot
 Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
 
-$payloadRoot = $extractRoot
-if (-not (Test-Path -LiteralPath (Join-Path $payloadRoot 'service.bat') -PathType Leaf)) {
-    $topDirectories = @(Get-ChildItem -LiteralPath $extractRoot -Directory -Force)
-    if ($topDirectories.Count -eq 1 -and (Test-Path -LiteralPath (Join-Path $topDirectories[0].FullName 'service.bat') -PathType Leaf)) {
-        $payloadRoot = $topDirectories[0].FullName
-    } else {
-        $candidates = @(Get-ChildItem -LiteralPath $extractRoot -Filter 'service.bat' -File -Recurse -Force | Where-Object {
-            Test-Path -LiteralPath (Join-Path $_.Directory.FullName 'general.bat') -PathType Leaf
-        })
-        if ($candidates.Count -ne 1) { throw 'Could not resolve one exact Flowseal payload root after extraction.' }
-        $payloadRoot = $candidates[0].Directory.FullName
+# The official release archive contains one payload directory. Resolve it from
+# the service/general pair instead of assuming the ZIP's top-directory name.
+$candidates = @(Get-ChildItem -LiteralPath $extractRoot -Filter 'service.bat' -File -Recurse -Force | Where-Object {
+    Test-Path -LiteralPath (Join-Path $_.Directory.FullName 'general.bat') -PathType Leaf
+})
+if ($candidates.Count -ne 1) {
+    throw "Could not resolve one exact Flowseal release payload root. Candidates: $($candidates.Count)."
+}
+$payloadRoot = $candidates[0].Directory.FullName
+
+$archiveRequiredFiles = @(
+    'service.bat',
+    'general.bat',
+    'bin/winws.exe',
+    'bin/WinDivert.dll',
+    'bin/WinDivert64.sys'
+)
+foreach ($relative in $archiveRequiredFiles) {
+    $candidate = Join-Path $payloadRoot ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Verified Zapret release asset missing required file: $relative"
     }
 }
+foreach ($directory in @('lists', 'utils')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $payloadRoot $directory) -PathType Container)) {
+        throw "Verified Zapret release asset missing required directory: $directory"
+    }
+}
+
+# Flowseal's official 1.10.2 release.yml omits LICENSE.txt and .service/ from
+# its downloadable archives. Reconstruct those two metadata files only from
+# our byte-pinned copies of the same immutable 1.10.2 tag.
+Copy-Item -LiteralPath $pinnedLicense -Destination (Join-Path $payloadRoot 'LICENSE.txt') -Force
+New-Directory (Join-Path $payloadRoot '.service')
+Copy-Item -LiteralPath $pinnedVersionFile -Destination (Join-Path $payloadRoot '.service/version.txt') -Force
 
 $requiredFiles = @(
     'LICENSE.txt',
@@ -192,19 +254,23 @@ $requiredFiles = @(
 )
 foreach ($relative in $requiredFiles) {
     $candidate = Join-Path $payloadRoot ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
-    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Verified Zapret payload missing required file: $relative" }
-}
-if (-not (Test-Path -LiteralPath (Join-Path $payloadRoot 'lists') -PathType Container)) {
-    throw 'Verified Zapret payload missing required directory: lists'
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Reconstructed Zapret payload missing required file: $relative"
+    }
 }
 
+Assert-Sha256 (Join-Path $payloadRoot 'LICENSE.txt') $PinnedLicenseSha256 'Reconstructed Flowseal LICENSE.txt'
+Assert-Sha256 (Join-Path $payloadRoot '.service/version.txt') $PinnedVersionSha256 'Reconstructed Flowseal version.txt'
 $upstreamVersion = (Get-Content -LiteralPath (Join-Path $payloadRoot '.service/version.txt') -Raw).Trim()
 if ($upstreamVersion -ne $PinnedVersion) {
-    throw "Extracted Zapret version mismatch. Expected $PinnedVersion, got $upstreamVersion."
+    throw "Reconstructed Zapret version mismatch. Expected $PinnedVersion, got $upstreamVersion."
 }
 
-$strategies = @(Get-ChildItem -LiteralPath $payloadRoot -Filter '*.bat' -File | Where-Object { $_.Name -notlike 'service*' } | Sort-Object Name)
+$strategies = @(Get-ChildItem -LiteralPath $payloadRoot -Filter '*.bat' -File |
+    Where-Object { $_.Name -notlike 'service*' } |
+    Sort-Object Name)
 if ($strategies.Count -eq 0) { throw 'Verified Zapret payload contains no top-level strategies.' }
+
 $patchedFiles = 0
 foreach ($strategy in $strategies) {
     $patch = Patch-DiscordMediaTcp443 $strategy.FullName
@@ -215,7 +281,9 @@ foreach ($strategy in $strategies) {
 # Idempotency: a second patch pass must not change any strategy.
 foreach ($strategy in $strategies) {
     $secondPass = Patch-DiscordMediaTcp443 $strategy.FullName
-    if ($secondPass.Changed) { throw "Discord screen-share patch is not idempotent: $($strategy.Name)" }
+    if ($secondPass.Changed) {
+        throw "Discord screen-share patch is not idempotent: $($strategy.Name)"
+    }
 }
 
 if (Test-Path -LiteralPath $output) { Remove-Item -LiteralPath $output -Recurse -Force }
@@ -224,13 +292,18 @@ Copy-Item -LiteralPath $payloadRoot -Destination $output -Recurse -Force
 
 foreach ($relative in $requiredFiles) {
     $candidate = Join-Path $output ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
-    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Prepared Zapret tree missing required file: $relative" }
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Prepared Zapret tree missing required file: $relative"
+    }
 }
-if (-not (Test-Path -LiteralPath (Join-Path $output 'lists') -PathType Container)) {
-    throw 'Prepared Zapret tree missing lists directory.'
+foreach ($directory in @('lists', 'utils')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $output $directory) -PathType Container)) {
+        throw "Prepared Zapret tree missing required directory: $directory"
+    }
 }
 
 Write-Host "Pinned Zapret archive verified: $actualSize bytes, SHA-256 $actualSha"
+Write-Host "Pinned Flowseal metadata verified and restored from immutable tag $PinnedVersion"
 Write-Host "Flowseal Zapret version verified: $upstreamVersion"
 Write-Host "Discord media strategies patched: $patchedFiles"
 Write-Host "Prepared bundled Zapret tree: $output"
