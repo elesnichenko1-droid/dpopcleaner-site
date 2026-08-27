@@ -8,7 +8,7 @@ namespace DPopCleaner.SimpleUpdate
     {
         internal const int CurrentVersionCode = 417;
         internal const int CurrentRevision = 3;
-        internal const string StableManifestUrl = "https://elesnichenko1-droid.github.io/dpopcleaner-site/update/stable.json";
+        internal const string StableManifestUrl = LauncherOptions.DefaultManifestUrl;
 
         [STAThread]
         private static void Main(string[] args)
@@ -16,20 +16,15 @@ namespace DPopCleaner.SimpleUpdate
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            var corePath = Path.Combine(baseDirectory, "DPopCleaner.exe");
-            var settingsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "DPopCleaner", "SimpleUpdate.ini");
-
-            for (var i = 0; i < args.Length; i++)
-            {
-                if (string.Equals(args[i], "--settings-path", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-                    settingsPath = args[++i];
-            }
-
             try
             {
+                var options = LauncherOptions.Parse(args);
+                var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                var corePath = Path.Combine(baseDirectory, "DPopCleaner.exe");
+                var settingsPath = options.SettingsPathOverride ?? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "DPopCleaner", "SimpleUpdate.ini");
+
                 using (var mutex = new System.Threading.Mutex(false, "DPopCleaner.SimpleUpdate.Launcher"))
                 {
                     bool acquired;
