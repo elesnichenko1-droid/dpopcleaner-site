@@ -25,7 +25,7 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
         self.assertEqual(version['product'], 'DPopCleaner')
         self.assertEqual(version['version'], '0.4.18')
         self.assertEqual(version['version_code'], 418)
-        self.assertEqual(version['revision'], 1)
+        self.assertEqual(version['revision'], 2)
         self.assertEqual(version['channel'], 'stable')
         self.assertEqual(version['manifest'], './update/stable.json')
 
@@ -33,7 +33,7 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
         self.assertEqual(stable['product'], 'DPopCleaner')
         self.assertEqual(stable['version'], '0.4.18')
         self.assertEqual(stable['version_code'], 418)
-        self.assertEqual(stable['revision'], 1)
+        self.assertEqual(stable['revision'], 2)
         self.assertEqual(stable['channel'], 'stable')
         self.assertFalse(stable['available'], 'repository manifest must fail closed before production publishes real SHA/size')
         self.assertEqual(stable['download_url'], '')
@@ -43,7 +43,7 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
         self.assertIn("m.version === '0.4.18'", manifest)
         self.assertIn("m.channel === 'stable'", manifest)
-        self.assertIn('number(m.revision) === 1', manifest)
+        self.assertIn('number(m.revision) === 2', manifest)
         self.assertIn('v0\\.4\\.18', manifest)
         self.assertIn('dpopcleaner_setup_0\\.4\\.18\\.exe', manifest)
 
@@ -60,8 +60,12 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
             'flowseal zapret 1.10.2',
             'thirdparty\\zapret',
             'windivert',
+            'assets/dpopcleaner-0.4.18-overview.png',
+            'assets/dpopcleaner-0.4.18-zapret.png',
         ):
             self.assertIn(token, index)
+        self.assertNotIn('dpopcleaner-0.4.17-disk.png', index)
+        self.assertNotIn('dpopcleaner-0.4.17-restore.png', index)
         self.assertNotIn('замороженное ядро', index)
         self.assertNotIn('byte-identical', index)
         self.assertNotIn('beta', index)
@@ -79,6 +83,9 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
             'flowseal zapret 1.10.2',
             'thirdparty\\zapret',
             'list-general-user.txt',
+            'rev.2',
+            'икон',
+            'скриншот',
         ):
             self.assertIn(token, notes_text)
         self.assertNotIn('beta', notes_text)
@@ -94,12 +101,16 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
             'dpop0418_stage.ps1 -requirecompanions',
             'dpop0418_install_smoke.ps1',
             'dpop0418_close_smoke.ps1',
+            'dpop0418_icon_smoke.ps1',
+            'dpop0418_capture_screenshots.ps1',
+            'dpopcleaner-0.4.18-overview.png',
+            'dpopcleaner-0.4.18-zapret.png',
             'test_dpop0418_release_contract.py',
             'node --test tests/release-manifest.test.cjs',
             'ctest --test-dir build0418',
             'zapretscreenfix.tests.csproj',
             'version_code = 418',
-            'revision = 1',
+            'revision = 2',
             'get-filehash',
             'gh release',
             'update/stable.json',
@@ -110,9 +121,52 @@ class DPop0418ReleaseContractTests(unittest.TestCase):
             'sha256',
         ):
             self.assertIn(token, workflow)
+        self.assertNotIn('assets/dpopcleaner-0.4.17-disk.png', workflow)
+        self.assertNotIn('assets/dpopcleaner-0.4.17-restore.png', workflow)
         self.assertNotIn('--prerelease', workflow)
         self.assertNotIn('update/beta.json', workflow)
         self.assertNotIn('releases/latest', workflow)
+
+    def test_windows_icon_resource_and_installer_contract(self):
+        icon = ROOT / 'dpopcleaner.ico'
+        resource_header = ROOT / 'v0418/resources/resource.h'
+        resource_script = ROOT / 'v0418/resources/version.rc.in'
+        cmake = ROOT / 'v0418/CMakeLists.txt'
+        main_window = ROOT / 'v0418/core/MainWindow.cpp'
+        installer = ROOT / 'release/DPopCleaner_0.4.18.iss'
+        icon_smoke = ROOT / 'tools/dpop0418_icon_smoke.ps1'
+        capture = ROOT / 'tools/dpop0418_capture_screenshots.ps1'
+
+        self.assertTrue(icon.is_file(), 'canonical dpopcleaner.ico must exist')
+        self.assertTrue(resource_header.is_file(), 'shared icon resource id header is required')
+        self.assertTrue(icon_smoke.is_file(), 'compiled icon resource smoke is required')
+        self.assertTrue(capture.is_file(), 'real UI screenshot capture script is required')
+
+        header = resource_header.read_text(encoding='utf-8').lower()
+        self.assertIn('#define idi_app_icon 101', header)
+
+        rc = resource_script.read_text(encoding='utf-8').lower()
+        self.assertIn('#include "resource.h"', rc)
+        self.assertIn('idi_app_icon icon "dpopcleaner.ico"', rc)
+        self.assertIn('fileversion 0,4,18,2', rc)
+        self.assertIn('productversion 0,4,18,2', rc)
+
+        cmake_text = cmake.read_text(encoding='utf-8').lower()
+        self.assertIn('dpopcleaner.ico', cmake_text)
+        self.assertIn('generated/dpopcleaner.ico', cmake_text)
+        self.assertIn('generated/resource.h', cmake_text)
+
+        main_text = main_window.read_text(encoding='utf-8').lower()
+        self.assertIn('../resources/resource.h', main_text)
+        self.assertIn('makeintresourcew(idi_app_icon)', main_text)
+        self.assertNotIn('loadiconw(nullptr, idi_application)', main_text)
+
+        iss = installer.read_text(encoding='utf-8').lower()
+        self.assertIn('setupiconfile=..\\dpopcleaner.ico', iss)
+        self.assertIn('versioninfoversion=0.4.18.2', iss)
+        self.assertIn('versioninfoproductversion=0.4.18.2', iss)
+        self.assertIn('setup revision 2', iss)
+        self.assertIn('iconfilename: "{app}\\dpopcleaner.exe"', iss)
 
 
 if __name__ == '__main__':
