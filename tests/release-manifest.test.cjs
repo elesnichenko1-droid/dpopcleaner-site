@@ -7,7 +7,7 @@ const validManifest = Object.freeze({
   channel: 'stable',
   version: '0.4.18',
   version_code: 418,
-  revision: 1,
+  revision: 2,
   available: true,
   signed: false,
   download_url: 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.18/DPopCleaner_Setup_0.4.18.exe',
@@ -15,7 +15,7 @@ const validManifest = Object.freeze({
   size: 3000000,
 });
 
-test('accepts the exact published 0.4.18 rev.1 release contract', () => {
+test('accepts the exact published 0.4.18 rev.2 release contract', () => {
   assert.equal(isUsableManifest(validManifest), true);
 });
 
@@ -23,7 +23,7 @@ const invalidCases = [
   ['missing manifest', null],
   ['unavailable release', { ...validManifest, available: false }],
   ['wrong version', { ...validManifest, version: '0.4.17' }],
-  ['wrong revision', { ...validManifest, revision: 2 }],
+  ['old revision', { ...validManifest, revision: 1 }],
   ['zero revision', { ...validManifest, revision: 0 }],
   ['HTTP URL', { ...validManifest, download_url: validManifest.download_url.replace('https://', 'http://') }],
   ['wrong release tag', { ...validManifest, download_url: validManifest.download_url.replace('v0.4.18', 'v0.4.17') }],

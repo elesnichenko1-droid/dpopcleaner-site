@@ -13,13 +13,15 @@ if(MSVC)
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/../dpopcleaner.ico" "${CMAKE_BINARY_DIR}/generated/dpopcleaner.ico" COPYONLY)
+configure_file(resources/resource.h "${CMAKE_BINARY_DIR}/generated/resource.h" COPYONLY)
 configure_file(resources/version.rc.in "${CMAKE_BINARY_DIR}/generated/version.rc" @ONLY)
 set(DPOP0418_VERSION_RESOURCE "${CMAKE_BINARY_DIR}/generated/version.rc")
 
 enable_testing()
 
 function(dpop0418_target target)
-    target_include_directories(${target} PRIVATE core)
+    target_include_directories(${target} PRIVATE core "${CMAKE_BINARY_DIR}/generated")
     target_compile_definitions(${target} PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
@@ -87,7 +89,7 @@ target_link_libraries(DPopCleaner PRIVATE
 )
 dpop0418_target(DPopCleaner)
 
-# Both DPopCleaner DPopUpdater receive the generated version resource above.
+# Both DPopCleaner and DPopUpdater receive the same icon + version resource.
 set_target_properties(DPopCleaner DPopUpdater PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
     string(TOUPPER "${cfg}" cfg_upper)

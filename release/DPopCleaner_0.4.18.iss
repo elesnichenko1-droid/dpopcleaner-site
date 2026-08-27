@@ -11,16 +11,17 @@
 AppId={{B892E3D2-00CC-4D16-BB22-8B3943D42D15}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion} rev.2
 AppPublisher=DPopCleaner Project
 AppPublisherURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
 AppSupportURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
 AppUpdatesURL=https://elesnichenko1-droid.github.io/dpopcleaner-site/
-VersionInfoVersion=0.4.18.1
-VersionInfoProductVersion=0.4.18.1
+VersionInfoVersion=0.4.18.2
+VersionInfoProductVersion=0.4.18.2
 VersionInfoCompany=DPopCleaner Project
-VersionInfoDescription=DPopCleaner 0.4.18 Setup Revision 1
+VersionInfoDescription=DPopCleaner 0.4.18 Setup Revision 2
 VersionInfoProductName=DPopCleaner
+SetupIconFile=..\dpopcleaner.ico
 DefaultDirName={autopf}\DPopCleaner
 DefaultGroupName=DPopCleaner
 DisableProgramGroupPage=yes
@@ -38,7 +39,7 @@ RestartApplications=no
 AllowNoIcons=yes
 MinVersion=10.0
 UninstallDisplayIcon={app}\DPopCleaner.exe
-UninstallDisplayName=DPopCleaner 0.4.18
+UninstallDisplayName=DPopCleaner 0.4.18 rev.2
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -73,11 +74,11 @@ Source: "{#StageRoot}\Resources\*"; DestDir: "{app}\Resources"; Flags: ignorever
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Flags: unchecked
 
 [Icons]
-Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"; IconFilename: "{app}\DPopCleaner.exe"; IconIndex: 0
 Name: "{autoprograms}\DPopCleaner\Анализатор диска"; Filename: "{app}\Modules\DiskAnalyzer.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Центр восстановления"; Filename: "{app}\Modules\RestoreCenter.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Zapret — фикс демонстрации экрана"; Filename: "{app}\Modules\ZapretScreenFix.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"; IconFilename: "{app}\DPopCleaner.exe"; IconIndex: 0; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\DPopCleaner.exe"; Description: "Запустить DPopCleaner"; Flags: nowait postinstall skipifsilent

@@ -24,8 +24,6 @@ def main() -> None:
     require("SaveSettingsAtomic" in text and "LoadSettings" in text,
             "Settings page must use the isolated settings store")
 
-    # Zapret is a first-class page in 0.4.18. The legacy Screen Fix remains available
-    # separately, but starting/stopping/installing the bundled Flowseal payload happens here.
     for token in (
         '#include "ZapretController.h"',
         "Page::Zapret",
@@ -63,8 +61,8 @@ def main() -> None:
     require("gShuttingDown.load" in text, "Worker/result path must guard against shutdown")
     require("DPOP0418_TEST_SLOW_UPDATE_MS" in client,
             "Close smoke must use deterministic slow-update test hook")
-    require("0.4.18" in version and "kVersionCode = 418" in version and "kRevision = 1" in version,
-            "Native core identity must be 0.4.18 / 418 / revision 1")
+    require("0.4.18" in version and "kVersionCode = 418" in version and "kRevision = 2" in version,
+            "Native core identity must be 0.4.18 / 418 / revision 2")
 
 
 if __name__ == "__main__":

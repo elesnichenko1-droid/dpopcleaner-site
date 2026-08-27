@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.gitattributes'
+      - 'dpopcleaner.ico'
       - '.github/workflows/publish-dpopcleaner-0.4.18.yml'
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
       - 'release/DPopCleaner_0.4.18.iss'
@@ -17,7 +18,6 @@ on:
       - 'tests/release-manifest.test.cjs'
       - 'v0418/**'
       - 'v0417/**'
-      - 'assets/dpopcleaner-0.4.17-*'
       - 'dpopcleaner-icon.png'
       - 'index.html'
       - 'styles.css'
@@ -29,6 +29,7 @@ on:
     branches: [main]
     paths:
       - '.gitattributes'
+      - 'dpopcleaner.ico'
       - '.github/workflows/publish-dpopcleaner-0.4.18.yml'
       - '.github/workflows/DPopCleaner_0.4.18_FOUNDATION.yml'
       - 'release/DPopCleaner_0.4.18.iss'
@@ -40,7 +41,6 @@ on:
       - 'tests/release-manifest.test.cjs'
       - 'v0418/**'
       - 'v0417/**'
-      - 'assets/dpopcleaner-0.4.17-*'
       - 'dpopcleaner-icon.png'
       - 'index.html'
       - 'styles.css'
@@ -123,6 +123,10 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build0418 -C Release --output-on-failure
 
+      - name: Verify compiled application icons
+        shell: pwsh
+        run: ./tools/dpop0418_icon_smoke.ps1 -MainExe 'build0418/bin/Release/DPopCleaner.exe' -UpdaterExe 'build0418/bin/Release/DPopUpdater.exe'
+
       - name: Verify 0.4.18 UI contract
         shell: pwsh
         run: python tests/test_dpop0418_ui_contract.py
@@ -161,6 +165,10 @@ jobs:
         shell: pwsh
         run: ./tools/dpop0418_close_smoke.ps1 -Exe '_release/0.4.18/stage/DPopCleaner.exe'
 
+      - name: Capture current 0.4.18 UI screenshots
+        shell: pwsh
+        run: ./tools/dpop0418_capture_screenshots.ps1 -Exe '_release/0.4.18/stage/DPopCleaner.exe' -OutputDir '_release/0.4.18/site-assets'
+
       - name: Run staged Disk Analyzer smoke
         shell: pwsh
         run: ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.18/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.18/evidence/disk'
@@ -182,6 +190,10 @@ jobs:
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Expected 0.4.18 installer was not produced.' }
           "DPOP0418_INSTALLER=$((Resolve-Path $installer).Path)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Verify staged and installer icon resources
+        shell: pwsh
+        run: ./tools/dpop0418_icon_smoke.ps1 -MainExe '_release/0.4.18/stage/DPopCleaner.exe' -UpdaterExe '_release/0.4.18/stage/DPopUpdater.exe' -Installer $env:DPOP0418_INSTALLER
+
       - name: Run installed and reinstall 0.4.18 package smoke
         shell: pwsh
         run: ./tools/dpop0418_install_smoke.ps1 -InstallerPath $env:DPOP0418_INSTALLER -OutputDir '_release/0.4.18/evidence/install'
@@ -192,18 +204,21 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $publish = Join-Path $env:RUNNER_TEMP 'dpop0418-publish'
           Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $publish, (Join-Path $publish 'update') -Force | Out-Null
+          New-Item -ItemType Directory -Path $publish, (Join-Path $publish 'update'), (Join-Path $publish 'assets') -Force | Out-Null
           Copy-Item $env:DPOP0418_INSTALLER (Join-Path $publish $env:RELEASE_ASSET) -Force
           Copy-Item 'release/RELEASE_NOTES_0.4.18.md' (Join-Path $publish 'RELEASE_NOTES_0.4.18.md') -Force
+          foreach ($name in @('dpopcleaner-0.4.18-overview.png','dpopcleaner-0.4.18-zapret.png','dpopcleaner-0.4.18-settings.png')) {
+            Copy-Item (Join-Path '_release/0.4.18/site-assets' $name) (Join-Path $publish 'assets' $name) -Force
+          }
           $item = Get-Item $env:DPOP0418_INSTALLER
           $sha256 = (Get-FileHash -LiteralPath $env:DPOP0418_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
           $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
           [ordered]@{
-            product = 'DPopCleaner'; channel = 'stable'; version = '0.4.18'; version_code = 418; revision = 1; mandatory = $false
+            product = 'DPopCleaner'; channel = 'stable'; version = '0.4.18'; version_code = 418; revision = 2; mandatory = $false
             download_url = $url; sha256 = $sha256; size = [int64]$item.Length; signed = $false; available = $true
             notes_url = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args = '/SILENT /NORESTART'
           } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
-          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.18'; version_code=418; revision=1; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA; bundled_zapret='1.10.2'; bundled_zapret_sha256=$env:ZAPRET_SHA256 } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
+          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.18'; version_code=418; revision=2; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA; bundled_zapret='1.10.2'; bundled_zapret_sha256=$env:ZAPRET_SHA256 } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0418_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload verified 0.4.18 release candidate
@@ -240,9 +255,9 @@ jobs:
           asset="publish/${RELEASE_ASSET}"
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release upload "${RELEASE_TAG}" "$asset" --clobber
-            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.18" --notes-file release/RELEASE_NOTES_0.4.18.md
+            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.18 rev.2" --notes-file release/RELEASE_NOTES_0.4.18.md
           else
-            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.18" --notes-file release/RELEASE_NOTES_0.4.18.md
+            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.18 rev.2" --notes-file release/RELEASE_NOTES_0.4.18.md
           fi
 
       - name: Stage GitHub Pages
@@ -251,7 +266,9 @@ jobs:
           rm -rf _site
           mkdir -p _site/assets _site/update
           cp index.html styles.css script.js release-manifest.js version.json dpopcleaner-icon.png _site/
-          cp assets/dpopcleaner-0.4.17-disk.png assets/dpopcleaner-0.4.17-restore.png _site/assets/
+          cp publish/assets/dpopcleaner-0.4.18-overview.png _site/assets/
+          cp publish/assets/dpopcleaner-0.4.18-zapret.png _site/assets/
+          cp publish/assets/dpopcleaner-0.4.18-settings.png _site/assets/
           cp publish/update/stable.json _site/update/stable.json
 
       - name: Upload Pages artifact
@@ -263,21 +280,27 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live manifest and installer SHA256
+      - name: Verify live manifest, screenshots and installer SHA256
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $manifestUrl = 'https://elesnichenko1-droid.github.io/dpopcleaner-site/update/stable.json'
+          $base = 'https://elesnichenko1-droid.github.io/dpopcleaner-site'
+          $manifestUrl = "$base/update/stable.json"
           $expected = Get-Content -Raw 'publish/update/stable.json' | ConvertFrom-Json
           $live = $null
           for ($i = 0; $i -lt 18; $i++) {
             try {
-              $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }
-              if ($live.version -eq '0.4.18' -and $live.channel -eq 'stable' -and $live.version_code -eq 418 -and $live.revision -eq 1 -and $live.available -eq $true -and $live.sha256 -eq $expected.sha256) { break }
+              $live = Invoke-RestMethod -Uri ($manifestUrl + '?t=' + $env:GITHUB_RUN_ID + '-' + $i) -Headers @{ 'Cache-Control'='no-cache' }
+              if ($live.version -eq '0.4.18' -and $live.channel -eq 'stable' -and $live.version_code -eq 418 -and $live.revision -eq 2 -and $live.available -eq $true -and $live.sha256 -eq $expected.sha256) { break }
             } catch {}
             Start-Sleep -Seconds 10
           }
-          if (-not $live -or $live.version -ne '0.4.18' -or $live.channel -ne 'stable' -or $live.version_code -ne 418 -or $live.revision -ne 1 -or $live.available -ne $true -or $live.sha256 -ne $expected.sha256 -or [int64]$live.size -ne [int64]$expected.size) { throw 'Live stable manifest mismatch.' }
+          if (-not $live -or $live.version -ne '0.4.18' -or $live.channel -ne 'stable' -or $live.version_code -ne 418 -or $live.revision -ne 2 -or $live.available -ne $true -or $live.sha256 -ne $expected.sha256 -or [int64]$live.size -ne [int64]$expected.size) { throw 'Live stable manifest mismatch.' }
+          foreach ($name in @('dpopcleaner-0.4.18-overview.png','dpopcleaner-0.4.18-zapret.png','dpopcleaner-0.4.18-settings.png')) {
+            $target = Join-Path $env:RUNNER_TEMP $name
+            Invoke-WebRequest -Uri "$base/assets/$name?t=$env:GITHUB_RUN_ID" -OutFile $target
+            if ((Get-Item -LiteralPath $target).Length -lt 15000) { throw "Live current screenshot is missing or too small: $name" }
+          }
           $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.18.exe'
           Invoke-WebRequest -Uri $live.download_url -OutFile $download
           $sha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
