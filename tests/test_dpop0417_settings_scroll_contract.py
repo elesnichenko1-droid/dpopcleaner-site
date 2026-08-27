@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +19,18 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
         self.assertIn("лицензия", text)
         self.assertIn("включить автообновление", text)
         self.assertIn("проверить обновления", text)
+
+    def test_virtual_content_extent_is_at_least_autoscroll_minimum(self):
+        text = (ROOT / "v0417" / "src" / "SimpleUpdate" / "AdditionalSettingsHost.cs").read_text(encoding="utf-8")
+        minimum = re.search(r"AutoScrollMinSize\s*=\s*(\d+)", text)
+        content = re.search(r"ContentHeight\s*=\s*(\d+)", text)
+        self.assertIsNotNone(minimum, "AutoScrollMinSize constant is required")
+        self.assertIsNotNone(content, "ContentHeight constant is required")
+        self.assertGreaterEqual(
+            int(content.group(1)),
+            int(minimum.group(1)),
+            "ContentHeight must cover AutoScrollMinSize so host construction cannot fail after creating controls",
+        )
 
     def test_launcher_uses_scroll_host_and_hides_legacy_version_badge(self):
         launcher = (ROOT / "v0417" / "src" / "SimpleUpdate" / "LauncherContext.cs").read_text(encoding="utf-8").lower()
