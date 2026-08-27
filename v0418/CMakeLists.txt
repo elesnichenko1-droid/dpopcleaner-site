@@ -12,6 +12,10 @@ if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+configure_file(resources/version.rc.in "${CMAKE_BINARY_DIR}/generated/version.rc" @ONLY)
+set(DPOP0418_VERSION_RESOURCE "${CMAKE_BINARY_DIR}/generated/version.rc")
+
 enable_testing()
 
 function(dpop0418_target target)
@@ -56,6 +60,7 @@ add_executable(DPopUpdater WIN32
     updater/UpdaterMain.cpp
     core/Hash.cpp
     core/Signature.cpp
+    "${DPOP0418_VERSION_RESOURCE}"
 )
 target_link_libraries(DPopUpdater PRIVATE user32 shell32 bcrypt wintrust crypt32)
 dpop0418_target(DPopUpdater)
@@ -69,6 +74,7 @@ add_executable(DPopCleaner WIN32
     core/UpdatePolicy.cpp
     core/Hash.cpp
     core/Signature.cpp
+    "${DPOP0418_VERSION_RESOURCE}"
 )
 target_link_libraries(DPopCleaner PRIVATE
     user32 gdi32 shell32 comctl32 dwmapi advapi32
@@ -76,6 +82,7 @@ target_link_libraries(DPopCleaner PRIVATE
 )
 dpop0418_target(DPopCleaner)
 
+# Both DPopCleaner DPopUpdater receive the generated version resource above.
 set_target_properties(DPopCleaner DPopUpdater PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
     string(TOUPPER "${cfg}" cfg_upper)
