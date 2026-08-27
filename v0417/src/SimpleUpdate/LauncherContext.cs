@@ -13,7 +13,7 @@ namespace DPopCleaner.SimpleUpdate
         private readonly Process _core;
         private readonly SettingsStore _settings;
         private readonly LauncherOptions _options;
-        private readonly Timer _timer;
+        private readonly System.Windows.Forms.Timer _timer;
         private readonly CancellationTokenSource _updateCancellation;
         private readonly HttpClient _http;
         private readonly UpdateClient _updateClient;
@@ -46,7 +46,7 @@ namespace DPopCleaner.SimpleUpdate
             });
             if (_core == null) throw new InvalidOperationException("Failed to start DPopCleaner.exe.");
 
-            _timer = new Timer { Interval = 100 };
+            _timer = new System.Windows.Forms.Timer { Interval = 100 };
             _timer.Tick += OnTick;
             _timer.Start();
         }
