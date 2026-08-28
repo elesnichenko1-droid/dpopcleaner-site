@@ -4,17 +4,17 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCREENSHOT_SHA256 = '9a98fc34d1442106f4d11037a5c4737c56c4f7d7e9407984d870655f56c5e078'
-SCREENSHOT_SIZE = 16830
-SCREENSHOT_PATH = 'assets/dpopcleaner-current-settings.webp'
+SCREENSHOT_SHA256 = 'ad8dd8dfd5d07312d9ff588f2afcae6d655e1a84cb64e17cb1666dc22dd7a572'
+SCREENSHOT_SIZE = 74050
+SCREENSHOT_PATH = 'assets/dpopcleaner-current-settings.png'
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
     def test_exact_user_screenshot_is_bundled_for_every_pages_deploy(self):
-        current_webp = ROOT / SCREENSHOT_PATH
-        self.assertTrue(current_webp.is_file(), 'the exact current-program screenshot is required')
-        self.assertEqual(current_webp.stat().st_size, SCREENSHOT_SIZE)
-        self.assertEqual(hashlib.sha256(current_webp.read_bytes()).hexdigest(), SCREENSHOT_SHA256)
+        current_png = ROOT / SCREENSHOT_PATH
+        self.assertTrue(current_png.is_file(), 'the exact current-program screenshot is required')
+        self.assertEqual(current_png.stat().st_size, SCREENSHOT_SIZE)
+        self.assertEqual(hashlib.sha256(current_png.read_bytes()).hexdigest(), SCREENSHOT_SHA256)
 
         publisher_text = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
         static_text = (ROOT / '.github/workflows/static.yml').read_text(encoding='utf-8').lower()
