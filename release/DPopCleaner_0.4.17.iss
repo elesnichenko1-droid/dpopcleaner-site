@@ -45,10 +45,7 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Dirs]
-Name: "{app}\bin"
-Name: "{app}\lists"
-Name: "{app}\utils"
-Name: "{app}\.service"
+Name: "{app}\Zapret"
 Name: "{app}\Languages"
 Name: "{app}\Shell"
 Name: "{app}\Documentation"; Permissions: users-modify
@@ -58,13 +55,8 @@ Name: "{app}\Resources"
 [Files]
 Source: "{#StageRoot}\DPopCleaner.exe"; DestDir: "{app}"; DestName: "DPopCleaner.exe"; Flags: ignoreversion restartreplace
 Source: "{#StageRoot}\SimpleUpdate.exe"; DestDir: "{app}"; DestName: "SimpleUpdate.exe"; Flags: ignoreversion restartreplace
-; The frozen 0.2.14 core resolves Flowseal Zapret beside DPopCleaner.exe.
-Source: "{#StageRoot}\LICENSE.txt"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
-Source: "{#StageRoot}\*.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#StageRoot}\.service\*"; DestDir: "{app}\.service"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#StageRoot}\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#StageRoot}\lists\*"; DestDir: "{app}\lists"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#StageRoot}\utils\*"; DestDir: "{app}\utils"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The frozen 0.2.14 core resolves its Zapret root as {app}\Zapret.
+Source: "{#StageRoot}\Zapret\*"; DestDir: "{app}\Zapret"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Modules\*"; DestDir: "{app}\Modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Languages\*"; DestDir: "{app}\Languages"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Shell\*"; DestDir: "{app}\Shell"; Flags: ignoreversion recursesubdirs createallsubdirs
