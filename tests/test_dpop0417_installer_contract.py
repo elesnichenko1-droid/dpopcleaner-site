@@ -52,6 +52,8 @@ class DPop0417InstallerContractTests(unittest.TestCase):
         self.assertIn('s-1-5-32-545', smoke_text)
         self.assertIn('unins000.exe', smoke_text)
         self.assertNotIn('invoke-expression', smoke_text)
+        self.assertIn('${zapretversion}: pass', smoke_text)
+        self.assertNotIn('$zapretversion: pass', smoke_text)
 
         ui_text = zapret_smoke.read_text(encoding="utf-8").lower()
         self.assertIn("$zapretroot = join-path $rootpath 'zapret'", ui_text)
