@@ -18,6 +18,7 @@ if (Test-Path -LiteralPath $destinationPath) {
     Remove-Item -LiteralPath $destinationPath -Recurse -Force
 }
 New-Item -ItemType Directory -Path (Join-Path $destinationPath 'update') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $destinationPath 'assets') -Force | Out-Null
 
 $requiredFiles = @(
     '.nojekyll',
@@ -27,7 +28,10 @@ $requiredFiles = @(
     'script.js',
     'styles.css',
     'version.json',
-    'update/beta.json'
+    'update/beta.json',
+    'assets/dpopcleaner-current-settings.png',
+    'assets/dpopcleaner-0.4.17-disk.png',
+    'assets/dpopcleaner-0.4.17-restore.png'
 )
 
 foreach ($relativePath in $requiredFiles) {

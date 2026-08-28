@@ -27,6 +27,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Materialize exact current settings screenshot
+        shell: pwsh
+        run: ./tools/dpop0417_materialize_current_screenshot.ps1
+
       - name: Verify 0.4.17 foundation contracts
         shell: pwsh
         run: |

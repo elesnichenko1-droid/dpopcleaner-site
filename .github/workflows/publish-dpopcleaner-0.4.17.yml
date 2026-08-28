@@ -12,6 +12,7 @@ on:
       - 'tools/dpop0417_*'
       - 'tests/test_dpop0417_*'
       - 'v0417/**'
+      - 'assets/current-settings-source/**'
       - 'assets/dpopcleaner-0.4.17-*'
       - 'assets/dpopcleaner-current-settings.png'
       - 'index.html'
@@ -30,6 +31,7 @@ on:
       - 'tools/dpop0417_*'
       - 'tests/test_dpop0417_*'
       - 'v0417/**'
+      - 'assets/current-settings-source/**'
       - 'assets/dpopcleaner-0.4.17-*'
       - 'assets/dpopcleaner-current-settings.png'
       - 'index.html'
@@ -66,6 +68,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Materialize exact current settings screenshot
+        shell: pwsh
+        run: ./tools/dpop0417_materialize_current_screenshot.ps1
 
       - name: Pin critical publication contract
         shell: pwsh
@@ -198,6 +204,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
+      - name: Materialize exact current settings screenshot
+        shell: pwsh
+        run: ./tools/dpop0417_materialize_current_screenshot.ps1
       - name: Download verified release candidate
         uses: actions/download-artifact@v5
         with:
