@@ -10,10 +10,12 @@ class DPop0417InstallerContractTests(unittest.TestCase):
         iss = ROOT / "release" / "DPopCleaner_0.4.17.iss"
         smoke = ROOT / "tools" / "dpop0417_install_smoke.ps1"
         zapret_smoke = ROOT / "tools" / "dpop0417_zapret_ui_smoke.ps1"
+        settings_smoke = ROOT / "tools" / "dpop0417_installed_settings_smoke.ps1"
         program = ROOT / "v0417" / "src" / "SimpleUpdate" / "Program.cs"
         self.assertTrue(iss.is_file())
         self.assertTrue(smoke.is_file())
         self.assertTrue(zapret_smoke.is_file())
+        self.assertTrue(settings_smoke.is_file())
         self.assertTrue(program.is_file())
 
         lowered = iss.read_text(encoding="utf-8").lower()
@@ -50,6 +52,8 @@ class DPop0417InstallerContractTests(unittest.TestCase):
         self.assertIn("assert-file 'dpopcleaner.exe'", smoke_text)
         self.assertIn("assert-file 'dpopcleaner.core.exe'", smoke_text)
         self.assertIn("assert-file 'simpleupdate.exe'", smoke_text)
+        self.assertIn('dpop0417_installed_settings_smoke.ps1', smoke_text)
+        self.assertIn('installed_settings_bridge_smoke', smoke_text)
         self.assertIn("assert-file 'zapret/service.bat'", normalized)
         self.assertIn("assert-file 'zapret/general.bat'", normalized)
         self.assertIn("assert-file 'zapret/bin/winws.exe'", normalized)
@@ -59,7 +63,12 @@ class DPop0417InstallerContractTests(unittest.TestCase):
         self.assertIn('zapret_runtime_present', smoke_text)
         self.assertIn('dpop0417_zapret_ui_smoke.ps1', smoke_text)
         self.assertIn('zapret_authentic_ui_smoke', smoke_text)
-        self.assertIn('--no-update-check', smoke_text)
+        self.assertIn('--no-update-check', settings_smoke.read_text(encoding='utf-8').lower())
+        self.assertIn('1492', settings_smoke.read_text(encoding='utf-8'))
+        self.assertIn('1490', settings_smoke.read_text(encoding='utf-8'))
+        self.assertIn('1491', settings_smoke.read_text(encoding='utf-8'))
+        self.assertIn('v0.2.11 beta', settings_smoke.read_text(encoding='utf-8').lower())
+        self.assertIn('wm_mousewheel', settings_smoke.read_text(encoding='utf-8').lower())
         self.assertIn('modules/diskanalyzer.exe', normalized)
         self.assertIn('modules/restorecenter.exe', normalized)
         self.assertIn('modules/zapretscreenfix.exe', normalized)
