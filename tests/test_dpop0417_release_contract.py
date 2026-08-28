@@ -1,37 +1,31 @@
 from pathlib import Path
-import base64
 import hashlib
 import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCREENSHOT_SHA256 = 'ad8dd8dfd5d07312d9ff588f2afcae6d655e1a84cb64e17cb1666dc22dd7a572'
-SCREENSHOT_SIZE = 74050
+SCREENSHOT_SHA256 = '9a98fc34d1442106f4d11037a5c4737c56c4f7d7e9407984d870655f56c5e078'
+SCREENSHOT_SIZE = 16830
+SCREENSHOT_PATH = 'assets/dpopcleaner-current-settings.webp'
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
-    def test_exact_user_screenshot_can_be_reconstructed_before_every_pages_deploy(self):
-        source_dir = ROOT / 'assets/current-settings-source'
-        parts = sorted(source_dir.glob('part*.b64'))
-        self.assertEqual([part.name for part in parts], [f'part{i:02d}.b64' for i in range(13)])
-        encoded = ''.join(part.read_text(encoding='ascii').strip() for part in parts)
-        payload = base64.b64decode(encoded, validate=True)
-        self.assertEqual(len(payload), SCREENSHOT_SIZE)
-        self.assertEqual(hashlib.sha256(payload).hexdigest(), SCREENSHOT_SHA256)
-
-        materializer = ROOT / 'tools/dpop0417_materialize_current_screenshot.ps1'
-        self.assertTrue(materializer.is_file(), 'exact screenshot materializer is required')
-        materializer_text = materializer.read_text(encoding='utf-8').lower()
-        self.assertIn('current-settings-source', materializer_text)
-        self.assertIn('dpopcleaner-current-settings.png', materializer_text)
-        self.assertIn(SCREENSHOT_SHA256, materializer_text)
-        self.assertIn(str(SCREENSHOT_SIZE), materializer_text)
+    def test_exact_user_screenshot_is_bundled_for_every_pages_deploy(self):
+        current_webp = ROOT / SCREENSHOT_PATH
+        self.assertTrue(current_webp.is_file(), 'the exact current-program screenshot is required')
+        self.assertEqual(current_webp.stat().st_size, SCREENSHOT_SIZE)
+        self.assertEqual(hashlib.sha256(current_webp.read_bytes()).hexdigest(), SCREENSHOT_SHA256)
 
         publisher_text = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
         static_text = (ROOT / '.github/workflows/static.yml').read_text(encoding='utf-8').lower()
-        materialize_token = 'dpop0417_materialize_current_screenshot.ps1'
-        self.assertIn(materialize_token, publisher_text)
-        self.assertIn(materialize_token, static_text)
+        stage_site_text = (ROOT / 'scripts/Stage-Site.ps1').read_text(encoding='utf-8').lower()
+
+        self.assertIn(SCREENSHOT_PATH, publisher_text)
+        self.assertIn(SCREENSHOT_SHA256, publisher_text)
+        self.assertIn('stage-site.ps1', static_text)
+        self.assertIn(SCREENSHOT_PATH, stage_site_text)
+        self.assertIn('assets/dpopcleaner-0.4.17-disk.png', stage_site_text)
+        self.assertIn('assets/dpopcleaner-0.4.17-restore.png', stage_site_text)
 
     def test_site_manifest_and_publisher_are_one_stable_0417_rev5_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
@@ -51,14 +45,14 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         self.assertIn('0.4.17 rev.5', index)
         self.assertIn('flowseal zapret 1.10.2', index)
-        self.assertIn('assets/dpopcleaner-current-settings.png', index)
+        self.assertIn(SCREENSHOT_PATH, index)
         notes_text = notes.read_text(encoding='utf-8').lower()
         self.assertIn('revision 5', notes_text)
         self.assertIn('flowseal zapret 1.10.2', notes_text)
         self.assertIn('service.bat', notes_text)
         self.assertIn('bin\\winws.exe', notes_text)
         workflow = publisher.read_text(encoding='utf-8').lower()
-        for token in ('release_tag: v0.4.17-rev5','dpop0417_prepare_zapret.ps1','dpop0417_zapret_ui_smoke.ps1','assets/dpopcleaner-current-settings.png','revision=5','actions/deploy-pages','sha256'):
+        for token in ('release_tag: v0.4.17-rev5','dpop0417_prepare_zapret.ps1','dpop0417_zapret_ui_smoke.ps1',SCREENSHOT_PATH,'revision=5','actions/deploy-pages','sha256'):
             self.assertIn(token, workflow)
         self.assertIn('$live.revision -ne 5', workflow)
         self.assertIn('v0\\.4\\.17-rev5', workflow)
