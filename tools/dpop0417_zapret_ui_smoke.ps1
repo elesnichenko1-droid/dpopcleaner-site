@@ -17,14 +17,15 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $launcher = Join-Path $RootPath 'SimpleUpdate.exe'
 $core = Join-Path $RootPath 'DPopCleaner.exe'
-$service = Join-Path $RootPath 'service.bat'
-$winws = Join-Path $RootPath 'bin\winws.exe'
-$windivert = Join-Path $RootPath 'bin\WinDivert64.sys'
+$zapretRoot = Join-Path $RootPath 'Zapret'
+$service = Join-Path $zapretRoot 'service.bat'
+$winws = Join-Path $zapretRoot 'bin\winws.exe'
+$windivert = Join-Path $zapretRoot 'bin\WinDivert64.sys'
 foreach ($required in @($launcher, $core, $service, $winws, $windivert)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Zapret UI smoke prerequisite missing: $required" }
 }
-$strategyFiles = @(Get-ChildItem -LiteralPath $RootPath -Filter 'general*.bat' -File | Sort-Object Name)
-if ($strategyFiles.Count -eq 0) { throw 'Zapret UI smoke found no general*.bat strategies beside DPopCleaner.exe.' }
+$strategyFiles = @(Get-ChildItem -LiteralPath $zapretRoot -Filter 'general*.bat' -File | Sort-Object Name)
+if ($strategyFiles.Count -eq 0) { throw 'Zapret UI smoke found no general*.bat strategies under the legacy Zapret directory.' }
 
 $native = @'
 using System;
@@ -127,6 +128,9 @@ try {
     # then appends the literal general*.bat before FindFirstFileW.
     $legacyZapretRoot = [ZapretSmokeNative]::ReadUtf16($coreProcess.Id, [IntPtr]::Add($moduleBase, 0x64fe0), 1200)
     Write-Host "FROZEN_ZAPRET_ROOT_BUFFER=$legacyZapretRoot"
+    if ([IO.Path]::GetFullPath($legacyZapretRoot).TrimEnd('\') -ne [IO.Path]::GetFullPath($zapretRoot).TrimEnd('\')) {
+        throw "Frozen core Zapret root differs from packaged legacy directory. core=$legacyZapretRoot packaged=$zapretRoot"
+    }
 
     $children = [ZapretSmokeNative]::Children($coreProcess.MainWindowHandle)
     $zapretButton = $children | Where-Object { $_.ClassName -eq 'Button' -and $_.Text -eq 'Zapret' } | Select-Object -First 1
@@ -166,8 +170,9 @@ try {
 
     [pscustomobject]@{
         root = $RootPath
+        zapret_root = $zapretRoot
         frozen_strategy_root = $legacyZapretRoot
-        bundled_version = (Get-Content -Raw -LiteralPath (Join-Path $RootPath '.service\version.txt')).Trim()
+        bundled_version = (Get-Content -Raw -LiteralPath (Join-Path $zapretRoot '.service\version.txt')).Trim()
         strategy_files = $strategyFiles.Count
         strategy_combo_count = $strategyCount
         strategy_entries = $strategyEntries
@@ -178,7 +183,7 @@ try {
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'zapret-ui-smoke-report.json') -Encoding utf8
 
     $selectedLabel = if ([string]::IsNullOrWhiteSpace($selectedStrategy)) { '<none>' } else { $selectedStrategy }
-    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK verified=$verifiedStrategy selected=$selectedLabel combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
+    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK root=$zapretRoot verified=$verifiedStrategy selected=$selectedLabel combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
