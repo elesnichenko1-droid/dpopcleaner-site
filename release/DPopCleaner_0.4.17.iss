@@ -37,7 +37,7 @@ CloseApplications=yes
 RestartApplications=no
 AllowNoIcons=yes
 MinVersion=10.0
-UninstallDisplayIcon={app}\SimpleUpdate.exe
+UninstallDisplayIcon={app}\DPopCleaner.exe
 UninstallDisplayName=DPopCleaner 0.4.17
 
 [Languages]
@@ -53,7 +53,9 @@ Name: "{app}\Modules"
 Name: "{app}\Resources"
 
 [Files]
-Source: "{#StageRoot}\DPopCleaner.exe"; DestDir: "{app}"; DestName: "DPopCleaner.exe"; Flags: ignoreversion restartreplace
+; Keep the frozen 0.2.14 bytes intact, but reserve the historical DPopCleaner.exe path for the UI bridge.
+Source: "{#StageRoot}\DPopCleaner.exe"; DestDir: "{app}"; DestName: "DPopCleaner.Core.exe"; Flags: ignoreversion restartreplace
+Source: "{#StageRoot}\SimpleUpdate.exe"; DestDir: "{app}"; DestName: "DPopCleaner.exe"; Flags: ignoreversion restartreplace
 Source: "{#StageRoot}\SimpleUpdate.exe"; DestDir: "{app}"; DestName: "SimpleUpdate.exe"; Flags: ignoreversion restartreplace
 ; The frozen 0.2.14 core resolves its Zapret root as {app}\Zapret.
 Source: "{#StageRoot}\Zapret\*"; DestDir: "{app}\Zapret"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -67,11 +69,11 @@ Source: "{#StageRoot}\Resources\*"; DestDir: "{app}\Resources"; Flags: ignorever
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Flags: unchecked
 
 [Icons]
-Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\SimpleUpdate.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Анализатор диска"; Filename: "{app}\Modules\DiskAnalyzer.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Центр восстановления"; Filename: "{app}\Modules\RestoreCenter.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\DPopCleaner\Исправление демонстрации экрана Zapret"; Filename: "{app}\Modules\ZapretScreenFix.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\SimpleUpdate.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autodesktop}\DPopCleaner"; Filename: "{app}\DPopCleaner.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\SimpleUpdate.exe"; Description: "Запустить DPopCleaner"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\DPopCleaner.exe"; Description: "Запустить DPopCleaner"; Flags: nowait postinstall skipifsilent
