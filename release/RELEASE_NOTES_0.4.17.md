@@ -5,12 +5,12 @@ DPopCleaner 0.4.17 rev.5 исправляет регрессию revision 4, и�
 ## Revision 5
 
 - В установщик включён полный pinned **Flowseal Zapret 1.10.2**.
-- Старый интерфейс DPopCleaner получает Zapret в ожидаемом layout прямо рядом с `DPopCleaner.exe`.
-- В корне установки присутствуют `service.bat`, `general.bat` и остальные `general*.bat` стратегии.
-- В `bin` присутствуют `bin\winws.exe`, `WinDivert.dll` и `WinDivert64.sys`.
-- Также устанавливаются `.service`, `lists` и `utils` из проверенного Flowseal runtime.
+- Рядом с `DPopCleaner.exe` устанавливается каталог `Zapret\`, который ожидает старый интерфейс DPopCleaner.
+- Стратегии и управление службой находятся в `Zapret\service.bat`, `Zapret\general.bat` и остальных `Zapret\general*.bat`.
+- Runtime находится в `Zapret\bin\winws.exe`; рядом с ним устанавливаются `WinDivert.dll` и `WinDivert64.sys`.
+- Внутри `Zapret\` также устанавливаются `.service`, `lists` и `utils` из проверенного Flowseal runtime.
 - Архив Flowseal принимается только после проверки pinned URL, размера и SHA-256.
-- Windows CI открывает настоящий старый **Zapret Center** и проверяет, что стратегии реально обнаружены; релиз без `winws.exe` или `general*.bat` больше не проходит.
+- Windows CI открывает настоящий старый **Zapret Center** и проверяет, что стратегии реально обнаружены; релиз без `Zapret\bin\winws.exe` или `Zapret\general*.bat` больше не проходит.
 
 ## Сохранено из revision 4
 
@@ -31,6 +31,6 @@ Windows CI проверяет immutable core размером 389 632 байта
 
 ## Установка
 
-Запустите `DPopCleaner_Setup_0.4.17.exe`. После установки рядом с неизменным `DPopCleaner.exe` находятся `SimpleUpdate.exe` и полный Flowseal Zapret runtime, включая `service.bat`, стратегии и `bin\winws.exe`.
+Запустите `DPopCleaner_Setup_0.4.17.exe`. После установки рядом с неизменным `DPopCleaner.exe` находятся `SimpleUpdate.exe` и каталог `Zapret\` с полным Flowseal runtime: `Zapret\service.bat`, стратегии `Zapret\general*.bat`, `Zapret\bin\winws.exe`, WinDivert, `.service`, `lists` и `utils`.
 
 Перед системными изменениями рекомендуется иметь актуальную точку восстановления Windows или резервную копию важных данных.
