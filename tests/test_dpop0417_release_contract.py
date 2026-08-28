@@ -40,39 +40,45 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('assets/dpopcleaner-0.4.17-disk.png', stage_site_text)
         self.assertIn('assets/dpopcleaner-0.4.17-restore.png', stage_site_text)
 
-    def test_site_manifest_and_publisher_are_one_stable_0417_rev5_release(self):
+    def test_site_manifest_and_publisher_are_one_stable_0417_rev6_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         notes = ROOT / 'release/RELEASE_NOTES_0.4.17.md'
         stable_manifest = ROOT / 'update/stable.json'
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
-        self.assertEqual(version['revision'], 5)
+        self.assertEqual(version['revision'], 6)
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
-        self.assertEqual(stable['revision'], 5)
+        self.assertEqual(stable['revision'], 6)
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
-        self.assertIn("number(m.revision) === 5", manifest)
-        self.assertIn('v0\\.4\\.17-rev5', manifest)
+        self.assertIn("number(m.revision) === 6", manifest)
+        self.assertIn('v0\\.4\\.17-rev6', manifest)
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
-        self.assertIn('currentrevision = 5', program)
-        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev5', launcher)
+        self.assertIn('currentrevision = 6', program)
+        self.assertIn('dpopcleaner.core.exe', program)
+        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev6', launcher)
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
-        self.assertIn('0.4.17 rev.5', index)
+        self.assertIn('0.4.17 rev.6', index)
         self.assertIn('flowseal zapret 1.10.2', index)
         self.assertIn(SCREENSHOT_PATH, index)
         self.assertIn('zapret\\service.bat', index)
-        self.assertIn('zapret\\bin\\winws.exe', index)
+        self.assertIn('dpopcleaner.core.exe', index)
+        self.assertIn('v0.2.11 beta', index)
+        self.assertIn('автообнов', index)
         notes_text = notes.read_text(encoding='utf-8').lower()
-        self.assertIn('revision 5', notes_text)
+        self.assertIn('revision 6', notes_text)
         self.assertIn('flowseal zapret 1.10.2', notes_text)
+        self.assertIn('dpopcleaner.core.exe', notes_text)
+        self.assertIn('dpopcleaner.exe', notes_text)
+        self.assertIn('v0.2.11 beta', notes_text)
+        self.assertIn('автообнов', notes_text)
         self.assertIn('zapret\\service.bat', notes_text)
         self.assertIn('zapret\\general.bat', notes_text)
         self.assertIn('zapret\\bin\\winws.exe', notes_text)
-        self.assertNotIn('в корне установки присутствуют `service.bat`', notes_text)
         workflow = publisher.read_text(encoding='utf-8').lower()
-        for token in ('release_tag: v0.4.17-rev5','dpop0417_prepare_zapret.ps1','dpop0417_zapret_ui_smoke.ps1',SCREENSHOT_PATH,'revision=5','actions/deploy-pages','sha256'):
+        for token in ('release_tag: v0.4.17-rev6','dpop0417_prepare_zapret.ps1','dpop0417_installed_settings_smoke.ps1',SCREENSHOT_PATH,'revision=6','actions/deploy-pages','sha256'):
             self.assertIn(token, workflow)
-        self.assertIn('$live.revision -ne 5', workflow)
-        self.assertIn('v0\\.4\\.17-rev5', workflow)
+        self.assertIn('$live.revision -ne 6', workflow)
+        self.assertIn('v0\\.4\\.17-rev6', workflow)
 
 
 if __name__ == '__main__':
