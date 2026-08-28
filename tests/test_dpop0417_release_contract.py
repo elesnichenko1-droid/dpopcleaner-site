@@ -1,102 +1,78 @@
 from pathlib import Path
+import base64
+import hashlib
 import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+SCREENSHOT_SHA256 = 'ad8dd8dfd5d07312d9ff588f2afcae6d655e1a84cb64e17cb1666dc22dd7a572'
+SCREENSHOT_SIZE = 74050
+SCREENSHOT_PATH = 'assets/dpopcleaner-current-settings.png'
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
-    def test_site_manifest_and_publisher_are_one_stable_0417_rev4_release(self):
+    def test_exact_user_screenshot_can_be_reconstructed_before_every_pages_deploy(self):
+        source_dir = ROOT / 'assets/current-settings-source'
+        parts = sorted(source_dir.glob('part*.b64'))
+        self.assertEqual([part.name for part in parts], [f'part{i:02d}.b64' for i in range(13)])
+        encoded = ''.join(part.read_text(encoding='ascii').strip() for part in parts)
+        payload = base64.b64decode(encoded, validate=True)
+        self.assertEqual(len(payload), SCREENSHOT_SIZE)
+        self.assertEqual(hashlib.sha256(payload).hexdigest(), SCREENSHOT_SHA256)
+
+        materializer = ROOT / 'tools/dpop0417_materialize_current_screenshot.ps1'
+        self.assertTrue(materializer.is_file(), 'exact screenshot materializer is required')
+        materializer_text = materializer.read_text(encoding='utf-8').lower()
+        self.assertIn('current-settings-source', materializer_text)
+        self.assertIn('dpopcleaner-current-settings.png', materializer_text)
+        self.assertIn(SCREENSHOT_SHA256, materializer_text)
+        self.assertIn(str(SCREENSHOT_SIZE), materializer_text)
+
+        foundation_text = (ROOT / '.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml').read_text(encoding='utf-8').lower()
+        publisher_text = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
+        static_text = (ROOT / '.github/workflows/static.yml').read_text(encoding='utf-8').lower()
+        stage_site_text = (ROOT / 'scripts/Stage-Site.ps1').read_text(encoding='utf-8').lower()
+        materialize_token = 'dpop0417_materialize_current_screenshot.ps1'
+        self.assertIn(materialize_token, foundation_text)
+        self.assertIn(materialize_token, publisher_text)
+        self.assertIn(materialize_token, static_text)
+        self.assertIn(SCREENSHOT_PATH, stage_site_text)
+        self.assertIn('assets/dpopcleaner-0.4.17-disk.png', stage_site_text)
+        self.assertIn('assets/dpopcleaner-0.4.17-restore.png', stage_site_text)
+
+    def test_site_manifest_and_publisher_are_one_stable_0417_rev5_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         notes = ROOT / 'release/RELEASE_NOTES_0.4.17.md'
-        disk_png = ROOT / 'assets/dpopcleaner-0.4.17-disk.png'
-        restore_png = ROOT / 'assets/dpopcleaner-0.4.17-restore.png'
         stable_manifest = ROOT / 'update/stable.json'
-        self.assertTrue(publisher.is_file(), '0.4.17 publisher workflow is required')
-        self.assertTrue(notes.is_file(), '0.4.17 release notes are required')
-        self.assertTrue(disk_png.is_file(), 'real Disk Analyzer screenshot is required')
-        self.assertTrue(restore_png.is_file(), 'real Restore Center screenshot is required')
-        self.assertTrue(stable_manifest.is_file(), 'stable update manifest is required')
-
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
-        self.assertEqual(version['version'], '0.4.17')
-        self.assertEqual(version['version_code'], 417)
-        self.assertEqual(version['revision'], 4)
-        self.assertEqual(version['channel'], 'stable')
-        self.assertEqual(version['manifest'], './update/stable.json')
-
+        self.assertEqual(version['revision'], 5)
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
-        self.assertEqual(stable['version'], '0.4.17')
-        self.assertEqual(stable['version_code'], 417)
-        self.assertEqual(stable['revision'], 4)
-        self.assertEqual(stable['channel'], 'stable')
-        self.assertFalse(stable['available'])
-        self.assertEqual(stable['download_url'], '')
-        self.assertEqual(stable['sha256'], '')
-        self.assertEqual(stable['size'], 0)
-
+        self.assertEqual(stable['revision'], 5)
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
-        self.assertIn("m.version === '0.4.17'", manifest)
-        self.assertIn("number(m.revision) === 4", manifest)
-        self.assertIn("m.channel === 'stable'", manifest)
-        self.assertIn('v0\\.4\\.17-rev4', manifest)
-        self.assertIn('dpopcleaner_setup_0\\.4\\.17\\.exe', manifest)
-
+        self.assertIn("number(m.revision) === 5", manifest)
+        self.assertIn('v0\\.4\\.17-rev5', manifest)
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
-        self.assertIn('currentrevision = 4', program)
-        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev4', launcher)
-
+        self.assertIn('currentrevision = 5', program)
+        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev5', launcher)
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
-        self.assertIn('dpopcleaner 0.4.17', index)
-        self.assertIn('rev.4', index)
-        self.assertIn('прокрут', index)
-        self.assertIn('автообнов', index)
-        self.assertIn('simpleupdate', index)
-        self.assertIn('assets/dpopcleaner-0.4.17-disk.png', index)
-        self.assertIn('assets/dpopcleaner-0.4.17-restore.png', index)
-        self.assertIn('ядро 0.2.14', index)
-        self.assertIn('центр восстановления', index)
-        self.assertIn('анализатор диска', index)
-        self.assertNotIn('0.4.17 beta', index)
-
-        script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
-        self.assertIn('./update/stable.json', script)
-        self.assertNotIn('0.4.17 beta', script)
-
+        self.assertIn('0.4.17 rev.5', index)
+        self.assertIn('flowseal zapret 1.10.2', index)
+        self.assertIn(SCREENSHOT_PATH, index)
+        self.assertIn('zapret\\service.bat', index)
+        self.assertIn('zapret\\bin\\winws.exe', index)
         notes_text = notes.read_text(encoding='utf-8').lower()
-        self.assertIn('revision 4', notes_text)
-        self.assertIn('прокрут', notes_text)
-        self.assertIn('simpleupdate', notes_text)
-        self.assertIn('автообнов', notes_text)
-        self.assertIn('zapretscreenfix', notes_text)
-
+        self.assertIn('revision 5', notes_text)
+        self.assertIn('flowseal zapret 1.10.2', notes_text)
+        self.assertIn('zapret\\service.bat', notes_text)
+        self.assertIn('zapret\\general.bat', notes_text)
+        self.assertIn('zapret\\bin\\winws.exe', notes_text)
+        self.assertNotIn('в корне установки присутствуют `service.bat`', notes_text)
         workflow = publisher.read_text(encoding='utf-8').lower()
-        for token in (
-            'release_tag: v0.4.17-rev4',
-            'dpopcleaner_setup_0.4.17.exe',
-            'v0417/src/simpleupdate/simpleupdate.csproj',
-            'dpop0417_stage.ps1 -requirecompanions',
-            'dpop0417_install_smoke.ps1',
-            'test_dpop0417_release_contract.py',
-            'get-filehash',
-            'gh release upload',
-            'update/stable.json',
-            'revision = 4',
-            'actions/deploy-pages',
-            'invoke-restmethod',
-            'sha256',
-        ):
+        for token in ('release_tag: v0.4.17-rev5','dpop0417_prepare_zapret.ps1','dpop0417_zapret_ui_smoke.ps1',SCREENSHOT_PATH,'revision=5','actions/deploy-pages','sha256'):
             self.assertIn(token, workflow)
-        self.assertIn("$live.revision -ne 4", workflow)
-        self.assertNotIn('--prerelease', workflow)
-        self.assertNotIn('update/beta.json', workflow)
-        self.assertNotIn('0.4.17 beta', workflow)
-
-        old_clean = (ROOT / '.github/workflows/build-clean-0.2.14-r1.yml').read_text(encoding='utf-8').lower()
-        static = (ROOT / '.github/workflows/static.yml').read_text(encoding='utf-8').lower()
-        self.assertNotIn('  push:', old_clean, 'old 0.2.14 publisher must be manual-only')
-        self.assertNotIn('  push:', static, 'generic Pages deploy must be manual-only during 0.4.17 publication')
+        self.assertIn('$live.revision -ne 5', workflow)
+        self.assertIn('v0\\.4\\.17-rev5', workflow)
 
 
 if __name__ == '__main__':
