@@ -16,7 +16,10 @@ $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $launcher = Join-Path $RootPath 'SimpleUpdate.exe'
-$core = Join-Path $RootPath 'DPopCleaner.exe'
+$installedCore = Join-Path $RootPath 'DPopCleaner.Core.exe'
+$stageCore = Join-Path $RootPath 'DPopCleaner.exe'
+$core = if (Test-Path -LiteralPath $installedCore -PathType Leaf) { $installedCore } else { $stageCore }
+$coreProcessName = [IO.Path]::GetFileNameWithoutExtension($core)
 $zapretRoot = Join-Path $RootPath 'Zapret'
 $service = Join-Path $zapretRoot 'service.bat'
 $winws = Join-Path $zapretRoot 'bin\winws.exe'
@@ -114,7 +117,7 @@ try {
     $deadline = [DateTime]::UtcNow.AddSeconds(18)
     do {
         Start-Sleep -Milliseconds 250
-        foreach ($candidate in @(Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue)) {
+        foreach ($candidate in @(Get-Process -Name $coreProcessName -ErrorAction SilentlyContinue)) {
             try {
                 if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($core)) { $coreProcess = $candidate; $coreProcess.Refresh(); break }
             } catch { }
@@ -170,6 +173,7 @@ try {
 
     [pscustomobject]@{
         root = $RootPath
+        core = $core
         zapret_root = $zapretRoot
         frozen_strategy_root = $legacyZapretRoot
         bundled_version = (Get-Content -Raw -LiteralPath (Join-Path $zapretRoot '.service\version.txt')).Trim()
@@ -183,7 +187,7 @@ try {
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'zapret-ui-smoke-report.json') -Encoding utf8
 
     $selectedLabel = if ([string]::IsNullOrWhiteSpace($selectedStrategy)) { '<none>' } else { $selectedStrategy }
-    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK root=$zapretRoot verified=$verifiedStrategy selected=$selectedLabel combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
+    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK core=$core root=$zapretRoot verified=$verifiedStrategy selected=$selectedLabel combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
