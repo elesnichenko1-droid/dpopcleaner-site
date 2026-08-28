@@ -2,7 +2,7 @@
   "product": "DPopCleaner",
   "version": "0.4.17",
   "version_code": 417,
-  "revision": 5,
+  "revision": 6,
   "channel": "stable",
   "platform": "windows",
   "architecture": "x86-64",
