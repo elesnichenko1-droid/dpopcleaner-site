@@ -20,12 +20,7 @@ if (-not (Test-Path -LiteralPath $allowlistPath -PathType Leaf)) { throw 'Missin
 $expectedAllowlist = @(
     'DPopCleaner.exe',
     'SimpleUpdate.exe',
-    'LICENSE.txt',
-    '.service/',
-    '*.bat',
-    'bin/',
-    'lists/',
-    'utils/',
+    'Zapret/',
     'Languages/',
     'Shell/',
     'Documentation/',
@@ -74,6 +69,8 @@ if ($strategies.Count -eq 0) { throw 'Prepared Zapret payload has no general*.ba
 if (Test-Path -LiteralPath $stageRoot) { Remove-Item -LiteralPath $stageRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stageRoot 'Modules') -Force | Out-Null
+$stageZapretRoot = Join-Path $stageRoot 'Zapret'
+New-Item -ItemType Directory -Path $stageZapretRoot -Force | Out-Null
 
 Copy-Item -LiteralPath $corePath -Destination (Join-Path $stageRoot ([string]$core.staged_name)) -Force
 
@@ -81,17 +78,17 @@ $launcher = Join-Path $root 'v0417/src/SimpleUpdate/bin/Release/net48/SimpleUpda
 if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "SimpleUpdate.exe is missing. Build v0417/src/SimpleUpdate first: $launcher" }
 Copy-Item -LiteralPath $launcher -Destination (Join-Path $stageRoot 'SimpleUpdate.exe') -Force
 
-# The frozen 0.2.14 core resolves Zapret relative to its own executable and
-# contains literal references to service.bat and bin\winws.exe. Therefore the
-# verified Flowseal payload is staged directly beside DPopCleaner.exe, not under
-# a new ThirdParty directory.
-Copy-Item -LiteralPath (Join-Path $zapretRoot 'LICENSE.txt') -Destination (Join-Path $stageRoot 'LICENSE.txt') -Force
+# Runtime evidence from the frozen 0.2.14 process shows that its Zapret root is
+# <DPopCleaner.exe directory>\Zapret. service.bat, general*.bat and bin\winws.exe
+# are resolved relative to that legacy subdirectory, so keep the verified
+# Flowseal payload there without modifying the immutable core.
+Copy-Item -LiteralPath (Join-Path $zapretRoot 'LICENSE.txt') -Destination (Join-Path $stageZapretRoot 'LICENSE.txt') -Force
 foreach ($batch in @(Get-ChildItem -LiteralPath $zapretRoot -Filter '*.bat' -File | Sort-Object Name)) {
-    Copy-Item -LiteralPath $batch.FullName -Destination (Join-Path $stageRoot $batch.Name) -Force
+    Copy-Item -LiteralPath $batch.FullName -Destination (Join-Path $stageZapretRoot $batch.Name) -Force
 }
 foreach ($directory in @('.service','bin','lists','utils')) {
     $source = Join-Path $zapretRoot $directory
-    $destination = Join-Path $stageRoot $directory
+    $destination = Join-Path $stageZapretRoot $directory
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
     Get-ChildItem -LiteralPath $source -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force }
 }
@@ -130,17 +127,17 @@ foreach ($companion in $companions) {
 }
 
 foreach ($relative in $requiredZapretFiles) {
-    $candidate = Join-Path $stageRoot ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
-    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Staged Zapret payload missing required file: $relative" }
+    $candidate = Join-Path $stageZapretRoot ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Staged Zapret payload missing required file: Zapret/$relative" }
 }
-$stagedStrategies = @(Get-ChildItem -LiteralPath $stageRoot -Filter 'general*.bat' -File)
-if ($stagedStrategies.Count -eq 0) { throw 'Staged Zapret payload contains no general*.bat strategies.' }
+$stagedStrategies = @(Get-ChildItem -LiteralPath $stageZapretRoot -Filter 'general*.bat' -File)
+if ($stagedStrategies.Count -eq 0) { throw 'Staged Zapret payload contains no general*.bat strategies under Zapret/.' }
 
 $stagedCore = Join-Path $stageRoot ([string]$core.staged_name)
 $stagedBlob = (& git -C $root hash-object -- $stagedCore).Trim()
 if ($LASTEXITCODE -ne 0 -or $stagedBlob -ne [string]$core.git_blob_sha1) { throw "Staged DPopCleaner.exe changed from the preserved original: $stagedBlob" }
 
 Write-Host "Staged immutable core: $stagedBlob"
-Write-Host "Staged Flowseal Zapret: $zapretVersion; strategies=$($stagedStrategies.Count); winws.exe=$(Join-Path $stageRoot 'bin/winws.exe')"
+Write-Host "Staged Flowseal Zapret: $zapretVersion; strategies=$($stagedStrategies.Count); root=$stageZapretRoot; winws.exe=$(Join-Path $stageZapretRoot 'bin/winws.exe')"
 Write-Host "Staged launcher: $(Join-Path $stageRoot 'SimpleUpdate.exe')"
 Write-Host "0.4.17 stage ready: $stageRoot"
