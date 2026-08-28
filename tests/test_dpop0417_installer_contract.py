@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,10 @@ class DPop0417InstallerContractTests(unittest.TestCase):
         program_text = program.read_text(encoding="utf-8").lower()
         self.assertIn('path.combine(basedirectory, "dpopcleaner.core.exe")', program_text)
         self.assertNotIn('path.combine(basedirectory, "dpopcleaner.exe")', program_text)
+        self.assertIsNone(
+            re.search(r'if\s*\(!acquired\)\s*\{.*?process\.start', program_text, re.S),
+            "a second launcher instance must never start an unbridged core directly",
+        )
 
         smoke_text = smoke.read_text(encoding="utf-8").lower()
         normalized = smoke_text.replace('\\', '/')
