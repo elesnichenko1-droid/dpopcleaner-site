@@ -20,7 +20,7 @@ namespace DPopCleaner.SimpleUpdate
             {
                 var options = LauncherOptions.Parse(args);
                 var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-                var corePath = Path.Combine(baseDirectory, "DPopCleaner.exe");
+                var corePath = Path.Combine(baseDirectory, "DPopCleaner.Core.exe");
                 var settingsPath = options.SettingsPathOverride ?? Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "DPopCleaner", "SimpleUpdate.ini");
@@ -32,7 +32,7 @@ namespace DPopCleaner.SimpleUpdate
                     catch (System.Threading.AbandonedMutexException) { acquired = true; }
                     if (!acquired)
                     {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(corePath) { UseShellExecute = true, WorkingDirectory = baseDirectory });
+                        // Never start the frozen core without its UI bridge.
                         return;
                     }
 
