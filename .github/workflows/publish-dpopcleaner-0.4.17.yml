@@ -129,18 +129,18 @@ jobs:
           ./tools/dpop0417_disk_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/DiskAnalyzer.exe' -OutputDir '_release/0.4.17/evidence/disk'
           ./tools/dpop0417_restore_smoke.ps1 -ExePath '_release/0.4.17/stage/Modules/RestoreCenter.exe' -OutputDir '_release/0.4.17/evidence/restore'
           foreach ($required in @(
-            '_release/0.4.17/stage/service.bat',
-            '_release/0.4.17/stage/general.bat',
-            '_release/0.4.17/stage/bin/winws.exe',
-            '_release/0.4.17/stage/bin/WinDivert.dll',
-            '_release/0.4.17/stage/bin/WinDivert64.sys',
-            '_release/0.4.17/stage/.service/version.txt',
+            '_release/0.4.17/stage/Zapret/service.bat',
+            '_release/0.4.17/stage/Zapret/general.bat',
+            '_release/0.4.17/stage/Zapret/bin/winws.exe',
+            '_release/0.4.17/stage/Zapret/bin/WinDivert.dll',
+            '_release/0.4.17/stage/Zapret/bin/WinDivert64.sys',
+            '_release/0.4.17/stage/Zapret/.service/version.txt',
             '_release/0.4.17/stage/Modules/ZapretScreenFix.exe',
             '_release/0.4.17/stage/Shell/commands/zapret-screen-fix.json'
           )) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Staged Zapret requirement missing: $required" }
           }
-          if ((Get-Content -Raw '_release/0.4.17/stage/.service/version.txt').Trim() -ne '1.10.2') { throw 'Staged Flowseal Zapret version is not 1.10.2.' }
+          if ((Get-Content -Raw '_release/0.4.17/stage/Zapret/.service/version.txt').Trim() -ne '1.10.2') { throw 'Staged Flowseal Zapret version is not 1.10.2.' }
           $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
           $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
           if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }
