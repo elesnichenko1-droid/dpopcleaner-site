@@ -11,12 +11,7 @@ class DPop0417StageContractTests(unittest.TestCase):
         self.assertEqual(entries, [
             "DPopCleaner.exe",
             "SimpleUpdate.exe",
-            "LICENSE.txt",
-            ".service/",
-            "*.bat",
-            "bin/",
-            "lists/",
-            "utils/",
+            "Zapret/",
             "Languages/",
             "Shell/",
             "Documentation/",
@@ -31,7 +26,7 @@ class DPop0417StageContractTests(unittest.TestCase):
         for forbidden in ["v035_overlay", "mainwindow.cpp", "pagebase.cpp", "fullcore.cpp", "cmake", "thirdparty/zapret"]:
             self.assertNotIn(forbidden, lowered)
 
-    def test_staging_script_is_fail_closed_and_places_verified_zapret_beside_old_core(self):
+    def test_staging_script_is_fail_closed_and_places_verified_zapret_in_legacy_subdirectory(self):
         script = (ROOT / "tools" / "dpop0417_stage.ps1").read_text(encoding="utf-8")
         lowered = script.lower()
         normalized = lowered.replace("\\", "/")
@@ -46,6 +41,7 @@ class DPop0417StageContractTests(unittest.TestCase):
         self.assertIn("zapretscreenfix.exe", lowered)
         self.assertIn("v0417/src/zapretscreenfix/bin/release/net48/zapretscreenfix.exe", normalized)
         self.assertIn("_release/0.4.17/third-party/zapret", normalized)
+        self.assertIn("$stagezapretroot = join-path $stageroot 'zapret'", lowered)
         self.assertIn("service.bat", lowered)
         self.assertIn("general.bat", lowered)
         self.assertIn("general*.bat", lowered)
