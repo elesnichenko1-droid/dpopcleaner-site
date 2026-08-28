@@ -21,7 +21,7 @@ DPopCleaner 0.4.17 rev.5 исправляет регрессию revision 4, и�
 
 ## Сохранено из revision 2/3
 
-- **ZapretScreenFix.exe** и команда `zapret-screen-fix` остаются в пакете.
+- **ZapretScreenFix.exe** и команда `zapret-screen-fix` сохраняют отдельное исправление демонстрации экрана и продолжают входить в пакет.
 - Анализатор диска и Центр восстановления остаются отдельными companion-модулями.
 - Основные ярлыки и post-install запуск ведут через `SimpleUpdate.exe`.
 
