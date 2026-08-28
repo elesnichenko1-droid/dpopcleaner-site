@@ -26,9 +26,12 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         self.assertIn("tools/dpop0417_prepare_zapret.ps1", normalized)
         self.assertIn("tools/dpop0417_stage.ps1", normalized)
         self.assertIn("tools/dpop0417_zapret_ui_smoke.ps1", normalized)
-        self.assertIn("stage/bin/winws.exe", normalized)
-        self.assertIn("stage/bin/windivert64.sys", normalized)
-        self.assertIn("stage/service.bat", normalized)
+        self.assertIn("stage/zapret/bin/winws.exe", normalized)
+        self.assertIn("stage/zapret/bin/windivert64.sys", normalized)
+        self.assertIn("stage/zapret/service.bat", normalized)
+        self.assertIn("stage/zapret/.service/version.txt", normalized)
+        self.assertNotIn("stage/bin/winws.exe", normalized)
+        self.assertNotIn("stage/service.bat", normalized)
         self.assertIn("modules/zapretscreenfix.exe", normalized)
         self.assertIn("1.10.2", lowered)
         self.assertIn("efd0eff1f4962319282363fa85595c25e0cebe11", lowered)
@@ -36,6 +39,21 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
 
         for forbidden in ["cmake", "v035_overlay", "gh release", "deploy-pages", "pages: write", "contents: write"]:
             self.assertNotIn(forbidden, lowered)
+
+    def test_publisher_verifies_the_same_legacy_zapret_subdirectory(self):
+        path = ROOT / ".github" / "workflows" / "publish-dpopcleaner-0.4.17.yml"
+        lowered = path.read_text(encoding="utf-8").lower()
+        normalized = lowered.replace("\\", "/")
+
+        self.assertIn("stage/zapret/service.bat", normalized)
+        self.assertIn("stage/zapret/general.bat", normalized)
+        self.assertIn("stage/zapret/bin/winws.exe", normalized)
+        self.assertIn("stage/zapret/bin/windivert.dll", normalized)
+        self.assertIn("stage/zapret/bin/windivert64.sys", normalized)
+        self.assertIn("stage/zapret/.service/version.txt", normalized)
+        self.assertNotIn("stage/service.bat", normalized)
+        self.assertNotIn("stage/bin/winws.exe", normalized)
+        self.assertIn("1.10.2", lowered)
 
 
 if __name__ == "__main__":
