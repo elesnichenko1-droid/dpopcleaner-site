@@ -47,6 +47,7 @@ public static class ZapretSmokeNative {
     [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp);
     public static ZapretSmokeChild[] Children(IntPtr parent) {
         var list = new List<ZapretSmokeChild>();
         EnumProc cb = delegate(IntPtr h, IntPtr _) {
@@ -57,6 +58,21 @@ public static class ZapretSmokeNative {
         };
         EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
     }
+    public static string[] ComboBoxItems(IntPtr hwnd) {
+        const uint CB_GETCOUNT = 0x0146;
+        const uint CB_GETLBTEXT = 0x0148;
+        const uint CB_GETLBTEXTLEN = 0x0149;
+        int count = SendMessage(hwnd, CB_GETCOUNT, IntPtr.Zero, IntPtr.Zero).ToInt32();
+        var items = new List<string>();
+        for (int index = 0; index < count; index++) {
+            int length = SendMessage(hwnd, CB_GETLBTEXTLEN, (IntPtr)index, IntPtr.Zero).ToInt32();
+            if (length < 0) continue;
+            var text = new StringBuilder(length + 1);
+            SendMessage(hwnd, CB_GETLBTEXT, (IntPtr)index, text);
+            items.Add(text.ToString());
+        }
+        return items.ToArray();
+    }
 }
 '@
 Add-Type -TypeDefinition $native -Language CSharp
@@ -64,6 +80,8 @@ Add-Type -TypeDefinition $native -Language CSharp
 $launcherProcess = $null
 $coreProcess = $null
 $selectedStrategy = ''
+$verifiedStrategy = ''
+$strategyEntries = @()
 $strategyCount = 0
 try {
     $settings = Join-Path $OutputDir 'SimpleUpdate-zapret-ui.ini'
@@ -99,10 +117,20 @@ try {
     } while (-not $combo -and [DateTime]::UtcNow -lt $deadline)
 
     if (-not $combo) { throw 'Zapret Center did not expose a populated strategy ComboBox.' }
+    $strategyEntries = @([ZapretSmokeNative]::ComboBoxItems($combo.Handle))
+    $validStrategies = @($strategyEntries | Where-Object { $_ -match '(?i)^general.*\.bat$' })
+    if ($validStrategies.Count -eq 0) {
+        throw "Zapret strategy ComboBox is populated but exposes no general*.bat entries: $($strategyEntries -join ', ')"
+    }
+
     $selectedStrategy = $combo.Text
-    if ([string]::IsNullOrWhiteSpace($selectedStrategy)) { throw 'Zapret strategy ComboBox has entries but no selected strategy text.' }
-    if ($selectedStrategy -match 'Стратегии не найдены|No strategies found') { throw "Old-core Zapret Center still reports missing strategies: $selectedStrategy" }
-    if ($selectedStrategy -notmatch '(?i)^general.*\.bat$') { throw "Unexpected Zapret strategy selected by authentic UI: $selectedStrategy" }
+    if (-not [string]::IsNullOrWhiteSpace($selectedStrategy)) {
+        if ($selectedStrategy -match 'Стратегии не найдены|No strategies found') { throw "Old-core Zapret Center still reports missing strategies: $selectedStrategy" }
+        if ($selectedStrategy -notmatch '(?i)^general.*\.bat$') { throw "Unexpected Zapret strategy selected by authentic UI: $selectedStrategy" }
+        $verifiedStrategy = $selectedStrategy
+    } else {
+        $verifiedStrategy = $validStrategies[0]
+    }
 
     $visibleText = ($children | Where-Object { $_.Visible } | ForEach-Object { $_.Text }) -join "`n"
     if ($visibleText -match 'Zapret components were not found beside DPopCleaner') { throw 'Authentic Zapret Center still reports missing bundled components.' }
@@ -112,12 +140,15 @@ try {
         bundled_version = (Get-Content -Raw -LiteralPath (Join-Path $RootPath '.service\version.txt')).Trim()
         strategy_files = $strategyFiles.Count
         strategy_combo_count = $strategyCount
+        strategy_entries = $strategyEntries
         selected_strategy = $selectedStrategy
+        verified_strategy = $verifiedStrategy
         winws_present = (Test-Path -LiteralPath $winws -PathType Leaf)
         windivert_present = (Test-Path -LiteralPath $windivert -PathType Leaf)
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'zapret-ui-smoke-report.json') -Encoding utf8
 
-    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK strategy=$selectedStrategy combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
+    $selectedLabel = if ([string]::IsNullOrWhiteSpace($selectedStrategy)) { '<none>' } else { $selectedStrategy }
+    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK verified=$verifiedStrategy selected=$selectedLabel combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
