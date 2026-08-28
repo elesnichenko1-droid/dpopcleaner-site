@@ -48,6 +48,9 @@ public static class ZapretSmokeNative {
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp);
+    [DllImport("kernel32.dll", SetLastError=true)] private static extern IntPtr OpenProcess(uint access, bool inheritHandle, int processId);
+    [DllImport("kernel32.dll", SetLastError=true)] private static extern bool ReadProcessMemory(IntPtr process, IntPtr address, byte[] buffer, IntPtr size, out IntPtr read);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
     public static ZapretSmokeChild[] Children(IntPtr parent) {
         var list = new List<ZapretSmokeChild>();
         EnumProc cb = delegate(IntPtr h, IntPtr _) {
@@ -73,6 +76,24 @@ public static class ZapretSmokeNative {
         }
         return items.ToArray();
     }
+    public static string ReadUtf16(int processId, IntPtr address, int maxChars) {
+        const uint PROCESS_VM_READ = 0x0010;
+        const uint PROCESS_QUERY_INFORMATION = 0x0400;
+        IntPtr process = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, processId);
+        if (process == IntPtr.Zero) throw new InvalidOperationException("OpenProcess failed: " + Marshal.GetLastWin32Error());
+        try {
+            var bytes = new byte[maxChars * 2];
+            IntPtr read;
+            if (!ReadProcessMemory(process, address, bytes, (IntPtr)bytes.Length, out read))
+                throw new InvalidOperationException("ReadProcessMemory failed: " + Marshal.GetLastWin32Error());
+            int usable = Math.Min(bytes.Length, read.ToInt32());
+            int end = 0;
+            while (end + 1 < usable && (bytes[end] != 0 || bytes[end + 1] != 0)) end += 2;
+            return Encoding.Unicode.GetString(bytes, 0, end);
+        } finally {
+            CloseHandle(process);
+        }
+    }
 }
 '@
 Add-Type -TypeDefinition $native -Language CSharp
@@ -83,6 +104,7 @@ $selectedStrategy = ''
 $verifiedStrategy = ''
 $strategyEntries = @()
 $strategyCount = 0
+$legacyZapretRoot = ''
 try {
     $settings = Join-Path $OutputDir 'SimpleUpdate-zapret-ui.ini'
     Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue
@@ -98,6 +120,13 @@ try {
         }
     } while (($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) -and [DateTime]::UtcNow -lt $deadline)
     if ($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Authentic DPopCleaner window did not appear for Zapret UI smoke.' }
+
+    $coreProcess.Refresh()
+    $moduleBase = $coreProcess.MainModule.BaseAddress
+    # Frozen 0.2.14 strategy enumerator reads its base path from RVA 0x64fe0,
+    # then appends the literal general*.bat before FindFirstFileW.
+    $legacyZapretRoot = [ZapretSmokeNative]::ReadUtf16($coreProcess.Id, [IntPtr]::Add($moduleBase, 0x64fe0), 1200)
+    Write-Host "FROZEN_ZAPRET_ROOT_BUFFER=$legacyZapretRoot"
 
     $children = [ZapretSmokeNative]::Children($coreProcess.MainWindowHandle)
     $zapretButton = $children | Where-Object { $_.ClassName -eq 'Button' -and $_.Text -eq 'Zapret' } | Select-Object -First 1
@@ -137,6 +166,7 @@ try {
 
     [pscustomobject]@{
         root = $RootPath
+        frozen_strategy_root = $legacyZapretRoot
         bundled_version = (Get-Content -Raw -LiteralPath (Join-Path $RootPath '.service\version.txt')).Trim()
         strategy_files = $strategyFiles.Count
         strategy_combo_count = $strategyCount
