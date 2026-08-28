@@ -1,20 +1,42 @@
 from pathlib import Path
+import base64
 import hashlib
 import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCREENSHOT_SHA256 = 'ad8dd8dfd5d07312d9ff588f2afcae6d655e1a84cb64e17cb1666dc22dd7a572'
+SCREENSHOT_SIZE = 74050
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
+    def test_exact_user_screenshot_can_be_reconstructed_before_every_pages_deploy(self):
+        source_dir = ROOT / 'assets/current-settings-source'
+        parts = sorted(source_dir.glob('part*.b64'))
+        self.assertEqual([part.name for part in parts], [f'part{i:02d}.b64' for i in range(13)])
+        encoded = ''.join(part.read_text(encoding='ascii').strip() for part in parts)
+        payload = base64.b64decode(encoded, validate=True)
+        self.assertEqual(len(payload), SCREENSHOT_SIZE)
+        self.assertEqual(hashlib.sha256(payload).hexdigest(), SCREENSHOT_SHA256)
+
+        materializer = ROOT / 'tools/dpop0417_materialize_current_screenshot.ps1'
+        self.assertTrue(materializer.is_file(), 'exact screenshot materializer is required')
+        materializer_text = materializer.read_text(encoding='utf-8').lower()
+        self.assertIn('current-settings-source', materializer_text)
+        self.assertIn('dpopcleaner-current-settings.png', materializer_text)
+        self.assertIn(SCREENSHOT_SHA256, materializer_text)
+        self.assertIn(str(SCREENSHOT_SIZE), materializer_text)
+
+        publisher_text = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
+        static_text = (ROOT / '.github/workflows/static.yml').read_text(encoding='utf-8').lower()
+        materialize_token = 'dpop0417_materialize_current_screenshot.ps1'
+        self.assertIn(materialize_token, publisher_text)
+        self.assertIn(materialize_token, static_text)
+
     def test_site_manifest_and_publisher_are_one_stable_0417_rev5_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         notes = ROOT / 'release/RELEASE_NOTES_0.4.17.md'
-        current_png = ROOT / 'assets/dpopcleaner-current-settings.png'
         stable_manifest = ROOT / 'update/stable.json'
-        self.assertTrue(current_png.is_file(), 'the user supplied current-program screenshot is required')
-        self.assertEqual(hashlib.sha256(current_png.read_bytes()).hexdigest(), SCREENSHOT_SHA256)
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         self.assertEqual(version['revision'], 5)
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
