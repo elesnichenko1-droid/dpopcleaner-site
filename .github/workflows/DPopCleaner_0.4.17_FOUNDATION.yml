@@ -136,18 +136,18 @@ jobs:
         shell: pwsh
         run: |
           foreach ($required in @(
-            '_release/0.4.17/stage/service.bat',
-            '_release/0.4.17/stage/general.bat',
-            '_release/0.4.17/stage/bin/winws.exe',
-            '_release/0.4.17/stage/bin/WinDivert.dll',
-            '_release/0.4.17/stage/bin/WinDivert64.sys',
-            '_release/0.4.17/stage/.service/version.txt',
+            '_release/0.4.17/stage/Zapret/service.bat',
+            '_release/0.4.17/stage/Zapret/general.bat',
+            '_release/0.4.17/stage/Zapret/bin/winws.exe',
+            '_release/0.4.17/stage/Zapret/bin/WinDivert.dll',
+            '_release/0.4.17/stage/Zapret/bin/WinDivert64.sys',
+            '_release/0.4.17/stage/Zapret/.service/version.txt',
             '_release/0.4.17/stage/Modules/ZapretScreenFix.exe',
             '_release/0.4.17/stage/Shell/commands/zapret-screen-fix.json'
           )) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Staged Zapret requirement missing: $required" }
           }
-          if ((Get-Content -Raw '_release/0.4.17/stage/.service/version.txt').Trim() -ne '1.10.2') { throw 'Staged Flowseal Zapret version is not 1.10.2.' }
+          if ((Get-Content -Raw '_release/0.4.17/stage/Zapret/.service/version.txt').Trim() -ne '1.10.2') { throw 'Staged Flowseal Zapret version is not 1.10.2.' }
 
       - name: Verify staged original core is byte-identical
         shell: pwsh
