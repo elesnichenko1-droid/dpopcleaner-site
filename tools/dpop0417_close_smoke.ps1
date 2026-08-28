@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
 Copy-Item -LiteralPath $helper -Destination (Join-Path $work 'SimpleUpdate.exe') -Force
 $settings = Join-Path $work 'SimpleUpdate.ini'
 $sourcePath = Join-Path $work 'FakeCore.cs'
-$fakeCore = Join-Path $work 'DPopCleaner.exe'
+$fakeCore = Join-Path $work 'DPopCleaner.Core.exe'
 
 @'
 using System;
@@ -50,7 +50,7 @@ internal sealed class HangingCloseForm : Form
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path -LiteralPath $csc -PathType Leaf)) { throw "csc.exe not found: $csc" }
 & $csc /nologo /target:winexe "/out:$fakeCore" /reference:System.Windows.Forms.dll /reference:System.dll $sourcePath
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $fakeCore -PathType Leaf)) { throw 'Failed to compile hanging fake DPopCleaner core.' }
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $fakeCore -PathType Leaf)) { throw 'Failed to compile hanging fake DPopCleaner.Core.exe.' }
 
 $native = @'
 using System;
@@ -71,11 +71,13 @@ try {
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
     do {
         Start-Sleep -Milliseconds 100
-        $candidate = Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $fakeCore } | Select-Object -First 1
+        $candidate = Get-Process -Name 'DPopCleaner.Core' -ErrorAction SilentlyContinue | Where-Object {
+            try { [IO.Path]::GetFullPath($_.Path) -eq [IO.Path]::GetFullPath($fakeCore) } catch { $false }
+        } | Select-Object -First 1
         if ($candidate) { $core = $candidate; $core.Refresh() }
     } while (($null -eq $core -or $core.MainWindowHandle -eq [IntPtr]::Zero) -and [DateTime]::UtcNow -lt $deadline)
 
-    if ($null -eq $core -or $core.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Fake DPopCleaner did not create a visible window.' }
+    if ($null -eq $core -or $core.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Fake DPopCleaner.Core.exe did not create a visible window.' }
 
     $sw = [Diagnostics.Stopwatch]::StartNew()
     if (-not [CloseSmokeNative]::PostMessage($core.MainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) {
@@ -90,8 +92,8 @@ try {
     } while ((-not $core.HasExited -or -not $launcher.HasExited) -and [DateTime]::UtcNow -lt $deadline)
     $sw.Stop()
 
-    if (-not $core.HasExited) { throw "Hidden DPopCleaner process still alive after close ($($sw.ElapsedMilliseconds) ms)." }
-    if (-not $launcher.HasExited) { throw "SimpleUpdate still alive after DPopCleaner close ($($sw.ElapsedMilliseconds) ms)." }
+    if (-not $core.HasExited) { throw "Hidden DPopCleaner.Core process still alive after close ($($sw.ElapsedMilliseconds) ms)." }
+    if (-not $launcher.HasExited) { throw "SimpleUpdate still alive after DPopCleaner.Core close ($($sw.ElapsedMilliseconds) ms)." }
     if ($sw.ElapsedMilliseconds -gt 1400) { throw "Close bridge exceeded 1400 ms: $($sw.ElapsedMilliseconds) ms" }
 
     Write-Host "SIMPLEUPDATE_FAST_CLOSE_OK elapsed_ms=$($sw.ElapsedMilliseconds)"
