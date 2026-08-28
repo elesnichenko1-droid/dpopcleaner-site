@@ -17,6 +17,7 @@ if ([IO.Path]::GetFileName($InstallerPath) -ne 'DPopCleaner_Setup_0.4.17.exe') {
 
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 $installRoot = Join-Path ([IO.Path]::GetTempPath()) 'dpop0417-installed-smoke'
+$zapretRoot = Join-Path $installRoot 'Zapret'
 $diskEvidence = Join-Path $OutputDir 'disk-installed'
 $restoreEvidence = Join-Path $OutputDir 'restore-installed'
 $zapretEvidence = Join-Path $OutputDir 'zapret-installed'
@@ -46,19 +47,19 @@ try {
 
     $core = Assert-File 'DPopCleaner.exe'
     $launcher = Assert-File 'SimpleUpdate.exe'
-    [void](Assert-File 'LICENSE.txt')
-    [void](Assert-File 'service.bat')
-    [void](Assert-File 'general.bat')
-    [void](Assert-File '.service\version.txt')
-    [void](Assert-File 'bin\winws.exe')
-    [void](Assert-File 'bin\WinDivert.dll')
-    [void](Assert-File 'bin\WinDivert64.sys')
-    if (-not (Test-Path -LiteralPath (Join-Path $installRoot 'lists') -PathType Container)) { throw 'Installed Zapret lists directory missing.' }
-    if (-not (Test-Path -LiteralPath (Join-Path $installRoot 'utils') -PathType Container)) { throw 'Installed Zapret utils directory missing.' }
-    $zapretVersion = (Get-Content -Raw -LiteralPath (Join-Path $installRoot '.service\version.txt')).Trim()
+    [void](Assert-File 'Zapret\LICENSE.txt')
+    [void](Assert-File 'Zapret\service.bat')
+    [void](Assert-File 'Zapret\general.bat')
+    [void](Assert-File 'Zapret\.service\version.txt')
+    [void](Assert-File 'Zapret\bin\winws.exe')
+    [void](Assert-File 'Zapret\bin\WinDivert.dll')
+    [void](Assert-File 'Zapret\bin\WinDivert64.sys')
+    if (-not (Test-Path -LiteralPath (Join-Path $zapretRoot 'lists') -PathType Container)) { throw 'Installed Zapret lists directory missing.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $zapretRoot 'utils') -PathType Container)) { throw 'Installed Zapret utils directory missing.' }
+    $zapretVersion = (Get-Content -Raw -LiteralPath (Join-Path $zapretRoot '.service\version.txt')).Trim()
     if ($zapretVersion -ne '1.10.2') { throw "Installed Zapret version mismatch: $zapretVersion" }
-    $installedStrategies = @(Get-ChildItem -LiteralPath $installRoot -Filter 'general*.bat' -File)
-    if ($installedStrategies.Count -eq 0) { throw 'Installed Zapret has no general*.bat strategies.' }
+    $installedStrategies = @(Get-ChildItem -LiteralPath $zapretRoot -Filter 'general*.bat' -File)
+    if ($installedStrategies.Count -eq 0) { throw 'Installed Zapret has no general*.bat strategies under Zapret\.' }
     $zapretRuntimePresent = $true
 
     [void](Assert-File 'Modules\DPop.Common.dll')
@@ -125,6 +126,7 @@ try {
     [pscustomobject]@{
         installer = $InstallerPath
         install_root = $installRoot
+        zapret_root = $zapretRoot
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
         simpleupdate_launcher_smoke = [bool]$launcherSmoke
@@ -140,7 +142,7 @@ try {
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $reportPath -Encoding utf8
 
     Write-Host "Installed immutable core: $installedCoreBlob"
-    Write-Host "Installed Flowseal Zapret $zapretVersion: PASS; strategies=$($installedStrategies.Count)"
+    Write-Host "Installed Flowseal Zapret $zapretVersion: PASS; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
     Write-Host 'Installed SimpleUpdate launcher smoke: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'
