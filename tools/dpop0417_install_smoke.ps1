@@ -142,7 +142,7 @@ try {
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $reportPath -Encoding utf8
 
     Write-Host "Installed immutable core: $installedCoreBlob"
-    Write-Host "Installed Flowseal Zapret $zapretVersion: PASS; root=$zapretRoot; strategies=$($installedStrategies.Count)"
+    Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
     Write-Host 'Installed SimpleUpdate launcher smoke: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'
