@@ -132,6 +132,9 @@ def print_updater_code_refs():
         ("UPDATER_ERROR", "Zapret updater module is missing. Reinstall DPopCleaner."),
         ("DPOPUPDATE", "DPopUpdate.bat"),
         ("ZAPRET_FOLDER", "zapret-discord-youtube"),
+        ("NO_STRATEGIES", "No strategies found"),
+        ("GENERAL_BAT", "general.bat"),
+        ("BAT_GLOB", "*.bat"),
         ("WINWS", "bin\\winws.exe"),
         ("SERVICE", "service.bat"),
     ):
