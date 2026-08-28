@@ -166,6 +166,16 @@ class DPop0417BundledZapretContractTests(unittest.TestCase):
         self.assertIn("service.bat", install_smoke)
         self.assertIn("prepare_zapret", publisher.lower(), "Release workflow must prepare a pinned Zapret payload")
 
+    def test_authentic_ui_smoke_accepts_populated_combo_without_default_selection(self):
+        smoke = (ROOT / "tools" / "dpop0417_zapret_ui_smoke.ps1").read_text(encoding="utf-8")
+        self.assertIn("ComboBoxItems", smoke, "Smoke must inspect actual ComboBox entries, not only window text")
+        self.assertIn("strategy_entries", smoke, "Evidence report must record the strategies exposed by the authentic UI")
+        self.assertNotIn(
+            "Zapret strategy ComboBox has entries but no selected strategy text.",
+            smoke,
+            "A populated old ComboBox is valid even when the legacy UI has no default selection",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
