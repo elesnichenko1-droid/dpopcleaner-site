@@ -17,10 +17,16 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $launcherPath = Join-Path $RootPath 'DPopCleaner.exe'
 $corePath = Join-Path $RootPath 'DPopCleaner.Core.exe'
+$dpopUpdatePath = Join-Path $RootPath 'DPopUpdate.exe'
+$simpleUpdatePath = Join-Path $RootPath 'SimpleUpdate.exe'
 $settingsPath = Join-Path $OutputDir 'SimpleUpdate-rev7.ini'
-foreach ($required in @($launcherPath, $corePath, (Join-Path $RootPath 'SimpleUpdate.exe'), (Join-Path $RootPath 'Zapret\service.bat'))) {
+foreach ($required in @($launcherPath, $corePath, $simpleUpdatePath, $dpopUpdatePath, (Join-Path $RootPath 'Zapret\service.bat'))) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "rev.7 installed UI smoke prerequisite missing: $required" }
 }
+if ((Get-FileHash -LiteralPath $dpopUpdatePath -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $simpleUpdatePath -Algorithm SHA256).Hash) {
+    throw 'DPopUpdate.exe must be the verified SimpleUpdate compatibility binary.'
+}
+Write-Host 'Legacy Zapret updater compatibility module: PASS'
 Remove-Item -LiteralPath $settingsPath -Force -ErrorAction SilentlyContinue
 
 $native = @'
@@ -35,7 +41,10 @@ public sealed class Rev7InstalledChild {
     public string Text;
     public string ClassName;
     public bool Visible;
+    public int Left;
     public int Top;
+    public int Right;
+    public int Bottom;
 }
 public static class Rev7InstalledNative {
     private delegate bool EnumProc(IntPtr hwnd, IntPtr p);
@@ -54,7 +63,7 @@ public static class Rev7InstalledNative {
         EnumProc cb = delegate(IntPtr h, IntPtr _) {
             var t = new StringBuilder(512); var c = new StringBuilder(128); RECT r;
             GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity); GetWindowRect(h,out r);
-            list.Add(new Rev7InstalledChild { Handle=h, Id=GetDlgCtrlID(h), Text=t.ToString(), ClassName=c.ToString(), Visible=IsWindowVisible(h), Top=r.Top });
+            list.Add(new Rev7InstalledChild { Handle=h, Id=GetDlgCtrlID(h), Text=t.ToString(), ClassName=c.ToString(), Visible=IsWindowVisible(h), Left=r.Left, Top=r.Top, Right=r.Right, Bottom=r.Bottom });
             return true;
         };
         EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
@@ -80,6 +89,9 @@ function Click-Button([IntPtr]$Window, [string]$Text) {
     if (-not $button) { throw "Button not found: $Text" }
     [void][Rev7InstalledNative]::SendMessage($button.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
     Start-Sleep -Milliseconds 450
+}
+function Test-RectOverlap($A, $B) {
+    return ($A.Left -lt $B.Right -and $A.Right -gt $B.Left -and $A.Top -lt $B.Bottom -and $A.Bottom -gt $B.Top)
 }
 
 $launcher = $null
@@ -141,6 +153,33 @@ try {
     foreach ($legacyLabel in @('Проверить версию','Скачать и установить','Диагностика','Тесты')) {
         if (-not ($zapretChildren | Where-Object { $_.Visible -and $_.Text -eq $legacyLabel } | Select-Object -First 1)) { throw "Existing Zapret control disappeared: $legacyLabel" }
     }
+
+    $actions = @($zapretChildren | Where-Object { $_.Visible -and $_.Text -in @('Починка трансляции','Починка подключения','Игровой фильтр 1.10.2','Менеджер 1.10.2') })
+    for ($i = 0; $i -lt $actions.Count; $i++) {
+        for ($j = $i + 1; $j -lt $actions.Count; $j++) {
+            if (Test-RectOverlap $actions[$i] $actions[$j]) {
+                throw "Zapret actions overlap: '$($actions[$i].Text)' and '$($actions[$j].Text)'"
+            }
+        }
+    }
+    $additional = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and $_.Text -eq 'Дополнительно' } | Select-Object -First 1
+    $apply = $zapretChildren | Where-Object { $_.Visible -and $_.Id -eq 1704 -and $_.Text -eq 'Применить' } | Select-Object -First 1
+    if (-not $additional -or -not $apply) { throw 'Zapret safe-row anchors are missing.' }
+    foreach ($action in $actions) {
+        if ($action.Top -lt ($additional.Top - 8) -or $action.Bottom -gt ($apply.Top - 4)) {
+            throw "Compact Zapret toolbar escaped the safe row: $($action.Text) [$($action.Top),$($action.Bottom)]"
+        }
+    }
+    $legacyZapretIds = @(1701,1713,1714,1703,1709,1715,1702,1716,1717,1704,1705,1707,1708,1710,1711)
+    $legacyZapretControls = @($zapretChildren | Where-Object { $_.Visible -and $_.Id -in $legacyZapretIds })
+    foreach ($action in $actions) {
+        foreach ($legacy in $legacyZapretControls) {
+            if (Test-RectOverlap $action $legacy) {
+                throw "Existing Zapret control overlaps compact action toolbar: '$($action.Text)' vs '$($legacy.Text)'"
+            }
+        }
+    }
+
     $zapretVersion = (Get-Content -Raw -LiteralPath (Join-Path $RootPath 'Zapret\.service\version.txt')).Trim()
     if ($zapretVersion -ne '1.10.2') { throw "Bundled Zapret must remain 1.10.2, got $zapretVersion" }
 
@@ -181,6 +220,8 @@ try {
         zapret_version = $zapretVersion
         zapret_repairs = $true
         zapret_1102_actions = $true
+        zapret_compact_toolbar = $true
+        legacy_zapret_updater_module = $true
         settings_existing_controls_scroll = $true
         application_auto_update_in_scroll = $true
         legacy_version_hidden = $true

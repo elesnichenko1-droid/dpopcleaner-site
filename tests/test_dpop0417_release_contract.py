@@ -40,26 +40,27 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('assets/dpopcleaner-0.4.17-disk.png', stage_site_text)
         self.assertIn('assets/dpopcleaner-0.4.17-restore.png', stage_site_text)
 
-    def test_site_manifest_and_publisher_are_one_stable_0417_rev7_release(self):
+    def test_site_manifest_and_publisher_are_one_stable_0417_rev8_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         notes = ROOT / 'release/RELEASE_NOTES_0.4.17.md'
         stable_manifest = ROOT / 'update/stable.json'
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
-        self.assertEqual(version['revision'], 7)
+        self.assertEqual(version['revision'], 8)
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
-        self.assertEqual(stable['revision'], 7)
+        self.assertEqual(stable['revision'], 8)
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
-        self.assertIn("number(m.revision) === 7", manifest)
-        self.assertIn('v0\\.4\\.17-rev7', manifest)
+        self.assertIn("number(m.revision) === 8", manifest)
+        self.assertIn('v0\\.4\\.17-rev8', manifest)
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
-        self.assertIn('currentrevision = 7', program)
+        self.assertIn('currentrevision = 8', program)
         self.assertIn('dpopcleaner.core.exe', program)
-        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev7', launcher)
+        self.assertIn('dpopupdate.exe', program)
+        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev8', launcher)
 
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         for token in (
-            '0.4.17 rev.7', 'flowseal zapret 1.10.2', SCREENSHOT_PATH,
+            'flowseal zapret 1.10.2', SCREENSHOT_PATH,
             'dpopcleaner.core.exe', '5–95', 'починка трансляции',
             'починка подключения', 'игровой фильтр 1.10.2',
             'менеджер 1.10.2', 'автообновление приложения', 'прокрут'
@@ -67,9 +68,15 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
             self.assertIn(token, index)
         self.assertTrue('прежний интерфейс' in index or 'интерфейс сохран' in index)
 
+        script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
+        self.assertIn('m.revision', script)
+        self.assertIn('applyrevision', script)
+        self.assertIn('rev.${revision}', script)
+
         notes_text = notes.read_text(encoding='utf-8').lower()
         for token in (
-            'revision 7', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe',
+            'revision 8', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe',
+            'dpopupdate.exe', 'модуль обновления не найден', 'компакт',
             '5–95', 'починка трансляции', 'починка подключения',
             'игровой фильтр 1.10.2', 'менеджер 1.10.2',
             'автообновление приложения', 'прокрут'
@@ -79,19 +86,19 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
 
         workflow = publisher.read_text(encoding='utf-8').lower()
         for token in (
-            'release_tag: v0.4.17-rev7',
+            'release_tag: v0.4.17-rev8',
             'dpop0417_prepare_zapret.ps1',
             'dpop0417_installed_settings_smoke.ps1',
             'dpop0417_rev7_installed_ui_smoke.ps1',
             SCREENSHOT_PATH,
-            'revision=7',
+            'revision=8',
             'actions/deploy-pages',
             'sha256',
-            'dpopcleaner-0.4.17-rev7-release-candidate'
+            'dpopcleaner-0.4.17-rev8-release-candidate'
         ):
             self.assertIn(token, workflow)
-        self.assertIn('$live.revision -ne 7', workflow)
-        self.assertIn('v0\\.4\\.17-rev7', workflow)
+        self.assertIn('$live.revision -ne 8', workflow)
+        self.assertIn('v0\\.4\\.17-rev8', workflow)
 
 
 if __name__ == '__main__':
