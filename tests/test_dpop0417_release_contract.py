@@ -87,7 +87,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertTrue('прежний интерфейс' in notes_text or 'интерфейс сохран' in notes_text)
 
         workflow = publisher.read_text(encoding='utf-8').lower()
-        for token in ('release_tag: v0.4.17-rev11', 'dpop0417_prepare_zapret.ps1', 'dpop0417_installed_settings_smoke.ps1', 'dpop0417_rev7_installed_ui_smoke.ps1', 'dpop0417_rev9_zapret_update_smoke.ps1', 'dpop0417_rev11_existing_ui_smoke.ps1', SCREENSHOT_PATH, 'revision=11', 'actions/deploy-pages', 'sha256', 'dpopcleaner-0.4.17-rev11-release-candidate'):
+        for token in ('release_tag: v0.4.17-rev11', 'dpop0417_prepare_zapret.ps1', 'dpop0417_install_smoke.ps1', 'dpop0417_rev9_zapret_update_smoke.ps1', 'dpop0417_rev11_existing_ui_smoke.ps1', SCREENSHOT_PATH, 'revision=11', 'actions/deploy-pages', 'sha256', 'dpopcleaner-0.4.17-rev11-release-candidate'):
             self.assertIn(token, workflow)
         self.assertIn('$live.revision -ne 11', workflow)
         self.assertIn('v0\\.4\\.17-rev11', workflow)
