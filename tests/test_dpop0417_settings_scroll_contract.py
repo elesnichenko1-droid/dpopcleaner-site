@@ -64,18 +64,20 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
         self.assertIn("Re-querying by label would recursively find our own proxy checkbox", launcher)
         self.assertIn("HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds)", launcher)
 
-    def test_rev10_runtime_smoke_replays_user_video_sequence(self):
-        smoke_path = ROOT / "tools" / "dpop0417_rev10_ui_stability_smoke.ps1"
-        self.assertTrue(smoke_path.is_file(), "rev.10 video regression smoke is required")
+    def test_rev11_runtime_smoke_replays_wheel_and_existing_zapret_status(self):
+        smoke_path = ROOT / "tools" / "dpop0417_rev11_existing_ui_smoke.ps1"
+        self.assertTrue(smoke_path.is_file(), "rev.11 existing-UI regression smoke is required")
         smoke = smoke_path.read_text(encoding="utf-8")
         for token in (
-            "REV10_UI_STABILITY_SMOKE_OK",
-            "Settings host drifted after wheel",
+            "REV11_EXISTING_UI_SMOKE_OK",
+            "Settings host drifted during aggressive wheel sequence",
             "Settings host moved after reopen cycle",
             "settings_reopen_cycles = 3",
             "Click-Id $window 905",
             "Click-Id $window 906",
             "0x020A",
+            "Rev.11 must not create version proxy id=1726",
+            "zapret_native_status_handle_stable",
         ):
             self.assertIn(token, smoke)
 
