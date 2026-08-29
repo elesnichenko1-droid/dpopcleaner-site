@@ -1,4 +1,4 @@
-name: Build, release and deploy DPopCleaner 0.4.17 rev.8
+name: Build, release and deploy DPopCleaner 0.4.17 rev.9
 
 on:
   workflow_dispatch:
@@ -48,11 +48,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: dpopcleaner-0-4-17-rev8-publish-${{ github.event_name }}
+  group: dpopcleaner-0-4-17-rev9-publish-${{ github.event_name }}
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: v0.4.17-rev8
+  RELEASE_TAG: v0.4.17-rev9
   RELEASE_ASSET: DPopCleaner_Setup_0.4.17.exe
 
 jobs:
@@ -169,7 +169,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $publish = Join-Path $env:RUNNER_TEMP 'dpop0417-rev8-publish'
+          $publish = Join-Path $env:RUNNER_TEMP 'dpop0417-rev9-publish'
           Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $publish, (Join-Path $publish 'assets'), (Join-Path $publish 'update') -Force | Out-Null
           Copy-Item $env:DPOP0417_INSTALLER (Join-Path $publish $env:RELEASE_ASSET) -Force
@@ -178,17 +178,17 @@ jobs:
           $sha256 = (Get-FileHash -LiteralPath $env:DPOP0417_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
           $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
           [ordered]@{
-            product='DPopCleaner'; channel='stable'; version='0.4.17'; version_code=417; revision=8; mandatory=$false
+            product='DPopCleaner'; channel='stable'; version='0.4.17'; version_code=417; revision=9; mandatory=$false
             download_url=$url; sha256=$sha256; size=[int64]$item.Length; signed=$false; available=$true
             notes_url='https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args='/SILENT /NORESTART'
           } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
-          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=8; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
+          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=9; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload verified release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: dpopcleaner-0.4.17-rev8-release-candidate
+          name: dpopcleaner-0.4.17-rev9-release-candidate
           path: ${{ env.DPOP0417_PUBLISH }}/*
           if-no-files-found: error
 
@@ -210,7 +210,7 @@ jobs:
       - name: Download verified release candidate
         uses: actions/download-artifact@v5
         with:
-          name: dpopcleaner-0.4.17-rev8-release-candidate
+          name: dpopcleaner-0.4.17-rev9-release-candidate
           path: publish
       - name: Publish GitHub release
         env:
@@ -220,9 +220,9 @@ jobs:
           asset="publish/${RELEASE_ASSET}"
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release upload "${RELEASE_TAG}" "$asset" --clobber
-            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.17 rev.8" --notes-file release/RELEASE_NOTES_0.4.17.md
+            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.17 rev.9" --notes-file release/RELEASE_NOTES_0.4.17.md
           else
-            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 rev.8" --notes-file release/RELEASE_NOTES_0.4.17.md
+            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 rev.9" --notes-file release/RELEASE_NOTES_0.4.17.md
           fi
       - name: Stage GitHub Pages
         run: |
@@ -247,11 +247,11 @@ jobs:
           $expected = Get-Content -Raw 'publish/update/stable.json' | ConvertFrom-Json
           $live = $null
           for ($i = 0; $i -lt 12; $i++) {
-            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.revision -eq 8 -and $live.sha256 -eq $expected.sha256) { break } } catch {}
+            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.revision -eq 9 -and $live.sha256 -eq $expected.sha256) { break } } catch {}
             Start-Sleep -Seconds 10
           }
-          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 8) { throw 'Live stable manifest mismatch.' }
-          if ($live.download_url -notmatch '/releases/download/v0\.4\.17-rev8/DPopCleaner_Setup_0\.4\.17\.exe$') { throw 'Live stable download URL mismatch.' }
+          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 9) { throw 'Live stable manifest mismatch.' }
+          if ($live.download_url -notmatch '/releases/download/v0\.4\.17-rev9/DPopCleaner_Setup_0\.4\.17\.exe$') { throw 'Live stable download URL mismatch.' }
           $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.17.exe'
           Invoke-WebRequest -Uri $live.download_url -OutFile $download
           if ((Get-Item -LiteralPath $download).Length -ne [int64]$expected.size) { throw 'Live installer size mismatch.' }
