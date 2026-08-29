@@ -18,8 +18,18 @@ namespace DPopCleaner.SimpleUpdate
 
             try
             {
-                var options = LauncherOptions.Parse(args);
                 var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+
+                // The immutable 0.2.14 Zapret page launches DPopUpdate.exe from the application root.
+                // Ship the verified SimpleUpdate binary under that legacy name and dispatch it here
+                // before taking the launcher mutex, because DPopCleaner is normally still running.
+                if (string.Equals(Path.GetFileName(Application.ExecutablePath), "DPopUpdate.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    LegacyZapretUpdater.Run(baseDirectory);
+                    return;
+                }
+
+                var options = LauncherOptions.Parse(args);
                 var corePath = Path.Combine(baseDirectory, "DPopCleaner.Core.exe");
                 var settingsPath = options.SettingsPathOverride ?? Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
