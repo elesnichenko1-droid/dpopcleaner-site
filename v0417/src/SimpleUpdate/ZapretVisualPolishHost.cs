@@ -11,12 +11,12 @@ namespace DPopCleaner.SimpleUpdate
         internal const int VersionStatusProxyId = 1726;
 
         private const string FallbackZapretVersion = "1.10.2";
-        private const string VersionClassName = "DPopCleanerZapretVersionProxy";
         private const int GWL_STYLE = -16;
         private const long BS_TYPEMASK = 0x0000000F;
         private const long BS_OWNERDRAW = 0x0000000B;
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
+        private const uint SS_LEFT = 0x00000000;
         private const uint WM_DRAWITEM = 0x002B;
         private const uint WM_PAINT = 0x000F;
         private const uint WM_ERASEBKGND = 0x0014;
@@ -28,7 +28,8 @@ namespace DPopCleaner.SimpleUpdate
         private const uint ODS_SELECTED = 0x0001;
         private const uint ODS_DISABLED = 0x0004;
         private const uint ODT_BUTTON = 4;
-        private const uint SubclassId = 0xD510;
+        private const uint ToolbarSubclassId = 0xD510;
+        private const uint VersionSubclassId = 0xD511;
 
         private static readonly int[] BridgeButtonIds =
         {
@@ -44,12 +45,11 @@ namespace DPopCleaner.SimpleUpdate
         private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> ToolbarOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
         private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> VersionOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
         private static readonly SubclassProc ToolbarSubclassDelegate = StaticToolbarSubclassProc;
-        private static readonly WindowProc VersionWndProcDelegate = StaticVersionWndProc;
+        private static readonly SubclassProc VersionSubclassDelegate = StaticVersionSubclassProc;
         private static readonly IntPtr PageBrush = CreateSolidBrush(Rgb(12, 17, 23));
         private static readonly IntPtr ButtonBrush = CreateSolidBrush(Rgb(18, 27, 38));
         private static readonly IntPtr ButtonPressedBrush = CreateSolidBrush(Rgb(27, 39, 53));
         private static readonly IntPtr ButtonBorderBrush = CreateSolidBrush(Rgb(45, 61, 78));
-        private static bool _versionClassRegistered;
 
         private readonly IntPtr _parent;
         private readonly string _applicationRoot;
@@ -78,23 +78,6 @@ namespace DPopCleaner.SimpleUpdate
             public UIntPtr itemData;
         }
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct WNDCLASSEX
-        {
-            public uint cbSize;
-            public uint style;
-            public IntPtr lpfnWndProc;
-            public int cbClsExtra;
-            public int cbWndExtra;
-            public IntPtr hInstance;
-            public IntPtr hIcon;
-            public IntPtr hCursor;
-            public IntPtr hbrBackground;
-            [MarshalAs(UnmanagedType.LPWStr)] public string lpszMenuName;
-            [MarshalAs(UnmanagedType.LPWStr)] public string lpszClassName;
-            public IntPtr hIconSm;
-        }
-
         [StructLayout(LayoutKind.Sequential)]
         private struct PAINTSTRUCT
         {
@@ -107,20 +90,13 @@ namespace DPopCleaner.SimpleUpdate
         }
 
         private delegate IntPtr SubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr refData);
-        private delegate IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr GetModuleHandle(string moduleName);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern ushort RegisterClassEx(ref WNDCLASSEX windowClass);
-
-        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr CreateWindowEx(uint exStyle, string className, string windowName, uint style,
             int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr DefWindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetParent(IntPtr hwnd);
@@ -190,7 +166,6 @@ namespace DPopCleaner.SimpleUpdate
             if (parent == IntPtr.Zero) throw new ArgumentException("Parent window is required.", "parent");
             _parent = parent;
             _applicationRoot = Path.GetFullPath(applicationRoot ?? string.Empty);
-            EnsureVersionClass();
             CreateVersionStatusProxy();
             Show();
         }
@@ -222,7 +197,7 @@ namespace DPopCleaner.SimpleUpdate
                     if (toolbar != IntPtr.Zero && _toolbarParents.Add(toolbar))
                     {
                         lock (Sync) ToolbarOwners[toolbar] = this;
-                        SetWindowSubclass(toolbar, ToolbarSubclassDelegate, new UIntPtr(SubclassId), UIntPtr.Zero);
+                        SetWindowSubclass(toolbar, ToolbarSubclassDelegate, new UIntPtr(ToolbarSubclassId), UIntPtr.Zero);
                     }
                 }
                 InvalidateRect(button, IntPtr.Zero, true);
@@ -250,23 +225,36 @@ namespace DPopCleaner.SimpleUpdate
             _versionBounds = NativeBridge.GetChildClientBounds(_parent, _legacyVersionStatus);
             if (_versionBounds == null) return;
             _versionFont = NativeBridge.SendMessage(_legacyVersionStatus, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
-            _versionProxy = CreateWindowEx(0, VersionClassName, string.Empty, WS_CHILD | WS_VISIBLE,
+
+            var initialText = BuildVersionStatusText();
+            _versionProxy = CreateWindowEx(0, "Static", initialText, WS_CHILD | WS_VISIBLE | SS_LEFT,
                 _versionBounds.Left, _versionBounds.Top, _versionBounds.Width, _versionBounds.Height,
                 _parent, new IntPtr(VersionStatusProxyId), GetModuleHandle(null), IntPtr.Zero);
             if (_versionProxy == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret version status proxy.");
+            if (_versionFont != IntPtr.Zero)
+                NativeBridge.SendMessage(_versionProxy, 0x0030, _versionFont, new IntPtr(1));
+
             lock (Sync) VersionOwners[_versionProxy] = this;
+            if (!SetWindowSubclass(_versionProxy, VersionSubclassDelegate, new UIntPtr(VersionSubclassId), UIntPtr.Zero))
+                throw new InvalidOperationException("Could not subclass Zapret version status proxy.");
+
             NativeBridge.ShowWindow(_legacyVersionStatus, NativeBridge.SW_HIDE);
             RefreshVersionStatusProxy();
+        }
+
+        private string BuildVersionStatusText()
+        {
+            var version = GetInstalledZapretVersion();
+            var legacyText = NativeBridge.ReadWindowText(_legacyVersionStatus) ?? string.Empty;
+            var bullet = legacyText.IndexOf('•');
+            var suffix = bullet >= 0 ? "  " + legacyText.Substring(bullet).TrimStart() : string.Empty;
+            return "Zapret " + version + suffix;
         }
 
         private void RefreshVersionStatusProxy()
         {
             if (_legacyVersionStatus == IntPtr.Zero || _versionProxy == IntPtr.Zero) return;
-            var version = GetInstalledZapretVersion();
-            var legacyText = NativeBridge.ReadWindowText(_legacyVersionStatus) ?? string.Empty;
-            var bullet = legacyText.IndexOf('•');
-            var suffix = bullet >= 0 ? "  " + legacyText.Substring(bullet).TrimStart() : string.Empty;
-            NativeBridge.WriteWindowText(_versionProxy, "Zapret " + version + suffix);
+            NativeBridge.WriteWindowText(_versionProxy, BuildVersionStatusText());
             NativeBridge.ShowWindow(_legacyVersionStatus, NativeBridge.SW_HIDE);
             NativeBridge.PositionChildWindow(_versionProxy, _versionBounds);
             InvalidateRect(_versionProxy, IntPtr.Zero, true);
@@ -326,6 +314,19 @@ namespace DPopCleaner.SimpleUpdate
             return DefSubclassProc(hwnd, msg, wParam, lParam);
         }
 
+        private static IntPtr StaticVersionSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr refData)
+        {
+            ZapretVisualPolishHost owner;
+            lock (Sync) VersionOwners.TryGetValue(hwnd, out owner);
+            if (owner != null && msg == WM_PAINT)
+            {
+                owner.PaintVersion(hwnd);
+                return IntPtr.Zero;
+            }
+            if (msg == WM_ERASEBKGND) return new IntPtr(1);
+            return DefSubclassProc(hwnd, msg, wParam, lParam);
+        }
+
         private void DrawOwnerButton(ref DRAWITEMSTRUCT item)
         {
             var rect = item.rcItem;
@@ -336,42 +337,6 @@ namespace DPopCleaner.SimpleUpdate
             SetBkMode(item.hDC, TRANSPARENT);
             SetTextColor(item.hDC, (item.itemState & ODS_DISABLED) != 0 ? Rgb(145, 154, 164) : Rgb(242, 246, 250));
             DrawText(item.hDC, text.ToString(), -1, ref rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        }
-
-        private static void EnsureVersionClass()
-        {
-            lock (Sync)
-            {
-                if (_versionClassRegistered) return;
-                var wc = new WNDCLASSEX
-                {
-                    cbSize = (uint)Marshal.SizeOf(typeof(WNDCLASSEX)),
-                    lpfnWndProc = Marshal.GetFunctionPointerForDelegate(VersionWndProcDelegate),
-                    hInstance = GetModuleHandle(null),
-                    hbrBackground = PageBrush,
-                    lpszClassName = VersionClassName
-                };
-                var atom = RegisterClassEx(ref wc);
-                if (atom == 0)
-                {
-                    var error = Marshal.GetLastWin32Error();
-                    if (error != 1410) throw new InvalidOperationException("Could not register Zapret version proxy class. Win32=" + error);
-                }
-                _versionClassRegistered = true;
-            }
-        }
-
-        private static IntPtr StaticVersionWndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
-        {
-            ZapretVisualPolishHost owner;
-            lock (Sync) VersionOwners.TryGetValue(hwnd, out owner);
-            if (owner != null && msg == WM_PAINT)
-            {
-                owner.PaintVersion(hwnd);
-                return IntPtr.Zero;
-            }
-            if (msg == WM_ERASEBKGND) return new IntPtr(1);
-            return DefWindowProc(hwnd, msg, wParam, lParam);
         }
 
         private void PaintVersion(IntPtr hwnd)
@@ -409,15 +374,18 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (_disposed) return;
             _disposed = true;
+
             foreach (var toolbar in _toolbarParents)
             {
-                try { RemoveWindowSubclass(toolbar, ToolbarSubclassDelegate, new UIntPtr(SubclassId)); } catch { }
+                try { RemoveWindowSubclass(toolbar, ToolbarSubclassDelegate, new UIntPtr(ToolbarSubclassId)); } catch { }
                 lock (Sync) ToolbarOwners.Remove(toolbar);
             }
             _toolbarParents.Clear();
             _buttons.Clear();
+
             if (_versionProxy != IntPtr.Zero)
             {
+                try { RemoveWindowSubclass(_versionProxy, VersionSubclassDelegate, new UIntPtr(VersionSubclassId)); } catch { }
                 lock (Sync) VersionOwners.Remove(_versionProxy);
                 try { DestroyWindow(_versionProxy); } catch { }
                 _versionProxy = IntPtr.Zero;
