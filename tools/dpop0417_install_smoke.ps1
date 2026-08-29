@@ -22,12 +22,14 @@ $diskEvidence = Join-Path $OutputDir 'disk-installed'
 $restoreEvidence = Join-Path $OutputDir 'restore-installed'
 $zapretEvidence = Join-Path $OutputDir 'zapret-installed'
 $settingsEvidence = Join-Path $OutputDir 'settings-installed'
+$rev7Evidence = Join-Path $OutputDir 'rev7-ui-installed'
 $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
 $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
 $uninstalled = $false
 $documentationAclModify = $false
 $installedSettingsBridgeSmoke = $false
+$rev7FunctionalSmoke = $false
 $zapretScreenFixPresent = $false
 $zapretRuntimePresent = $false
 $zapretUiSmoke = $false
@@ -44,7 +46,6 @@ try {
     if ($install.ExitCode -ne 0) { throw "Silent install failed with exit code $($install.ExitCode)." }
     $installed = $true
 
-    # Historical DPopCleaner.exe is now the bridge so old shortcuts cannot bypass revision 6 UI fixes.
     $appLauncher = Assert-File 'DPopCleaner.exe'
     $core = Assert-File 'DPopCleaner.Core.exe'
     $launcher = Assert-File 'SimpleUpdate.exe'
@@ -98,6 +99,11 @@ try {
     $installedSettingsBridgeSmoke = Test-Path -LiteralPath (Join-Path $settingsEvidence 'installed-settings-smoke-report.json') -PathType Leaf
     if (-not $installedSettingsBridgeSmoke) { throw 'Installed Settings bridge smoke report was not produced.' }
 
+    & (Join-Path $PSScriptRoot 'dpop0417_rev7_installed_ui_smoke.ps1') -RootPath $installRoot -OutputDir $rev7Evidence
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $rev7FunctionalSmoke = Test-Path -LiteralPath (Join-Path $rev7Evidence 'rev7-installed-ui-smoke-report.json') -PathType Leaf
+    if (-not $rev7FunctionalSmoke) { throw 'rev.7 installed functional UI smoke report was not produced.' }
+
     & (Join-Path $PSScriptRoot 'dpop0417_zapret_ui_smoke.ps1') -RootPath $installRoot -OutputDir $zapretEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $zapretUiSmoke = Test-Path -LiteralPath (Join-Path $zapretEvidence 'zapret-ui-smoke-report.json') -PathType Leaf
@@ -126,6 +132,7 @@ try {
         expected_core_blob = $expectedCoreBlob
         legacy_dpopcleaner_path_is_bridge = ($appLauncherHash -eq $simpleUpdateHash)
         installed_settings_bridge_smoke = [bool]$installedSettingsBridgeSmoke
+        rev7_functional_ui_smoke = [bool]$rev7FunctionalSmoke
         zapret_runtime_present = [bool]$zapretRuntimePresent
         zapret_version = $zapretVersion
         zapret_strategy_files = $installedStrategies.Count
@@ -140,6 +147,7 @@ try {
     Write-Host "Installed immutable core: $installedCoreBlob at DPopCleaner.Core.exe"
     Write-Host 'Historical DPopCleaner.exe path -> elevated Settings UI bridge: PASS'
     Write-Host 'Installed Settings scroll/auto-update/legacy-version smoke: PASS'
+    Write-Host 'Installed rev.7 hide/restore + RAM + Zapret + Settings functional smoke: PASS'
     Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'
