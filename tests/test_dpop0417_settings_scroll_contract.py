@@ -59,29 +59,24 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
         self.assertIn("Re-querying by label would recursively find our own proxy checkbox", launcher)
         self.assertIn("HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds)", launcher)
 
-    def test_rev11_runtime_smoke_replays_wheel_and_existing_zapret_status(self):
-        smoke = (ROOT / "tools" / "dpop0417_rev11_existing_ui_smoke.ps1").read_text(encoding="utf-8")
+    def test_rev12_runtime_smoke_uses_native_version_source_and_captures_real_zapret_page(self):
+        smoke = (ROOT / "tools" / "dpop0417_rev12_native_version_smoke.ps1").read_text(encoding="utf-8")
         for token in (
-            "REV11_EXISTING_UI_SMOKE_OK",
-            "Settings host drifted during aggressive wheel sequence",
-            "Settings host moved after reopen cycle",
-            "settings_reopen_cycles = 3",
+            "REV12_NATIVE_ZAPRET_VERSION_SMOKE_OK",
+            "Zapret\\utils\\dpop_version.txt",
+            "Zapret\\.service\\version.txt",
+            "nativeVersion -ne '1.10.2'",
+            "version_metadata_byte_identical",
+            "PrintWindow",
+            "rev12-zapret-native-version.png",
+            "Forbidden rev.10 version proxy id=1726 exists",
+            "bridge_buttons_owner_draw",
             "Click-Id $window 905",
-            "Click-Id $window 906",
-            "0x020A",
-            "Rev.11 must not create version proxy id=1726",
-            "zapret_native_status_handle_stable",
-            "Wait-ZapretPage",
-            "Wait-Visible $Window 1703",
-            "Zapret page did not stabilize after retry",
-            "Click-Id $Window 905",
-            "lowerEditBefore",
-            "lowerEditAfter",
-            "zapret_native_status_click_matches_frozen_behavior",
-            "Native Status click preserved frozen Edit layout: PASS",
+            "Wait-Visible $window 1703",
         ):
             self.assertIn(token, smoke)
-        self.assertNotIn("RequireNativeSuffix", smoke)
+        self.assertNotIn("Wait-NativeZapretStatus", smoke)
+        self.assertNotIn("WriteWindowText", smoke)
 
     def test_rev11_direct_frozen_core_diagnostic_records_native_status_click_effect(self):
         diagnostic = (ROOT / "tools" / "dpop0417_rev7_ui_diagnostic.ps1").read_text(encoding="utf-8")

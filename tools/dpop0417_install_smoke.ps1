@@ -23,7 +23,7 @@ $restoreEvidence = Join-Path $OutputDir 'restore-installed'
 $zapretEvidence = Join-Path $OutputDir 'zapret-installed'
 $settingsEvidence = Join-Path $OutputDir 'settings-installed'
 $rev7Evidence = Join-Path $OutputDir 'rev7-ui-installed'
-$rev11Evidence = Join-Path $OutputDir 'rev11-existing-ui'
+$rev12Evidence = Join-Path $OutputDir 'rev12-native-version'
 $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
 $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
@@ -31,7 +31,7 @@ $uninstalled = $false
 $documentationAclModify = $false
 $installedSettingsBridgeSmoke = $false
 $rev7FunctionalSmoke = $false
-$rev11ExistingUiSmoke = $false
+$rev12NativeVersionSmoke = $false
 $zapretScreenFixPresent = $false
 $zapretRuntimePresent = $false
 $zapretUiSmoke = $false
@@ -58,14 +58,20 @@ try {
     [void](Assert-File 'Zapret\LICENSE.txt')
     [void](Assert-File 'Zapret\service.bat')
     [void](Assert-File 'Zapret\general.bat')
-    [void](Assert-File 'Zapret\.service\version.txt')
+    $serviceVersionFile = Assert-File 'Zapret\.service\version.txt'
+    $nativeVersionFile = Assert-File 'Zapret\utils\dpop_version.txt'
     [void](Assert-File 'Zapret\bin\winws.exe')
     [void](Assert-File 'Zapret\bin\WinDivert.dll')
     [void](Assert-File 'Zapret\bin\WinDivert64.sys')
     if (-not (Test-Path -LiteralPath (Join-Path $zapretRoot 'lists') -PathType Container)) { throw 'Installed Zapret lists directory missing.' }
     if (-not (Test-Path -LiteralPath (Join-Path $zapretRoot 'utils') -PathType Container)) { throw 'Installed Zapret utils directory missing.' }
-    $zapretVersion = (Get-Content -Raw -LiteralPath (Join-Path $zapretRoot '.service\version.txt')).Trim()
+    $zapretVersion = (Get-Content -Raw -LiteralPath $serviceVersionFile).Trim()
+    $nativeZapretVersion = (Get-Content -Raw -LiteralPath $nativeVersionFile).Trim()
     if ($zapretVersion -ne '1.10.2') { throw "Installed Zapret version mismatch: $zapretVersion" }
+    if ($nativeZapretVersion -ne $zapretVersion) { throw "Installed frozen-core dpop_version mismatch: $nativeZapretVersion vs $zapretVersion" }
+    if ((Get-FileHash -LiteralPath $serviceVersionFile -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $nativeVersionFile -Algorithm SHA256).Hash) {
+        throw 'Installed native dpop_version.txt is not byte-identical to pinned .service/version.txt.'
+    }
     $installedStrategies = @(Get-ChildItem -LiteralPath $zapretRoot -Filter 'general*.bat' -File)
     if ($installedStrategies.Count -eq 0) { throw 'Installed Zapret has no general*.bat strategies under Zapret\.' }
     $zapretRuntimePresent = $true
@@ -111,10 +117,13 @@ try {
     $zapretUiSmoke = Test-Path -LiteralPath (Join-Path $zapretEvidence 'zapret-ui-smoke-report.json') -PathType Leaf
     if (-not $zapretUiSmoke) { throw 'Installed authentic Zapret UI smoke report was not produced.' }
 
-    & (Join-Path $PSScriptRoot 'dpop0417_rev11_existing_ui_smoke.ps1') -InstallerPath $InstallerPath -OutputDir $rev11Evidence
+    # Independent clean install: prove the immutable core receives 1.10.2 through
+    # its own native utils\dpop_version.txt source and save an actual rendered PNG.
+    & (Join-Path $PSScriptRoot 'dpop0417_rev12_native_version_smoke.ps1') -InstallerPath $InstallerPath -OutputDir $rev12Evidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $rev11ExistingUiSmoke = Test-Path -LiteralPath (Join-Path $rev11Evidence 'rev11-existing-ui-smoke-report.json') -PathType Leaf
-    if (-not $rev11ExistingUiSmoke) { throw 'rev.11 existing Settings/Zapret UI smoke report was not produced.' }
+    $rev12NativeVersionSmoke = Test-Path -LiteralPath (Join-Path $rev12Evidence 'rev12-native-version-smoke-report.json') -PathType Leaf
+    if (-not $rev12NativeVersionSmoke) { throw 'rev.12 native Zapret version smoke report was not produced.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $rev12Evidence 'rev12-zapret-native-version.png') -PathType Leaf)) { throw 'rev.12 native Zapret screenshot evidence was not produced.' }
 
     & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') -ExePath $diskExe -OutputDir $diskEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -140,9 +149,10 @@ try {
         legacy_dpopcleaner_path_is_bridge = ($appLauncherHash -eq $simpleUpdateHash)
         installed_settings_bridge_smoke = [bool]$installedSettingsBridgeSmoke
         rev7_functional_ui_smoke = [bool]$rev7FunctionalSmoke
-        rev11_existing_ui_smoke = [bool]$rev11ExistingUiSmoke
+        rev12_native_version_smoke = [bool]$rev12NativeVersionSmoke
         zapret_runtime_present = [bool]$zapretRuntimePresent
         zapret_version = $zapretVersion
+        zapret_native_version_source = $nativeZapretVersion
         zapret_strategy_files = $installedStrategies.Count
         zapret_authentic_ui_smoke = [bool]$zapretUiSmoke
         zapret_screen_fix_present = [bool]$zapretScreenFixPresent
@@ -156,8 +166,8 @@ try {
     Write-Host 'Historical DPopCleaner.exe path -> elevated Settings UI bridge: PASS'
     Write-Host 'Installed Settings scroll/auto-update/legacy-version smoke: PASS'
     Write-Host 'Installed rev.7 hide/restore + RAM + Zapret + Settings functional smoke: PASS'
-    Write-Host 'Installed rev.11 existing Settings/Zapret UI runtime smoke: PASS'
-    Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; root=$zapretRoot; strategies=$($installedStrategies.Count)"
+    Write-Host 'Installed rev.12 native Zapret version source + screenshot smoke: PASS'
+    Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; native_source=$nativeZapretVersion; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'
     Write-Host 'Installed Documentation ACL: BUILTIN\Users Modify PASS'

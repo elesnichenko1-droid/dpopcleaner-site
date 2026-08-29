@@ -66,36 +66,35 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertNotIn('zapretProxyTimer', program)
         self.assertNotIn('ZapretUpdateProxyHost zapretUpdateProxy', program)
 
-    def test_rev11_zapret_rewrites_existing_status_in_place_and_keeps_dark_buttons(self):
+    def test_rev12_zapret_uses_frozen_core_native_version_source_and_keeps_dark_buttons(self):
         visual_path = ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs'
         self.assertTrue(visual_path.is_file())
         visual = visual_path.read_text(encoding='utf-8')
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
-        self.assertNotIn('VersionStatusProxyId = 1726', visual)
-        self.assertNotIn('CreateVersionStatusProxy', visual)
-        self.assertNotIn('CreateWindowEx(0, "Static"', visual)
-        self.assertIn('AttachToExistingVersionStatus', visual)
-        self.assertIn('SelectExistingStatusEdit', visual)
-        self.assertIn('RefreshExistingVersionStatus', visual)
-        self.assertIn('RewriteVersionStatusText', visual)
-        self.assertIn('string.Equals(child.ClassName, "Edit"', visual)
-        self.assertIn('child.Visible', visual)
-        self.assertIn('child.Top < candidate.Top', visual)
-        self.assertIn('string.Equals(text, "—", StringComparison.Ordinal)', visual)
-        self.assertIn('"Zapret " + version + "  •  " + text', visual)
-        self.assertIn('NativeBridge.ReadWindowText(_versionStatus)', visual)
-        self.assertIn('NativeBridge.WriteWindowText(_versionStatus, rewritten)', visual)
-        self.assertIn('if (!string.Equals(existing, rewritten, StringComparison.Ordinal))', visual)
-        self.assertNotIn('SetWindowSubclass(_versionStatus', visual)
-        self.assertNotIn('VersionOwners', visual)
-        self.assertNotIn('VersionSubclassDelegate', visual)
+        prepare = (ROOT / 'tools/dpop0417_prepare_zapret.ps1').read_text(encoding='utf-8')
+        stage = (ROOT / 'tools/dpop0417_stage.ps1').read_text(encoding='utf-8')
+
+        # Rev.12 must not create or rewrite a version HWND. The immutable core already
+        # owns the visible row and reads Zapret\\utils\\dpop_version.txt itself.
+        for forbidden in (
+            'VersionStatusProxyId', 'CreateVersionStatusProxy', 'AttachToExistingVersionStatus',
+            'SelectExistingStatusEdit', 'RefreshExistingVersionStatus', 'RewriteVersionStatusText',
+            '_versionStatus', 'WriteWindowText(_versionStatus', 'SetWindowSubclass(_versionStatus'
+        ):
+            self.assertNotIn(forbidden, visual)
+        self.assertIn('EnsureDarkBridgeButtons();', visual)
         self.assertIn('BS_OWNERDRAW', visual)
         self.assertIn('WM_DRAWITEM', visual)
         self.assertIn('DrawOwnerButton', visual)
         self.assertIn('"Игровой фильтр " + version', visual)
         self.assertIn('"Менеджер " + version', visual)
         self.assertIn('ZapretVisualPolishHost', launcher)
-        self.assertNotIn('InvalidateRect(button, IntPtr.Zero, true);\n            }', visual)
+
+        self.assertIn("utils/dpop_version.txt", prepare)
+        self.assertIn("Copy-Item -LiteralPath $pinnedVersionFile", prepare)
+        self.assertIn("Prepared frozen-core dpop_version.txt", prepare)
+        self.assertIn("utils/dpop_version.txt", stage)
+        self.assertIn("Frozen-core Zapret version source mismatch", stage)
 
     def test_frozen_zapret_download_button_has_compatibility_updater(self):
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8')

@@ -45,6 +45,7 @@ if ($LASTEXITCODE -ne 0 -or $sourceBlob -ne [string]$core.git_blob_sha1) { throw
 $requiredZapretFiles = @(
     'LICENSE.txt',
     '.service/version.txt',
+    'utils/dpop_version.txt',
     'service.bat',
     'general.bat',
     'bin/winws.exe',
@@ -63,6 +64,8 @@ foreach ($directory in @('lists','utils')) {
 }
 $zapretVersion = (Get-Content -Raw -LiteralPath (Join-Path $zapretRoot '.service/version.txt')).Trim()
 if ($zapretVersion -ne '1.10.2') { throw "Prepared Zapret version mismatch: $zapretVersion" }
+$nativeZapretVersion = (Get-Content -Raw -LiteralPath (Join-Path $zapretRoot 'utils/dpop_version.txt')).Trim()
+if ($nativeZapretVersion -ne $zapretVersion) { throw "Frozen-core Zapret version source mismatch: $nativeZapretVersion vs $zapretVersion" }
 $strategies = @(Get-ChildItem -LiteralPath $zapretRoot -Filter 'general*.bat' -File | Sort-Object Name)
 if ($strategies.Count -eq 0) { throw 'Prepared Zapret payload has no general*.bat strategies.' }
 
@@ -81,7 +84,8 @@ Copy-Item -LiteralPath $launcher -Destination (Join-Path $stageRoot 'SimpleUpdat
 # Runtime evidence from the frozen 0.2.14 process shows that its Zapret root is
 # <DPopCleaner.exe directory>\Zapret. service.bat, general*.bat and bin\winws.exe
 # are resolved relative to that legacy subdirectory, so keep the verified
-# Flowseal payload there without modifying the immutable core.
+# Flowseal payload there without modifying the immutable core. The same core
+# also reads utils\dpop_version.txt for the native Zapret Center version row.
 Copy-Item -LiteralPath (Join-Path $zapretRoot 'LICENSE.txt') -Destination (Join-Path $stageZapretRoot 'LICENSE.txt') -Force
 foreach ($batch in @(Get-ChildItem -LiteralPath $zapretRoot -Filter '*.bat' -File | Sort-Object Name)) {
     Copy-Item -LiteralPath $batch.FullName -Destination (Join-Path $stageZapretRoot $batch.Name) -Force
@@ -130,6 +134,8 @@ foreach ($relative in $requiredZapretFiles) {
     $candidate = Join-Path $stageZapretRoot ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
     if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Staged Zapret payload missing required file: Zapret/$relative" }
 }
+$stagedNativeVersion = (Get-Content -Raw -LiteralPath (Join-Path $stageZapretRoot 'utils/dpop_version.txt')).Trim()
+if ($stagedNativeVersion -ne $zapretVersion) { throw "Staged frozen-core Zapret version source mismatch: $stagedNativeVersion" }
 $stagedStrategies = @(Get-ChildItem -LiteralPath $stageZapretRoot -Filter 'general*.bat' -File)
 if ($stagedStrategies.Count -eq 0) { throw 'Staged Zapret payload contains no general*.bat strategies under Zapret/.' }
 
@@ -138,6 +144,6 @@ $stagedBlob = (& git -C $root hash-object -- $stagedCore).Trim()
 if ($LASTEXITCODE -ne 0 -or $stagedBlob -ne [string]$core.git_blob_sha1) { throw "Staged DPopCleaner.exe changed from the preserved original: $stagedBlob" }
 
 Write-Host "Staged immutable core: $stagedBlob"
-Write-Host "Staged Flowseal Zapret: $zapretVersion; strategies=$($stagedStrategies.Count); root=$stageZapretRoot; winws.exe=$(Join-Path $stageZapretRoot 'bin/winws.exe')"
+Write-Host "Staged Flowseal Zapret: $zapretVersion; native_version_source=$stagedNativeVersion; strategies=$($stagedStrategies.Count); root=$stageZapretRoot; winws.exe=$(Join-Path $stageZapretRoot 'bin/winws.exe')"
 Write-Host "Staged launcher: $(Join-Path $stageRoot 'SimpleUpdate.exe')"
 Write-Host "0.4.17 stage ready: $stageRoot"

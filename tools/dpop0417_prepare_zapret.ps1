@@ -105,8 +105,21 @@ foreach ($directory in @('lists', 'utils')) {
 Copy-Item -LiteralPath $pinnedLicense -Destination (Join-Path $payloadRoot 'LICENSE.txt') -Force
 New-Directory (Join-Path $payloadRoot '.service')
 Copy-Item -LiteralPath $pinnedVersionFile -Destination (Join-Path $payloadRoot '.service/version.txt') -Force
+
+# Frozen DPopCleaner 0.2.14 does NOT read .service/version.txt for the version
+# rendered in Zapret Center. Reverse/runtime diagnostics prove it opens the
+# existing legacy compatibility path Zapret\utils\dpop_version.txt as UTF-8;
+# when the file is absent it constructs the fallback "1.9.9d" in machine code.
+# Feed the immutable core the same byte-pinned 1.10.2 metadata through the path
+# it already expects. This changes no core bytes and creates no replacement UI.
+Copy-Item -LiteralPath $pinnedVersionFile -Destination (Join-Path $payloadRoot 'utils/dpop_version.txt') -Force
+
 Assert-Sha256 (Join-Path $payloadRoot 'LICENSE.txt') $PinnedLicenseSha256 'Prepared Flowseal LICENSE.txt'
 Assert-Sha256 (Join-Path $payloadRoot '.service/version.txt') $PinnedVersionSha256 'Prepared Flowseal version.txt'
+Assert-Sha256 (Join-Path $payloadRoot 'utils/dpop_version.txt') $PinnedVersionSha256 'Prepared frozen-core dpop_version.txt'
+if ((Get-Content -Raw -LiteralPath (Join-Path $payloadRoot 'utils/dpop_version.txt')).Trim() -ne $PinnedVersion) {
+    throw "Prepared frozen-core dpop_version.txt is not $PinnedVersion."
+}
 
 $strategies = @(Get-ChildItem -LiteralPath $payloadRoot -Filter 'general*.bat' -File | Sort-Object Name)
 if ($strategies.Count -eq 0) {
@@ -124,6 +137,7 @@ $requiredPreparedFiles = @(
     'service.bat',
     'general.bat',
     '.service/version.txt',
+    'utils/dpop_version.txt',
     'bin/winws.exe',
     'bin/WinDivert.dll',
     'bin/WinDivert64.sys'
@@ -139,7 +153,11 @@ foreach ($directory in @('lists', 'utils')) {
         throw "Prepared Zapret tree missing required directory: $directory"
     }
 }
+if ((Get-Content -Raw -LiteralPath (Join-Path $output 'utils/dpop_version.txt')).Trim() -ne $PinnedVersion) {
+    throw "Prepared Zapret tree exposes wrong frozen-core version metadata."
+}
 
 Write-Host "Pinned Zapret archive verified: $actualSize bytes, SHA-256 $actualSha"
 Write-Host "Flowseal Zapret version verified: $PinnedVersion"
+Write-Host "Frozen-core Zapret version source verified: utils/dpop_version.txt=$PinnedVersion"
 Write-Host "Prepared old-core-compatible Zapret payload: $output"

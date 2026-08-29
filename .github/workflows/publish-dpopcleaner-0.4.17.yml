@@ -1,4 +1,4 @@
-name: Build, release and deploy DPopCleaner 0.4.17 rev.11
+name: Build, release and deploy DPopCleaner 0.4.17 rev.12
 
 on:
   workflow_dispatch:
@@ -48,11 +48,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: dpopcleaner-0-4-17-rev11-publish-${{ github.event_name }}
+  group: dpopcleaner-0-4-17-rev12-publish-${{ github.event_name }}
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: v0.4.17-rev11
+  RELEASE_TAG: v0.4.17-rev12
   RELEASE_ASSET: DPopCleaner_Setup_0.4.17.exe
 
 jobs:
@@ -126,12 +126,15 @@ jobs:
             '_release/0.4.17/stage/Zapret/bin/WinDivert.dll',
             '_release/0.4.17/stage/Zapret/bin/WinDivert64.sys',
             '_release/0.4.17/stage/Zapret/.service/version.txt',
+            '_release/0.4.17/stage/Zapret/utils/dpop_version.txt',
             '_release/0.4.17/stage/Modules/ZapretScreenFix.exe',
             '_release/0.4.17/stage/Shell/commands/zapret-screen-fix.json'
           )) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Staged Zapret requirement missing: $required" }
           }
-          if ((Get-Content -Raw '_release/0.4.17/stage/Zapret/.service/version.txt').Trim() -ne '1.10.2') { throw 'Staged Flowseal Zapret version is not 1.10.2.' }
+          $serviceVersion = (Get-Content -Raw '_release/0.4.17/stage/Zapret/.service/version.txt').Trim()
+          $nativeVersion = (Get-Content -Raw '_release/0.4.17/stage/Zapret/utils/dpop_version.txt').Trim()
+          if ($serviceVersion -ne '1.10.2' -or $nativeVersion -ne '1.10.2') { throw "Staged Zapret version mismatch: service=$serviceVersion native=$nativeVersion" }
           $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
           $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
           if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }
@@ -150,12 +153,18 @@ jobs:
           $installer = '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe'
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer missing.' }
           "DPOP0417_INSTALLER=$((Resolve-Path $installer).Path)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Run installed package smoke (includes rev.11 existing UI smoke)
+      - name: Run installed package smoke (includes rev.12 native version smoke)
         shell: pwsh
         run: ./tools/dpop0417_install_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/install'
-      - name: Run rev.11 existing UI smoke independently
+      - name: Run rev.12 native Zapret version smoke independently
         shell: pwsh
-        run: ./tools/dpop0417_rev11_existing_ui_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev11-existing-ui'
+        run: ./tools/dpop0417_rev12_native_version_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev12-native-version'
+      - name: Upload rev.12 rendered Zapret evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.4.17-rev12-zapret-evidence
+          path: _release/0.4.17/evidence/rev12-native-version/*
+          if-no-files-found: error
       - name: Run rev.9 Zapret update click smoke
         shell: pwsh
         run: ./tools/dpop0417_rev9_zapret_update_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev9-zapret-update'
@@ -163,7 +172,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $publish = Join-Path $env:RUNNER_TEMP 'dpop0417-rev11-publish'
+          $publish = Join-Path $env:RUNNER_TEMP 'dpop0417-rev12-publish'
           Remove-Item $publish -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $publish, (Join-Path $publish 'assets'), (Join-Path $publish 'update') -Force | Out-Null
           Copy-Item $env:DPOP0417_INSTALLER (Join-Path $publish $env:RELEASE_ASSET) -Force
@@ -172,16 +181,16 @@ jobs:
           $sha256 = (Get-FileHash -LiteralPath $env:DPOP0417_INSTALLER -Algorithm SHA256).Hash.ToLowerInvariant()
           $url = "https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/$env:RELEASE_TAG/$env:RELEASE_ASSET"
           [ordered]@{
-            product='DPopCleaner'; channel='stable'; version='0.4.17'; version_code=417; revision=11; mandatory=$false
+            product='DPopCleaner'; channel='stable'; version='0.4.17'; version_code=417; revision=12; mandatory=$false
             download_url=$url; sha256=$sha256; size=[int64]$item.Length; signed=$false; available=$true
             notes_url='https://elesnichenko1-droid.github.io/dpopcleaner-site/'; install_args='/SILENT /NORESTART'
           } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
-          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=11; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
+          [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=12; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Upload verified release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: dpopcleaner-0.4.17-rev11-release-candidate
+          name: dpopcleaner-0.4.17-rev12-release-candidate
           path: ${{ env.DPOP0417_PUBLISH }}/*
           if-no-files-found: error
 
@@ -203,7 +212,7 @@ jobs:
       - name: Download verified release candidate
         uses: actions/download-artifact@v5
         with:
-          name: dpopcleaner-0.4.17-rev11-release-candidate
+          name: dpopcleaner-0.4.17-rev12-release-candidate
           path: publish
       - name: Publish GitHub release
         env:
@@ -213,9 +222,9 @@ jobs:
           asset="publish/${RELEASE_ASSET}"
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release upload "${RELEASE_TAG}" "$asset" --clobber
-            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.17 rev.11" --notes-file release/RELEASE_NOTES_0.4.17.md
+            gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.17 rev.12" --notes-file release/RELEASE_NOTES_0.4.17.md
           else
-            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 rev.11" --notes-file release/RELEASE_NOTES_0.4.17.md
+            gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 rev.12" --notes-file release/RELEASE_NOTES_0.4.17.md
           fi
       - name: Stage GitHub Pages
         run: |
@@ -240,11 +249,11 @@ jobs:
           $expected = Get-Content -Raw 'publish/update/stable.json' | ConvertFrom-Json
           $live = $null
           for ($i = 0; $i -lt 12; $i++) {
-            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.revision -eq 11 -and $live.sha256 -eq $expected.sha256) { break } } catch {}
+            try { $live = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'Cache-Control'='no-cache' }; if ($live.version -eq '0.4.17' -and $live.channel -eq 'stable' -and $live.revision -eq 12 -and $live.sha256 -eq $expected.sha256) { break } } catch {}
             Start-Sleep -Seconds 10
           }
-          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 11) { throw 'Live stable manifest mismatch.' }
-          if ($live.download_url -notmatch '/releases/download/v0\.4\.17-rev11/DPopCleaner_Setup_0\.4\.17\.exe$') { throw 'Live stable download URL mismatch.' }
+          if (-not $live -or $live.version -ne '0.4.17' -or $live.channel -ne 'stable' -or $live.version_code -ne 417 -or $live.revision -ne 12) { throw 'Live stable manifest mismatch.' }
+          if ($live.download_url -notmatch '/releases/download/v0\.4\.17-rev12/DPopCleaner_Setup_0\.4\.17\.exe$') { throw 'Live stable download URL mismatch.' }
           $download = Join-Path $env:RUNNER_TEMP 'DPopCleaner_Setup_0.4.17.exe'
           Invoke-WebRequest -Uri $live.download_url -OutFile $download
           if ((Get-Item -LiteralPath $download).Length -ne [int64]$expected.size) { throw 'Live installer size mismatch.' }
