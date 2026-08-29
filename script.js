@@ -9,7 +9,8 @@ function formatBytes(bytes){
 }
 
 function applyRevision(m){
-  const revision = Number(m?.revision);
+  if(!m) return;
+  const revision = Number(m.revision);
   if(!Number.isInteger(revision) || revision < 1) return;
   const label = `rev.${revision}`;
   document.title = document.title.replace(/rev\.\d+/gi, label);
