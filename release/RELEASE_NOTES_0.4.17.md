@@ -1,6 +1,6 @@
 # DPopCleaner 0.4.17 rev.7
 
-DPopCleaner 0.4.17 rev.7 — функциональный hotfix поверх прежнего интерфейса. Дизайн приложения не менялся, C++-интерфейс не внедрялся: работа выполнена через существующий launcher/UI-bridge, а оригинальное ядро 0.2.14 сохранено byte-identical как `{app}\DPopCleaner.Core.exe` с Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`.
+DPopCleaner 0.4.17 rev.7 — функциональный hotfix поверх прежнего интерфейса. **Прежний интерфейс сохранён**: дизайн приложения не менялся, C++-интерфейс не внедрялся. Работа выполнена через существующий launcher/UI-bridge, а оригинальное ядро 0.2.14 сохранено byte-identical как `{app}\DPopCleaner.Core.exe` с Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`.
 
 ## Revision 7
 
