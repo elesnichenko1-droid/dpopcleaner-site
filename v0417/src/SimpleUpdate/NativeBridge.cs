@@ -8,10 +8,16 @@ namespace DPopCleaner.SimpleUpdate
     internal static class NativeBridge
     {
         internal const int SettingsGearId = 906;
+        internal const int RamTabButtonId = 910;
+        internal const int ZapretTabButtonId = 905;
         internal const int AdminCheckboxId = 1410;
         internal const int LicenseBuyButtonId = 1407;
         internal const int LicenseSaveButtonId = 1408;
         internal const int SupportButtonId = 1406;
+        internal const int SaveSettingsButtonId = 1401;
+        internal const int RamThresholdComboId = 1956;
+        internal const int ZapretCheckVersionButtonId = 1709;
+        internal const int ZapretApplyButtonId = 1704;
         internal const int AutoUpdateCheckboxId = 1490;
         internal const int CheckNowButtonId = 1491;
         internal const int SettingsScrollHostId = 1492;
@@ -31,6 +37,15 @@ namespace DPopCleaner.SimpleUpdate
         internal const int ICON_BIG = 1;
         internal const int SW_HIDE = 0;
         internal const int SW_SHOW = 5;
+
+        private const uint CB_GETCOUNT = 0x0146;
+        private const uint CB_GETLBTEXT = 0x0148;
+        private const uint CB_GETLBTEXTLEN = 0x0149;
+        private const uint CB_RESETCONTENT = 0x014B;
+        private const uint CB_ADDSTRING = 0x0143;
+        private const uint CB_SETCURSEL = 0x014E;
+        private const string FirstRamThreshold = "5%";
+        private const string LastRamThreshold = "95%";
 
         private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
@@ -100,6 +115,12 @@ namespace DPopCleaner.SimpleUpdate
         [DllImport("user32.dll")]
         internal static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")]
+        private static extern IntPtr SendMessageText(IntPtr hWnd, uint msg, IntPtr wParam, string lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")]
+        private static extern IntPtr SendMessageBuffer(IntPtr hWnd, uint msg, IntPtr wParam, StringBuilder lParam);
+
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -148,6 +169,18 @@ namespace DPopCleaner.SimpleUpdate
             return IntPtr.Zero;
         }
 
+        internal static IntPtr FindChildByText(IntPtr parent, string text, string className = null, bool visibleOnly = false)
+        {
+            foreach (var child in GetChildren(parent))
+            {
+                if (visibleOnly && !child.Visible) continue;
+                if (!string.Equals(child.Text ?? string.Empty, text ?? string.Empty, StringComparison.Ordinal)) continue;
+                if (!string.IsNullOrEmpty(className) && !string.Equals(child.ClassName, className, StringComparison.OrdinalIgnoreCase)) continue;
+                return child.Handle;
+            }
+            return IntPtr.Zero;
+        }
+
         internal static ClientBounds GetChildClientBounds(IntPtr parent, IntPtr child)
         {
             if (parent == IntPtr.Zero || child == IntPtr.Zero) return null;
@@ -165,17 +198,28 @@ namespace DPopCleaner.SimpleUpdate
             };
         }
 
+        internal static ClientBounds GetSettingsScrollBounds(IntPtr parent)
+        {
+            var first = FindChildByText(parent, "Фоновый контроль мусора каждые 30 минут", "Button", true);
+            var firstBounds = GetChildClientBounds(parent, first);
+            if (firstBounds == null) return null;
+
+            var status = FindChildByText(parent, "Готово.", "Static", true);
+            var statusBounds = GetChildClientBounds(parent, status);
+            var saveBounds = GetChildClientBounds(parent, FindChildById(parent, SaveSettingsButtonId));
+            var bottom = statusBounds != null
+                ? statusBounds.Top - 8
+                : (saveBounds != null ? saveBounds.Bottom + 28 : firstBounds.Top + 305);
+            var x = Math.Max(22, firstBounds.Left - 10);
+            var y = Math.Max(0, firstBounds.Top - 5);
+            bottom = Math.Max(y + 180, bottom);
+            return new ClientBounds { Left = x, Top = y, Right = x + 500, Bottom = bottom };
+        }
+
+        // Compatibility name retained for older contracts; rev.7 moves this host to the existing checkbox area.
         internal static ClientBounds GetAdditionalSettingsBounds(IntPtr parent, IntPtr adminAnchor)
         {
-            var admin = GetChildClientBounds(parent, adminAnchor);
-            if (admin == null) return null;
-            var supportHandle = FindChildById(parent, SupportButtonId);
-            var support = GetChildClientBounds(parent, supportHandle);
-            var x = Math.Max(22, admin.Left - 10);
-            var y = admin.Bottom + 8;
-            var available = support != null ? support.Top - y - 10 : 190;
-            var height = Math.Max(130, Math.Min(190, available));
-            return new ClientBounds { Left = x, Top = y, Right = x + 500, Bottom = y + height };
+            return GetSettingsScrollBounds(parent);
         }
 
         internal static IntPtr FindLegacyLicenseEdit(IntPtr parent, ClientBounds hostBounds)
@@ -209,6 +253,17 @@ namespace DPopCleaner.SimpleUpdate
         internal static void ClickButton(IntPtr handle)
         {
             if (handle != IntPtr.Zero) SendMessage(handle, BM_CLICK, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        internal static bool IsChecked(IntPtr handle)
+        {
+            return handle != IntPtr.Zero && SendMessage(handle, BM_GETCHECK, IntPtr.Zero, IntPtr.Zero).ToInt32() == BST_CHECKED;
+        }
+
+        internal static void SetChecked(IntPtr handle, bool value)
+        {
+            if (handle != IntPtr.Zero)
+                SendMessage(handle, BM_SETCHECK, new IntPtr(value ? BST_CHECKED : BST_UNCHECKED), IntPtr.Zero);
         }
 
         internal static void PositionChildWindow(IntPtr handle, ClientBounds bounds)
@@ -245,6 +300,44 @@ namespace DPopCleaner.SimpleUpdate
             }
         }
 
+        internal static bool EnsureRamThresholdRange(IntPtr parent)
+        {
+            var combo = FindChildById(parent, RamThresholdComboId);
+            if (combo == IntPtr.Zero || !IsWindowVisible(combo)) return false;
+
+            var count = SendMessage(combo, CB_GETCOUNT, IntPtr.Zero, IntPtr.Zero).ToInt32();
+            if (count == 19 && string.Equals(ReadComboItem(combo, 0), FirstRamThreshold, StringComparison.Ordinal) &&
+                string.Equals(ReadComboItem(combo, 18), LastRamThreshold, StringComparison.Ordinal))
+                return true;
+
+            var selectedText = ReadWindowText(combo);
+            if (string.IsNullOrWhiteSpace(selectedText)) selectedText = "70%";
+
+            SendMessage(combo, CB_RESETCONTENT, IntPtr.Zero, IntPtr.Zero);
+            var values = new[]
+            {
+                "5%", "10%", "15%", "20%", "25%", "30%", "35%", "40%", "45%", "50%",
+                "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%"
+            };
+            var selectedIndex = 13;
+            for (var i = 0; i < values.Length; i++)
+            {
+                SendMessageText(combo, CB_ADDSTRING, IntPtr.Zero, values[i]);
+                if (string.Equals(values[i], selectedText, StringComparison.OrdinalIgnoreCase)) selectedIndex = i;
+            }
+            SendMessage(combo, CB_SETCURSEL, new IntPtr(selectedIndex), IntPtr.Zero);
+            return true;
+        }
+
+        private static string ReadComboItem(IntPtr combo, int index)
+        {
+            var length = SendMessage(combo, CB_GETLBTEXTLEN, new IntPtr(index), IntPtr.Zero).ToInt32();
+            if (length < 0) return string.Empty;
+            var value = new StringBuilder(length + 1);
+            SendMessageBuffer(combo, CB_GETLBTEXT, new IntPtr(index), value);
+            return value.ToString();
+        }
+
         internal static IntPtr CreateAutoUpdateCheckbox(IntPtr parent, IntPtr adminAnchor, bool isChecked)
         {
             RECT rect;
@@ -256,9 +349,9 @@ namespace DPopCleaner.SimpleUpdate
             const uint WS_VISIBLE = 0x10000000;
             const uint WS_TABSTOP = 0x00010000;
             const uint BS_AUTOCHECKBOX = 0x00000003;
-            var checkbox = CreateWindowEx(0, "Button", "Включить автообновление",
+            var checkbox = CreateWindowEx(0, "Button", "Включить автообновление приложения",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                point.X, point.Y, 280, 24, parent, new IntPtr(AutoUpdateCheckboxId), GetModuleHandle(null), IntPtr.Zero);
+                point.X, point.Y, 300, 24, parent, new IntPtr(AutoUpdateCheckboxId), GetModuleHandle(null), IntPtr.Zero);
             if (checkbox != IntPtr.Zero)
                 SendMessage(checkbox, BM_SETCHECK, new IntPtr(isChecked ? BST_CHECKED : BST_UNCHECKED), IntPtr.Zero);
             return checkbox;
@@ -276,7 +369,7 @@ namespace DPopCleaner.SimpleUpdate
             const uint WS_TABSTOP = 0x00010000;
             const uint BS_AUTOCHECKBOX = 0x00000003;
             const uint BS_PUSHLIKE = 0x00001000;
-            return CreateWindowEx(0, "Button", "Проверить сейчас",
+            return CreateWindowEx(0, "Button", "Проверить обновления",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | BS_PUSHLIKE,
                 point.X + 300, point.Y, 160, 27, parent, new IntPtr(CheckNowButtonId), GetModuleHandle(null), IntPtr.Zero);
         }
