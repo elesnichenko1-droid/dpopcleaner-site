@@ -71,6 +71,20 @@ function Click-ByText([IntPtr]$Window, [string]$Text) {
     [void][Rev7Native]::SendMessage($item.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
     Start-Sleep -Milliseconds 500
 }
+function Click-ControlId([IntPtr]$Window, [int]$Id) {
+    $item = Get-Children $Window | Where-Object { $_.Visible -and $_.Id -eq $Id } | Select-Object -First 1
+    if (-not $item) { throw "Control id=$Id not found." }
+    [void][Rev7Native]::SendMessage($item.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+}
+function Get-ZapretEdits([IntPtr]$Window) {
+    @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 2)
+}
+function Write-ZapretEditSnapshot([string]$Prefix, [IntPtr]$Window) {
+    $edits = @(Get-ZapretEdits $Window)
+    $upper = if ($edits.Count -ge 1) { $edits[0].Text } else { '<missing>' }
+    $lower = if ($edits.Count -ge 2) { $edits[1].Text } else { '<missing>' }
+    Write-Host "$Prefix upper=$upper lower=$lower"
+}
 
 $exe = (Resolve-Path -LiteralPath $ExePath).Path
 $p = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru
@@ -90,6 +104,13 @@ try {
 
     Click-ByText $window 'Zapret'
     Dump-Page 'zapret' $window
+
+    # Evidence for rev.11: ask the untouched frozen core itself what native Status does.
+    # No SimpleUpdate/UI bridge is running in this diagnostic process.
+    Write-ZapretEditSnapshot 'REV11_NATIVE_STATUS_BEFORE' $window
+    Click-ControlId $window 1703
+    Start-Sleep -Milliseconds 1200
+    Write-ZapretEditSnapshot 'REV11_NATIVE_STATUS_AFTER' $window
 
     $settings = Get-Children $window | Where-Object { $_.Id -eq 906 -and $_.ClassName -eq 'Button' } | Select-Object -First 1
     if (-not $settings) { throw 'Settings gear id=906 not found.' }

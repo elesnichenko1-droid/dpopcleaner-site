@@ -21,6 +21,12 @@ namespace DPopCleaner.SimpleUpdate
         private const uint BS_PUSHBUTTON = 0x00000000;
         private const uint ES_AUTOHSCROLL = 0x0080;
         private const uint SS_LEFT = 0x00000000;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOACTIVATE = 0x0010;
+        private const uint RDW_INVALIDATE = 0x0001;
+        private const uint RDW_ERASE = 0x0004;
+        private const uint RDW_ALLCHILDREN = 0x0080;
+        private const uint RDW_UPDATENOW = 0x0100;
 
         private const uint WM_COMMAND = 0x0111;
         private const uint WM_VSCROLL = 0x0115;
@@ -153,6 +159,18 @@ namespace DPopCleaner.SimpleUpdate
 
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr BeginDeferWindowPos(int numWindows);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr DeferWindowPos(IntPtr deferHandle, IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
+        [DllImport("user32.dll")]
+        private static extern bool EndDeferWindowPos(IntPtr deferHandle);
+
+        [DllImport("user32.dll")]
+        private static extern bool RedrawWindow(IntPtr hwnd, IntPtr updateRect, IntPtr updateRegion, uint flags);
 
         [DllImport("user32.dll")]
         private static extern int SetScrollInfo(IntPtr hwnd, int bar, ref SCROLLINFO info, bool redraw);
@@ -441,10 +459,58 @@ namespace DPopCleaner.SimpleUpdate
         private void ApplyScroll(int target)
         {
             if (_host == IntPtr.Zero) return;
-            _scrollPosition = Math.Max(0, Math.Min(MaxScroll, target));
-            foreach (var item in _items)
-                SetWindowPos(item.Handle, IntPtr.Zero, item.X, item.Y - _scrollPosition, item.Width, item.Height, 0x0004 | 0x0010);
+            var clamped = Math.Max(0, Math.Min(MaxScroll, target));
+            if (clamped == _scrollPosition)
+            {
+                UpdateScrollInfo();
+                return;
+            }
+
+            _scrollPosition = clamped;
+            var deferred = BeginDeferWindowPos(_items.Count);
+            var deferredOk = deferred != IntPtr.Zero;
+            if (deferredOk)
+            {
+                foreach (var item in _items)
+                {
+                    var next = DeferWindowPos(deferred, item.Handle, IntPtr.Zero,
+                        item.X, item.Y - _scrollPosition, item.Width, item.Height,
+                        SWP_NOZORDER | SWP_NOACTIVATE);
+                    if (next == IntPtr.Zero)
+                    {
+                        deferredOk = false;
+                        break;
+                    }
+                    deferred = next;
+                }
+            }
+
+            if (deferredOk)
+            {
+                if (!EndDeferWindowPos(deferred))
+                    PositionItemsIndividually();
+            }
+            else
+            {
+                PositionItemsIndividually();
+            }
+
             UpdateScrollInfo();
+            RedrawSettingsHost();
+        }
+
+        private void PositionItemsIndividually()
+        {
+            foreach (var item in _items)
+                SetWindowPos(item.Handle, IntPtr.Zero, item.X, item.Y - _scrollPosition,
+                    item.Width, item.Height, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+
+        private void RedrawSettingsHost()
+        {
+            if (_host == IntPtr.Zero) return;
+            RedrawWindow(_host, IntPtr.Zero, IntPtr.Zero,
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
         }
 
         private void UpdateScrollInfo()
