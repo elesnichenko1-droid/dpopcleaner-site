@@ -40,43 +40,7 @@ namespace DPopCleaner.SimpleUpdate
                     if (!acquired) return;
 
                     var context = new LauncherContext(corePath, settingsPath, options);
-                    ZapretUpdateProxyHost zapretUpdateProxy = null;
-                    var zapretProxyTimer = new System.Windows.Forms.Timer { Interval = 100 };
-                    zapretProxyTimer.Tick += delegate
-                    {
-                        try
-                        {
-                            var core = context.CoreProcess;
-                            core.Refresh();
-                            if (core.HasExited) return;
-                            var mainWindow = core.MainWindowHandle;
-                            if (mainWindow == IntPtr.Zero) return;
-
-                            var marker = NativeBridge.FindChildByText(mainWindow, "Дополнительно", "Static", true);
-                            var visible = marker != IntPtr.Zero;
-                            if (!visible)
-                            {
-                                if (zapretUpdateProxy != null) zapretUpdateProxy.Hide();
-                                return;
-                            }
-
-                            if (zapretUpdateProxy == null)
-                                zapretUpdateProxy = new ZapretUpdateProxyHost(mainWindow, baseDirectory);
-                            else
-                                zapretUpdateProxy.Show();
-                        }
-                        catch
-                        {
-                            // A proxy failure must never terminate the frozen core or launcher.
-                        }
-                    };
-                    zapretProxyTimer.Start();
-
                     Application.Run(context);
-
-                    zapretProxyTimer.Stop();
-                    if (zapretUpdateProxy != null) zapretUpdateProxy.Dispose();
-                    zapretProxyTimer.Dispose();
                     try { mutex.ReleaseMutex(); } catch { }
                 }
             }
