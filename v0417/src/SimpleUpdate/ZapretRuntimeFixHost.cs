@@ -166,14 +166,17 @@ namespace DPopCleaner.SimpleUpdate
 
             foreach (var child in NativeBridge.GetChildren(_parent))
             {
-                if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!child.Visible) continue;
                 var text = (child.Text ?? string.Empty).Trim();
                 if (!text.StartsWith("Zapret ", StringComparison.OrdinalIgnoreCase)) continue;
                 var separator = text.IndexOf('•');
                 if (separator < 0) continue; // Do not touch the "Zapret Center" heading.
 
-                var suffix = text.Substring(separator).TrimStart();
-                NativeBridge.WriteWindowText(child.Handle, "Zapret " + version + "   •   " + suffix.TrimStart('•').TrimStart());
+                // The frozen status line is not guaranteed to be a Win32 Static control. Match the
+                // semantic status text instead of its native class; SetWindowText works for that
+                // read-only status control and avoids tying rev.9 to an incorrect class assumption.
+                var suffix = text.Substring(separator + 1).Trim();
+                NativeBridge.WriteWindowText(child.Handle, "Zapret " + version + "   •   " + suffix);
                 return;
             }
         }
