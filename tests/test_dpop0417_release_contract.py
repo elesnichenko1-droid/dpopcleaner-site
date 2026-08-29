@@ -52,10 +52,12 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn("number(m.revision) === 9", manifest)
         self.assertIn('v0\\.4\\.17-rev9', manifest)
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
+        zapret_host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8').lower()
         self.assertIn('currentrevision = 9', program)
         self.assertIn('dpopcleaner.core.exe', program)
         self.assertIn('dpopupdate.exe', program)
-        self.assertIn('zapretupdateproxyhost', program)
+        self.assertIn('createlegacyupdateproxy', zapret_host)
+        self.assertIn('legacydownloadbuttonid', zapret_host)
 
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         for token in ('flowseal zapret 1.10.2', SCREENSHOT_PATH, 'dpopcleaner.core.exe', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2', 'автообновление приложения', 'прокрут'):
@@ -73,7 +75,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertTrue('прежний интерфейс' in notes_text or 'интерфейс сохран' in notes_text)
 
         workflow = publisher.read_text(encoding='utf-8').lower()
-        for token in ('release_tag: v0.4.17-rev9', 'dpop0417_prepare_zapret.ps1', 'dpop0417_installed_settings_smoke.ps1', 'dpop0417_rev7_installed_ui_smoke.ps1', SCREENSHOT_PATH, 'revision=9', 'actions/deploy-pages', 'sha256', 'dpopcleaner-0.4.17-rev9-release-candidate'):
+        for token in ('release_tag: v0.4.17-rev9', 'dpop0417_prepare_zapret.ps1', 'dpop0417_installed_settings_smoke.ps1', 'dpop0417_rev7_installed_ui_smoke.ps1', 'dpop0417_rev9_zapret_update_smoke.ps1', SCREENSHOT_PATH, 'revision=9', 'actions/deploy-pages', 'sha256', 'dpopcleaner-0.4.17-rev9-release-candidate'):
             self.assertIn(token, workflow)
         self.assertIn('$live.revision -ne 9', workflow)
         self.assertIn('v0\\.4\\.17-rev9', workflow)
