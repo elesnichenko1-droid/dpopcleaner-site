@@ -79,24 +79,23 @@ try {
 
     if ($null -eq $core -or $core.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Fake DPopCleaner.Core.exe did not create a visible window.' }
 
-    $sw = [Diagnostics.Stopwatch]::StartNew()
+    # The fake core intentionally turns WM_CLOSE into Hide(), reproducing tray/minimize behavior.
     if (-not [CloseSmokeNative]::PostMessage($core.MainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) {
         throw 'Failed to post WM_CLOSE to fake core.'
     }
+    Start-Sleep -Milliseconds 1400
+    $core.Refresh(); $launcher.Refresh()
+    if ($core.HasExited) { throw 'Hidden DPopCleaner.Core was incorrectly terminated by the bridge.' }
+    if ($launcher.HasExited) { throw 'SimpleUpdate exited while the core was only hidden.' }
 
-    $deadline = [DateTime]::UtcNow.AddMilliseconds(1400)
-    do {
-        Start-Sleep -Milliseconds 40
-        $core.Refresh()
-        $launcher.Refresh()
-    } while ((-not $core.HasExited -or -not $launcher.HasExited) -and [DateTime]::UtcNow -lt $deadline)
+    # Real process termination remains the only normal launcher exit signal.
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    Stop-Process -Id $core.Id -Force
+    $core.WaitForExit(5000) | Out-Null
+    if (-not $launcher.WaitForExit(3000)) { throw 'SimpleUpdate stayed alive after the core process actually exited.' }
     $sw.Stop()
 
-    if (-not $core.HasExited) { throw "Hidden DPopCleaner.Core process still alive after close ($($sw.ElapsedMilliseconds) ms)." }
-    if (-not $launcher.HasExited) { throw "SimpleUpdate still alive after DPopCleaner.Core close ($($sw.ElapsedMilliseconds) ms)." }
-    if ($sw.ElapsedMilliseconds -gt 1400) { throw "Close bridge exceeded 1400 ms: $($sw.ElapsedMilliseconds) ms" }
-
-    Write-Host "SIMPLEUPDATE_FAST_CLOSE_OK elapsed_ms=$($sw.ElapsedMilliseconds)"
+    Write-Host "SIMPLEUPDATE_HIDE_RESTORE_LIFECYCLE_OK actual_exit_ms=$($sw.ElapsedMilliseconds)"
 }
 finally {
     if ($core -and -not $core.HasExited) { Stop-Process -Id $core.Id -Force -ErrorAction SilentlyContinue }
