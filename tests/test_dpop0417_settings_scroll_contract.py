@@ -78,6 +78,10 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
             "0x020A",
             "Rev.11 must not create version proxy id=1726",
             "zapret_native_status_handle_stable",
+            "Wait-ZapretPage",
+            "Wait-Visible $Window 1703",
+            "Zapret page did not stabilize after retry",
+            "Click-Id $Window 905",
         ):
             self.assertIn(token, smoke)
 
