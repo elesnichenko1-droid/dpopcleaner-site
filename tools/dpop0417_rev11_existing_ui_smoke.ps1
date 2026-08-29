@@ -93,11 +93,11 @@ function Wait-NativeZapretStatus([IntPtr]$Window, [string]$Version, [int]$Timeou
     do {
         Start-Sleep -Milliseconds 100
         $status = Children $Window | Where-Object {
-            $_.Visible -and $_.ClassName -eq 'Static' -and $_.Text -like ("Zapret " + $Version + "*") -and $_.Text -like '*•*'
+            $_.Visible -and $_.ClassName -eq 'Edit' -and $_.Text -like ("Zapret " + $Version + "*") -and $_.Text -like '*•*'
         } | Select-Object -First 1
         if ($status) { return $status }
     } while ([DateTime]::UtcNow -lt $deadline)
-    throw "Native Zapret status did not show installed version $Version."
+    throw "Native Zapret status Edit did not show installed version $Version."
 }
 
 $launcher = $null
@@ -154,7 +154,7 @@ try {
         if (-not (Same-Rect $initialRect $settingsPane)) { throw "Settings host moved after reopen cycle ${cycle}." }
     }
 
-    # Zapret rev.11 must edit the original frozen-core Static in place. No ID 1726 proxy may exist.
+    # Zapret rev.11 must edit the original frozen-core status Edit in place. No ID 1726 proxy may exist.
     Click-Id $window 905
     foreach ($id in @(1720,1721,1722,1723,1724,1725)) { [void](Wait-Visible $window $id) }
     $proxy = Find-Child $window 1726
@@ -173,9 +173,9 @@ try {
         $children = Children $window
         if ($children | Where-Object { $_.Id -eq 1726 } | Select-Object -First 1) { throw 'Version proxy id=1726 appeared while Zapret was open.' }
         $fresh = $children | Where-Object {
-            $_.Visible -and $_.Handle -eq $nativeStatusHandle -and $_.ClassName -eq 'Static' -and $_.Text -like ("Zapret " + $bundleVersion + "*") -and $_.Text -like '*•*'
+            $_.Visible -and $_.Handle -eq $nativeStatusHandle -and $_.ClassName -eq 'Edit' -and $_.Text -like ("Zapret " + $bundleVersion + "*") -and $_.Text -like '*•*'
         } | Select-Object -First 1
-        if (-not $fresh) { throw 'Existing native Zapret status handle changed, disappeared, or lost the installed version.' }
+        if (-not $fresh) { throw 'Existing native Zapret status Edit handle changed, disappeared, or lost the installed version.' }
         $stale = $children | Where-Object { $_.Visible -and $_.Text -like 'Zapret 1.9.9d*' } | Select-Object -First 1
         if ($stale) { throw 'Stale Zapret 1.9.9d became visible again.' }
         Start-Sleep -Milliseconds 150
@@ -191,6 +191,7 @@ try {
         settings_aggressive_wheel_rounds = 4
         settings_reopen_cycles = 3
         zapret_installed_version = $bundleVersion
+        zapret_native_status_class = 'Edit'
         zapret_native_status_handle = $nativeStatusHandle.ToInt64()
         zapret_native_status_handle_stable = $true
         zapret_version_proxy_1726_absent = $true
@@ -200,9 +201,9 @@ try {
 
     Write-Host 'REV11_EXISTING_UI_SMOKE_OK'
     Write-Host 'Settings aggressive wheel + repaint stability: PASS'
-    Write-Host "Existing native Zapret status rewritten in place to ${bundleVersion}: PASS"
+    Write-Host "Existing native Zapret status Edit rewritten in place to ${bundleVersion}: PASS"
     Write-Host 'Zapret version proxy id=1726 absent: PASS'
-    Write-Host 'Zapret native status handle stable for 4 seconds: PASS'
+    Write-Host 'Zapret native status Edit handle stable for 4 seconds: PASS'
 }
 finally {
     if ($core) { try { if (-not $core.HasExited) { Stop-Process -Id $core.Id -Force -ErrorAction SilentlyContinue } } catch {} }
