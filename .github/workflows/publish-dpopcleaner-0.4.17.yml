@@ -63,22 +63,18 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Materialize exact current settings screenshot
         shell: pwsh
         run: ./tools/dpop0417_materialize_current_screenshot.ps1
-
       - name: Pin critical publication contract
         shell: pwsh
         run: |
           python tests/test_dpop0417_release_contract.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Run all 0.4.17 contracts
         shell: pwsh
         run: |
@@ -89,7 +85,6 @@ jobs:
             python $test.FullName -v
             if ($LASTEXITCODE -ne 0) { throw "Contract failed: $($test.Name)" }
           }
-
       - name: Run Common, Disk and Zapret Screen Fix tests
         shell: pwsh
         run: |
@@ -99,7 +94,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet test v0417/tests/ZapretScreenFix.Tests/ZapretScreenFix.Tests.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Build companion modules and SimpleUpdate
         shell: pwsh
         run: |
@@ -113,15 +107,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build v0417/src/SimpleUpdate/SimpleUpdate.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Prepare pinned Flowseal Zapret 1.10.2
         shell: pwsh
         run: ./tools/dpop0417_prepare_zapret.ps1
-
       - name: Stage verified payload
         shell: pwsh
         run: ./tools/dpop0417_stage.ps1 -RequireCompanions
-
       - name: Verify authentic Zapret Center and staged modules
         shell: pwsh
         run: |
@@ -144,7 +135,6 @@ jobs:
           $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
           $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
           if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }
-
       - name: Build DPopCleaner 0.4.17 installer
         shell: pwsh
         run: |
@@ -160,11 +150,12 @@ jobs:
           $installer = '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe'
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer missing.' }
           "DPOP0417_INSTALLER=$((Resolve-Path $installer).Path)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Run installed package smoke (includes dpop0417_installed_settings_smoke.ps1 + dpop0417_rev7_installed_ui_smoke.ps1)
         shell: pwsh
         run: ./tools/dpop0417_install_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/install'
-
+      - name: Run rev.9 Zapret update click smoke
+        shell: pwsh
+        run: ./tools/dpop0417_rev9_zapret_update_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev9-zapret-update'
       - name: Build publication payload
         shell: pwsh
         run: |
@@ -184,7 +175,6 @@ jobs:
           } | ConvertTo-Json | Set-Content (Join-Path $publish 'update/stable.json') -Encoding utf8
           [ordered]@{ installer=$env:RELEASE_ASSET; sha256=$sha256; size=[int64]$item.Length; version='0.4.17'; version_code=417; revision=9; channel='stable'; tag=$env:RELEASE_TAG; source_sha=$env:GITHUB_SHA } | ConvertTo-Json | Set-Content (Join-Path $publish 'release-proof.json') -Encoding utf8
           "DPOP0417_PUBLISH=$publish" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Upload verified release candidate
         uses: actions/upload-artifact@v4
         with:
