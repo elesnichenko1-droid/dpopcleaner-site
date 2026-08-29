@@ -88,15 +88,24 @@ function Wait-Visible([IntPtr]$Window, [int]$Id, [int]$TimeoutMs = 6000) {
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Visible control id=$Id did not appear."
 }
-function Wait-NativeZapretStatus([IntPtr]$Window, [string]$Version, [int]$TimeoutMs = 6000) {
+function Top-VisibleEdit([IntPtr]$Window) {
+    Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 1
+}
+function Wait-NativeZapretStatus([IntPtr]$Window, [string]$Version, [IntPtr]$ExpectedHandle = [IntPtr]::Zero, [switch]$RequireNativeSuffix, [int]$TimeoutMs = 6000) {
     $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
     do {
         Start-Sleep -Milliseconds 100
-        $status = Children $Window | Where-Object {
-            $_.Visible -and $_.ClassName -eq 'Edit' -and $_.Text -like ("Zapret " + $Version + "*") -and $_.Text -like '*•*'
-        } | Select-Object -First 1
-        if ($status) { return $status }
+        $status = Top-VisibleEdit $Window
+        if ($status -and ($ExpectedHandle -eq [IntPtr]::Zero -or $status.Handle -eq $ExpectedHandle)) {
+            $versionOk = $status.Text -like ("Zapret " + $Version + "*")
+            $suffixOk = (-not $RequireNativeSuffix) -or $status.Text -like '*•*'
+            if ($versionOk -and $suffixOk) { return $status }
+        }
     } while ([DateTime]::UtcNow -lt $deadline)
+    $edits = Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top
+    Write-Host 'REV11_ZAPRET_EDIT_DIAGNOSTIC_BEGIN'
+    foreach ($edit in $edits) { Write-Host ("handle={0} top={1} text={2}" -f $edit.Handle.ToInt64(),$edit.Top,$edit.Text) }
+    Write-Host 'REV11_ZAPRET_EDIT_DIAGNOSTIC_END'
     throw "Native Zapret status Edit did not show installed version $Version."
 }
 
@@ -154,7 +163,7 @@ try {
         if (-not (Same-Rect $initialRect $settingsPane)) { throw "Settings host moved after reopen cycle ${cycle}." }
     }
 
-    # Zapret rev.11 must edit the original frozen-core status Edit in place. No ID 1726 proxy may exist.
+    # Rev.11 uses the existing upper frozen-core Edit. No version proxy is allowed.
     Click-Id $window 905
     foreach ($id in @(1720,1721,1722,1723,1724,1725)) { [void](Wait-Visible $window $id) }
     $proxy = Find-Child $window 1726
@@ -166,14 +175,21 @@ try {
         if ($buttonType -ne 0x0000000B) { throw "Zapret bridge button id=$id is not BS_OWNERDRAW; style=0x$('{0:X}' -f $button.Style)" }
     }
 
+    # The native row starts as "—". The bridge must attach before text exists and show the installed version in that same handle.
     $nativeStatus = Wait-NativeZapretStatus $window $bundleVersion
     $nativeStatusHandle = $nativeStatus.Handle
+
+    # Force the frozen core to write its real status. WM_SETTEXT must be intercepted on the same native Edit.
+    Click-Id $window 1703
+    $nativeStatusAfterCoreWrite = Wait-NativeZapretStatus $window $bundleVersion -ExpectedHandle $nativeStatusHandle -RequireNativeSuffix
+    if ($nativeStatusAfterCoreWrite.Handle -ne $nativeStatusHandle) { throw 'Native Zapret status Edit handle changed after Status click.' }
+
     $deadline = [DateTime]::UtcNow.AddSeconds(4)
     do {
         $children = Children $window
         if ($children | Where-Object { $_.Id -eq 1726 } | Select-Object -First 1) { throw 'Version proxy id=1726 appeared while Zapret was open.' }
         $fresh = $children | Where-Object {
-            $_.Visible -and $_.Handle -eq $nativeStatusHandle -and $_.ClassName -eq 'Edit' -and $_.Text -like ("Zapret " + $bundleVersion + "*") -and $_.Text -like '*•*'
+            $_.Visible -and $_.Handle -eq $nativeStatusHandle -and $_.ClassName -eq 'Edit' -and $_.Text -like ("Zapret " + $bundleVersion + "*")
         } | Select-Object -First 1
         if (-not $fresh) { throw 'Existing native Zapret status Edit handle changed, disappeared, or lost the installed version.' }
         $stale = $children | Where-Object { $_.Visible -and $_.Text -like 'Zapret 1.9.9d*' } | Select-Object -First 1
@@ -194,6 +210,7 @@ try {
         zapret_native_status_class = 'Edit'
         zapret_native_status_handle = $nativeStatusHandle.ToInt64()
         zapret_native_status_handle_stable = $true
+        zapret_native_status_intercepts_status_click = $true
         zapret_version_proxy_1726_absent = $true
         stale_199d_absent = $true
         zapret_owner_draw_buttons = 6
@@ -201,7 +218,8 @@ try {
 
     Write-Host 'REV11_EXISTING_UI_SMOKE_OK'
     Write-Host 'Settings aggressive wheel + repaint stability: PASS'
-    Write-Host "Existing native Zapret status Edit rewritten in place to ${bundleVersion}: PASS"
+    Write-Host "Existing native Zapret status Edit attached before text and rewritten to ${bundleVersion}: PASS"
+    Write-Host 'Native Status button write intercepted on same Edit handle: PASS'
     Write-Host 'Zapret version proxy id=1726 absent: PASS'
     Write-Host 'Zapret native status Edit handle stable for 4 seconds: PASS'
 }
