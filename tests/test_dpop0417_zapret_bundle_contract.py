@@ -19,7 +19,7 @@ def extract_strings_with_offsets(data):
 def extract_core_zapret_strings():
     values = extract_strings_with_offsets(CORE.read_bytes())
     return sorted({value for _, value, _ in values if any(token in value.lower() for token in (
-        "zapret", "winws", "service.bat", "strategy", "strateg", "update", "updater"
+        "zapret", "winws", "service.bat", "strategy", "strateg", "update", "updater", "dpop_version"
     ))})
 
 
@@ -137,6 +137,7 @@ def print_updater_code_refs():
         ("BAT_GLOB", "*.bat"),
         ("WINWS", "bin\\winws.exe"),
         ("SERVICE", "service.bat"),
+        ("DPOP_VERSION_FILE", "utils\\dpop_version.txt"),
         ("LEGACY_ZAPRET_VERSION", "1.9.9d"),
     ):
         offsets = find_string_offsets(data, value)
@@ -153,9 +154,26 @@ class DPop0417BundledZapretContractTests(unittest.TestCase):
         self.assertTrue(values, "Frozen core should contain discoverable Zapret integration strings")
         self.assertIn("bin\\winws.exe", values)
         self.assertIn("service.bat", values)
+        self.assertIn("utils\\dpop_version.txt", values)
+
+    def test_frozen_core_native_version_source_and_legacy_fallback_are_proven(self):
+        data = CORE.read_bytes()
+        sections = parse_pe_sections(data)
+        text = next(s for s in sections if s["name"] == ".text")
+        offsets = find_string_offsets(data, "utils\\dpop_version.txt")
+        self.assertTrue(offsets, "Frozen 0.2.14 must contain its native dpop_version.txt path")
+        refs = rip_relative_lea_refs(data, sections, text["raw_offset"], text["raw_offset"] + text["raw_size"])
+        self.assertTrue(any(target in offsets for _, target, _ in refs), "Native dpop_version.txt path must be referenced by core code")
+
+        # No textual 1.9.9d exists. The immutable core constructs the fallback directly
+        # in instructions: movabs rax, UTF16('1.9.'); mov [rsi],rax; mov dword [rsi+8], UTF16('9d').
+        self.assertFalse(find_string_offsets(data, "1.9.9d"), "Legacy version should not be a stored text literal")
+        fallback_prefix = bytes.fromhex("48 b8 31 00 2e 00 39 00 2e 00 48 89 06 c7 46 08 39 00 64 00")
+        self.assertIn(fallback_prefix, data, "Frozen core machine-code fallback 1.9.9d must remain discoverable")
 
     def test_release_stages_real_zapret_runtime_not_only_screen_fix(self):
         allowlist = (ROOT / "v0417" / "stage-allowlist.txt").read_text(encoding="utf-8")
+        prepare = (ROOT / "tools" / "dpop0417_prepare_zapret.ps1").read_text(encoding="utf-8")
         stage = (ROOT / "tools" / "dpop0417_stage.ps1").read_text(encoding="utf-8")
         install_smoke = (ROOT / "tools" / "dpop0417_install_smoke.ps1").read_text(encoding="utf-8")
         publisher = (ROOT / ".github" / "workflows" / "publish-dpopcleaner-0.4.17.yml").read_text(encoding="utf-8")
@@ -165,6 +183,8 @@ class DPop0417BundledZapretContractTests(unittest.TestCase):
         self.assertIn("WinDivert64.sys", stage, "Stage must require the WinDivert driver")
         self.assertIn("service.bat", stage, "Stage must require Flowseal service management")
         self.assertIn("general.bat", stage, "Stage must require at least one real strategy")
+        self.assertIn("utils/dpop_version.txt", prepare, "Preparation must create the native frozen-core version source")
+        self.assertIn("utils/dpop_version.txt", stage, "Stage must require the native frozen-core version source")
         self.assertIn("winws.exe", install_smoke, "Fresh installed package must prove winws.exe exists")
         self.assertIn("WinDivert64.sys", install_smoke)
         self.assertIn("service.bat", install_smoke)
