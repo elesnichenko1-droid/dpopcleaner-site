@@ -57,6 +57,8 @@ Name: "{app}\Resources"
 Source: "{#StageRoot}\DPopCleaner.exe"; DestDir: "{app}"; DestName: "DPopCleaner.Core.exe"; Flags: ignoreversion restartreplace
 Source: "{#StageRoot}\SimpleUpdate.exe"; DestDir: "{app}"; DestName: "DPopCleaner.exe"; Flags: ignoreversion restartreplace
 Source: "{#StageRoot}\SimpleUpdate.exe"; DestDir: "{app}"; DestName: "SimpleUpdate.exe"; Flags: ignoreversion restartreplace
+; The immutable 0.2.14 Zapret page expects this root-level compatibility updater.
+Source: "{#StageRoot}\SimpleUpdate.exe"; DestDir: "{app}"; DestName: "DPopUpdate.exe"; Flags: ignoreversion restartreplace
 ; The frozen 0.2.14 core resolves its Zapret root as {app}\Zapret.
 Source: "{#StageRoot}\Zapret\*"; DestDir: "{app}\Zapret"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageRoot}\Modules\*"; DestDir: "{app}\Modules"; Flags: ignoreversion recursesubdirs createallsubdirs
