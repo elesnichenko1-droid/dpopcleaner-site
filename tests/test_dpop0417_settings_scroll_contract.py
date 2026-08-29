@@ -79,6 +79,22 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
         ):
             self.assertIn(token, smoke)
 
+    def test_rev11_settings_scroll_moves_children_atomically_and_repaints_once(self):
+        host = (ROOT / "v0417" / "src" / "SimpleUpdate" / "AdditionalSettingsHost.cs").read_text(encoding="utf-8")
+        for token in (
+            "BeginDeferWindowPos",
+            "DeferWindowPos",
+            "EndDeferWindowPos",
+            "RedrawWindow",
+            "RDW_INVALIDATE",
+            "RDW_ERASE",
+            "RDW_ALLCHILDREN",
+            "RDW_UPDATENOW",
+            "if (clamped == _scrollPosition)",
+        ):
+            self.assertIn(token, host)
+        self.assertIn("RedrawSettingsHost", host)
+
 
 if __name__ == "__main__":
     unittest.main()
