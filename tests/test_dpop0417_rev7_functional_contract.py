@@ -39,6 +39,15 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertIn('FindChildByText', bridge)
         self.assertIn('GetSettingsScrollBounds', bridge)
 
+    def test_rev9_settings_scroll_host_keeps_initial_bounds_instead_of_reanchoring_to_its_own_proxies(self):
+        launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
+        smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('private NativeBridge.ClientBounds _settingsHostBounds;', launcher)
+        self.assertIn('_settingsHostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);', launcher)
+        self.assertIn('_settingsHost.Show(_settingsHostBounds);', launcher)
+        self.assertIn('Settings scroll host drifted after wheel/timer refresh', smoke)
+        self.assertIn('Settings scroll host drifted after tab roundtrip', smoke)
+
     def test_existing_zapret_center_gets_repairs_and_1102_actions_without_new_ui(self):
         path = ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs'
         self.assertTrue(path.is_file(), 'ZapretEnhancementHost.cs must extend the frozen Zapret page')
@@ -91,6 +100,20 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertIn('DestName: "DPopUpdate.exe"', installer)
         self.assertIn('DPopUpdate.exe', smoke)
         self.assertIn('Legacy Zapret updater compatibility module: PASS', smoke)
+
+    def test_rev9_bypasses_broken_frozen_zapret_updater_handler_and_displays_real_bundle_version(self):
+        bridge = (ROOT / 'v0417/src/SimpleUpdate/NativeBridge.cs').read_text(encoding='utf-8')
+        host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
+        smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('ZapretDownloadButtonId = 1715', bridge)
+        self.assertIn('ZapretDownloadProxyButtonId', host)
+        self.assertIn('LegacyZapretUpdater.Run(_applicationRoot)', host)
+        self.assertIn('UpdateDisplayedVersion', host)
+        self.assertIn('.service', host)
+        self.assertIn('version.txt', host)
+        self.assertIn('Broken frozen Zapret updater button is still visible', smoke)
+        self.assertIn('Zapret updater proxy is not visible', smoke)
+        self.assertIn('Displayed Zapret version is not 1.10.2', smoke)
 
     def test_installed_rev7_smoke_reproduces_requested_behaviors(self):
         smoke_path = ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1'
