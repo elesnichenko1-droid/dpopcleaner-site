@@ -55,6 +55,32 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
         self.assertIn("v0.2.11 beta", smoke)
         self.assertIn("scroll", smoke)
 
+    def test_rev10_settings_host_uses_fixed_bounds_instead_of_recursive_proxy_feedback(self):
+        launcher = (ROOT / "v0417" / "src" / "SimpleUpdate" / "LauncherContext.cs").read_text(encoding="utf-8")
+        host = (ROOT / "v0417" / "src" / "SimpleUpdate" / "AdditionalSettingsHost.cs").read_text(encoding="utf-8")
+        self.assertIn("private NativeBridge.ClientBounds _settingsHostBounds;", launcher)
+        self.assertIn("_settingsHostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);", launcher)
+        self.assertIn("_settingsHost.Show();", launcher)
+        self.assertNotIn("_settingsHost.Show(hostBounds)", launcher)
+        self.assertIn("private readonly NativeBridge.ClientBounds _fixedBounds;", host)
+        self.assertIn("CloneBounds", host)
+        self.assertIn("NativeBridge.PositionChildWindow(_host, _fixedBounds);", host)
+
+    def test_rev10_runtime_smoke_replays_user_video_sequence(self):
+        smoke_path = ROOT / "tools" / "dpop0417_rev10_ui_stability_smoke.ps1"
+        self.assertTrue(smoke_path.is_file(), "rev.10 video regression smoke is required")
+        smoke = smoke_path.read_text(encoding="utf-8")
+        for token in (
+            "REV10_UI_STABILITY_SMOKE_OK",
+            "Settings host drifted after wheel",
+            "Settings host moved after reopen cycle",
+            "settings_reopen_cycles = 3",
+            "Click-Id $window 905",
+            "Click-Id $window 906",
+            "0x020A",
+        ):
+            self.assertIn(token, smoke)
+
 
 if __name__ == "__main__":
     unittest.main()
