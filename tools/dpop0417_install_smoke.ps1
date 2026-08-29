@@ -23,7 +23,7 @@ $restoreEvidence = Join-Path $OutputDir 'restore-installed'
 $zapretEvidence = Join-Path $OutputDir 'zapret-installed'
 $settingsEvidence = Join-Path $OutputDir 'settings-installed'
 $rev7Evidence = Join-Path $OutputDir 'rev7-ui-installed'
-$rev10Evidence = Join-Path $OutputDir 'rev10-ui-stability'
+$rev11Evidence = Join-Path $OutputDir 'rev11-existing-ui'
 $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
 $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
@@ -31,7 +31,7 @@ $uninstalled = $false
 $documentationAclModify = $false
 $installedSettingsBridgeSmoke = $false
 $rev7FunctionalSmoke = $false
-$rev10UiStabilitySmoke = $false
+$rev11ExistingUiSmoke = $false
 $zapretScreenFixPresent = $false
 $zapretRuntimePresent = $false
 $zapretUiSmoke = $false
@@ -111,10 +111,10 @@ try {
     $zapretUiSmoke = Test-Path -LiteralPath (Join-Path $zapretEvidence 'zapret-ui-smoke-report.json') -PathType Leaf
     if (-not $zapretUiSmoke) { throw 'Installed authentic Zapret UI smoke report was not produced.' }
 
-    & (Join-Path $PSScriptRoot 'dpop0417_rev10_ui_stability_smoke.ps1') -InstallerPath $InstallerPath -OutputDir $rev10Evidence
+    & (Join-Path $PSScriptRoot 'dpop0417_rev11_existing_ui_smoke.ps1') -InstallerPath $InstallerPath -OutputDir $rev11Evidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $rev10UiStabilitySmoke = Test-Path -LiteralPath (Join-Path $rev10Evidence 'rev10-ui-stability-smoke-report.json') -PathType Leaf
-    if (-not $rev10UiStabilitySmoke) { throw 'rev.10 Settings/Zapret runtime stability smoke report was not produced.' }
+    $rev11ExistingUiSmoke = Test-Path -LiteralPath (Join-Path $rev11Evidence 'rev11-existing-ui-smoke-report.json') -PathType Leaf
+    if (-not $rev11ExistingUiSmoke) { throw 'rev.11 existing Settings/Zapret UI smoke report was not produced.' }
 
     & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') -ExePath $diskExe -OutputDir $diskEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -140,7 +140,7 @@ try {
         legacy_dpopcleaner_path_is_bridge = ($appLauncherHash -eq $simpleUpdateHash)
         installed_settings_bridge_smoke = [bool]$installedSettingsBridgeSmoke
         rev7_functional_ui_smoke = [bool]$rev7FunctionalSmoke
-        rev10_ui_stability_smoke = [bool]$rev10UiStabilitySmoke
+        rev11_existing_ui_smoke = [bool]$rev11ExistingUiSmoke
         zapret_runtime_present = [bool]$zapretRuntimePresent
         zapret_version = $zapretVersion
         zapret_strategy_files = $installedStrategies.Count
@@ -156,7 +156,7 @@ try {
     Write-Host 'Historical DPopCleaner.exe path -> elevated Settings UI bridge: PASS'
     Write-Host 'Installed Settings scroll/auto-update/legacy-version smoke: PASS'
     Write-Host 'Installed rev.7 hide/restore + RAM + Zapret + Settings functional smoke: PASS'
-    Write-Host 'Installed rev.10 Settings fixed-bounds + Zapret visual/version runtime smoke: PASS'
+    Write-Host 'Installed rev.11 existing Settings/Zapret UI runtime smoke: PASS'
     Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'
