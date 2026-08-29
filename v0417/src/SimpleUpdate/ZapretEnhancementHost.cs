@@ -13,6 +13,8 @@ namespace DPopCleaner.SimpleUpdate
         internal const int RepairConnectionButtonId = 1721;
         internal const int GameFilterButtonId = 1722;
         internal const int ManagerButtonId = 1723;
+        internal const int LegacyCheckVersionButtonId = 1724;
+        internal const int LegacyDownloadButtonId = 1725;
 
         private const int ToolbarButtonCount = 4;
         private const int ButtonGap = 8;
@@ -37,6 +39,9 @@ namespace DPopCleaner.SimpleUpdate
         private readonly IntPtr _parent;
         private readonly string _applicationRoot;
         private IntPtr _actionToolbar;
+        private IntPtr _updateToolbar;
+        private IntPtr _legacyCheckVersionButton;
+        private IntPtr _legacyDownloadButton;
         private bool _disposed;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -90,19 +95,29 @@ namespace DPopCleaner.SimpleUpdate
             _applicationRoot = Path.GetFullPath(applicationRoot ?? string.Empty);
             EnsureHostClass();
             CreateToolbar();
+            CreateLegacyUpdateProxy();
+            RefreshDisplayedZapretVersion();
         }
 
         internal void Show()
         {
             if (_disposed) return;
             PositionActionToolbar();
-            NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_SHOW);
+            PositionUpdateToolbar();
+            RefreshDisplayedZapretVersion();
+            if (_legacyCheckVersionButton != IntPtr.Zero)
+                NativeBridge.ShowWindow(_legacyCheckVersionButton, NativeBridge.SW_HIDE);
+            if (_legacyDownloadButton != IntPtr.Zero)
+                NativeBridge.ShowWindow(_legacyDownloadButton, NativeBridge.SW_HIDE);
+            if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_SHOW);
+            if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_SHOW);
         }
 
         internal void Hide()
         {
             if (_disposed) return;
-            NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_HIDE);
+            if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_HIDE);
+            if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_HIDE);
         }
 
         private void CreateToolbar()
@@ -112,7 +127,7 @@ namespace DPopCleaner.SimpleUpdate
                 ? NativeBridge.SendMessage(fontAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero)
                 : IntPtr.Zero;
 
-            _actionToolbar = CreateHost();
+            _actionToolbar = CreateHost(ToolbarWidth, ToolbarHeight);
 
             // One safe row beside the frozen "Дополнительно" heading. Widths deliberately
             // preserve the full Russian labels while keeping all four actions inside the old page.
@@ -129,11 +144,40 @@ namespace DPopCleaner.SimpleUpdate
             PositionActionToolbar();
         }
 
-        private IntPtr CreateHost()
+        private void CreateLegacyUpdateProxy()
+        {
+            _legacyCheckVersionButton = NativeBridge.FindChildByText(_parent, "Проверить версию", "Button", true);
+            _legacyDownloadButton = NativeBridge.FindChildByText(_parent, "Скачать и установить", "Button", true);
+            if (_legacyCheckVersionButton == IntPtr.Zero || _legacyDownloadButton == IntPtr.Zero) return;
+
+            var check = NativeBridge.GetChildClientBounds(_parent, _legacyCheckVersionButton);
+            var download = NativeBridge.GetChildClientBounds(_parent, _legacyDownloadButton);
+            if (check == null || download == null) return;
+
+            var left = Math.Min(check.Left, download.Left);
+            var top = Math.Min(check.Top, download.Top);
+            var right = Math.Max(check.Right, download.Right);
+            var bottom = Math.Max(check.Bottom, download.Bottom);
+            var width = Math.Max(1, right - left);
+            var height = Math.Max(1, bottom - top);
+            var font = NativeBridge.SendMessage(_legacyCheckVersionButton, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
+
+            _updateToolbar = CreateHost(width, height);
+            CreateButton(_updateToolbar, "Проверить версию", LegacyCheckVersionButtonId,
+                check.Left - left, check.Top - top, check.Width, check.Height, font);
+            CreateButton(_updateToolbar, "Скачать и установить", LegacyDownloadButtonId,
+                download.Left - left, download.Top - top, download.Width, download.Height, font);
+
+            NativeBridge.ShowWindow(_legacyCheckVersionButton, NativeBridge.SW_HIDE);
+            NativeBridge.ShowWindow(_legacyDownloadButton, NativeBridge.SW_HIDE);
+            PositionUpdateToolbar();
+        }
+
+        private IntPtr CreateHost(int width, int height)
         {
             var handle = CreateWindowEx(0, HostClassName, string.Empty, WS_CHILD | WS_VISIBLE,
-                0, 0, ToolbarWidth, ToolbarHeight, _parent, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
-            if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret compact action toolbar.");
+                0, 0, width, height, _parent, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
+            if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret bridge toolbar.");
             lock (Sync) Hosts[handle] = this;
             return handle;
         }
@@ -173,6 +217,44 @@ namespace DPopCleaner.SimpleUpdate
             });
         }
 
+        private void PositionUpdateToolbar()
+        {
+            if (_updateToolbar == IntPtr.Zero || _legacyCheckVersionButton == IntPtr.Zero || _legacyDownloadButton == IntPtr.Zero) return;
+            var check = NativeBridge.GetChildClientBounds(_parent, _legacyCheckVersionButton);
+            var download = NativeBridge.GetChildClientBounds(_parent, _legacyDownloadButton);
+            if (check == null || download == null) return;
+            var left = Math.Min(check.Left, download.Left);
+            var top = Math.Min(check.Top, download.Top);
+            var right = Math.Max(check.Right, download.Right);
+            var bottom = Math.Max(check.Bottom, download.Bottom);
+            NativeBridge.PositionChildWindow(_updateToolbar, new NativeBridge.ClientBounds
+            {
+                Left = left,
+                Top = top,
+                Right = right,
+                Bottom = bottom
+            });
+        }
+
+        private void RefreshDisplayedZapretVersion()
+        {
+            var versionPath = Path.Combine(_applicationRoot, "Zapret", ".service", "version.txt");
+            if (!File.Exists(versionPath)) return;
+            var version = (File.ReadAllText(versionPath) ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(version)) return;
+
+            foreach (var child in NativeBridge.GetChildren(_parent))
+            {
+                if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
+                var text = (child.Text ?? string.Empty).Trim();
+                if (!text.StartsWith("Zapret ", StringComparison.OrdinalIgnoreCase)) continue;
+                var bullet = text.IndexOf('•');
+                var suffix = bullet >= 0 ? "  " + text.Substring(bullet) : string.Empty;
+                NativeBridge.WriteWindowText(child.Handle, "Zapret " + version + suffix);
+                break;
+            }
+        }
+
         private IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
             if (msg == WM_COMMAND)
@@ -184,6 +266,11 @@ namespace DPopCleaner.SimpleUpdate
                     else if (id == RepairConnectionButtonId) RepairConnection();
                     else if (id == GameFilterButtonId) CycleGameFilter();
                     else if (id == ManagerButtonId) OpenOfficialManager();
+                    else if (id == LegacyCheckVersionButtonId || id == LegacyDownloadButtonId)
+                    {
+                        LegacyZapretUpdater.Run(_applicationRoot);
+                        RefreshDisplayedZapretVersion();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -211,8 +298,6 @@ namespace DPopCleaner.SimpleUpdate
             if (!File.Exists(service) || !File.Exists(winws))
                 throw new InvalidOperationException("Bundled Zapret 1.10.2 повреждён или не установлен полностью.");
 
-            // Upstream Flowseal 1.10.2 exposes status_zapret; connection repair keeps the same
-            // safe TCP prerequisite but avoids touching unrelated/external winws processes.
             var statusCommand = UpstreamStatusCommand;
             RunHidden("cmd.exe", "/d /c \"\"" + service + "\" load_user_lists\"", zapretRoot, 8000);
             RunHidden("netsh.exe", "interface tcp set global timestamps=enabled", zapretRoot, 8000);
@@ -338,12 +423,14 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (_disposed) return;
             _disposed = true;
-            if (_actionToolbar != IntPtr.Zero)
+            foreach (var handle in new[] { _actionToolbar, _updateToolbar })
             {
-                lock (Sync) Hosts.Remove(_actionToolbar);
-                try { DestroyWindow(_actionToolbar); } catch { }
+                if (handle == IntPtr.Zero) continue;
+                lock (Sync) Hosts.Remove(handle);
+                try { DestroyWindow(handle); } catch { }
             }
             _actionToolbar = IntPtr.Zero;
+            _updateToolbar = IntPtr.Zero;
         }
     }
 }
