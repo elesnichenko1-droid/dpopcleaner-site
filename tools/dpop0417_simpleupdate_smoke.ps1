@@ -6,13 +6,15 @@ Set-StrictMode -Version Latest
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $helper = Join-Path $root 'v0417/src/SimpleUpdate/bin/Release/net48/SimpleUpdate.exe'
-$core = Join-Path $root 'downloads/DPopCleaner_0.2.14_BETA.exe'
+$coreSource = Join-Path $root 'downloads/DPopCleaner_0.2.14_BETA.exe'
 if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw "SimpleUpdate not built: $helper" }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('DPopSimpleUpdateSmoke-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
+Copy-Item -LiteralPath $helper -Destination (Join-Path $work 'DPopCleaner.exe') -Force
 Copy-Item -LiteralPath $helper -Destination (Join-Path $work 'SimpleUpdate.exe') -Force
-Copy-Item -LiteralPath $core -Destination (Join-Path $work 'DPopCleaner.exe') -Force
+Copy-Item -LiteralPath $coreSource -Destination (Join-Path $work 'DPopCleaner.Core.exe') -Force
+$corePath = Join-Path $work 'DPopCleaner.Core.exe'
 $settings = Join-Path $work 'SimpleUpdate.ini'
 
 $native = @'
@@ -59,16 +61,24 @@ Add-Type -TypeDefinition $native -Language CSharp
 $launcher = $null
 $coreProcess = $null
 try {
-    $launcher = Start-Process -FilePath (Join-Path $work 'SimpleUpdate.exe') -ArgumentList @('--no-update-check','--settings-path',('"' + $settings + '"')) -WorkingDirectory $work -PassThru
+    # Launch through the historical DPopCleaner.exe path. Rev.6 reserves this path for the bridge.
+    $launcher = Start-Process -FilePath (Join-Path $work 'DPopCleaner.exe') -ArgumentList @('--no-update-check','--settings-path',('"' + $settings + '"')) -WorkingDirectory $work -PassThru
 
     $deadline = [DateTime]::UtcNow.AddSeconds(18)
     do {
         Start-Sleep -Milliseconds 250
-        $candidate = Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $work 'DPopCleaner.exe') } | Select-Object -First 1
-        if ($candidate) { $coreProcess = $candidate; $coreProcess.Refresh() }
+        foreach ($candidate in @(Get-Process -Name 'DPopCleaner.Core' -ErrorAction SilentlyContinue)) {
+            try {
+                if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($corePath)) {
+                    $coreProcess = $candidate
+                    $coreProcess.Refresh()
+                    break
+                }
+            } catch { }
+        }
     } while (($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) -and [DateTime]::UtcNow -lt $deadline)
 
-    if ($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) { throw 'SimpleUpdate did not launch the authentic DPopCleaner core.' }
+    if ($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) { throw 'DPopCleaner.exe bridge did not launch the authentic DPopCleaner.Core.exe.' }
 
     $children = [SmokeNative]::Children($coreProcess.MainWindowHandle)
     $gear = $children | Where-Object { $_.Id -eq 906 -and $_.ClassName -eq 'Button' } | Select-Object -First 1
@@ -120,7 +130,7 @@ try {
 
     Stop-Process -Id $coreProcess.Id -Force
     $coreProcess.WaitForExit(5000) | Out-Null
-    if (-not $launcher.WaitForExit(6000)) { throw 'SimpleUpdate did not exit after DPopCleaner closed.' }
+    if (-not $launcher.WaitForExit(6000)) { throw 'DPopCleaner.exe bridge did not exit after DPopCleaner.Core.exe closed.' }
 
     Write-Host 'SIMPLEUPDATE_SCROLLABLE_SETTINGS_UI_SMOKE_OK'
 }

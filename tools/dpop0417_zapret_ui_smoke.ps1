@@ -16,14 +16,19 @@ $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $launcher = Join-Path $RootPath 'SimpleUpdate.exe'
-$core = Join-Path $RootPath 'DPopCleaner.exe'
+$installedCore = Join-Path $RootPath 'DPopCleaner.Core.exe'
+$stageCore = Join-Path $RootPath 'DPopCleaner.exe'
+$installedLayout = Test-Path -LiteralPath $installedCore -PathType Leaf
+$core = if ($installedLayout) { $installedCore } else { $stageCore }
+$coreProcessName = [IO.Path]::GetFileNameWithoutExtension($core)
 $zapretRoot = Join-Path $RootPath 'Zapret'
 $service = Join-Path $zapretRoot 'service.bat'
 $winws = Join-Path $zapretRoot 'bin\winws.exe'
 $windivert = Join-Path $zapretRoot 'bin\WinDivert64.sys'
-foreach ($required in @($launcher, $core, $service, $winws, $windivert)) {
+foreach ($required in @($core, $service, $winws, $windivert)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Zapret UI smoke prerequisite missing: $required" }
 }
+if ($installedLayout -and -not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Installed Zapret UI launcher missing: $launcher" }
 $strategyFiles = @(Get-ChildItem -LiteralPath $zapretRoot -Filter 'general*.bat' -File | Sort-Object Name)
 if ($strategyFiles.Count -eq 0) { throw 'Zapret UI smoke found no general*.bat strategies under the legacy Zapret directory.' }
 
@@ -107,20 +112,31 @@ $strategyEntries = @()
 $strategyCount = 0
 $legacyZapretRoot = ''
 try {
-    $settings = Join-Path $OutputDir 'SimpleUpdate-zapret-ui.ini'
-    Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue
-    $launcherProcess = Start-Process -FilePath $launcher -ArgumentList @('--no-update-check','--settings-path',('"' + $settings + '"')) -WorkingDirectory $RootPath -PassThru
+    if ($installedLayout) {
+        $settings = Join-Path $OutputDir 'SimpleUpdate-zapret-ui.ini'
+        Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue
+        $launcherProcess = Start-Process -FilePath $launcher -ArgumentList @('--no-update-check','--settings-path',('"' + $settings + '"')) -WorkingDirectory $RootPath -PassThru
+    } else {
+        # Stage is pre-Inno: the immutable core is still named DPopCleaner.exe there.
+        # Launch it directly only for its own Zapret discovery test. Installed tests must use the bridge.
+        $coreProcess = Start-Process -FilePath $core -WorkingDirectory $RootPath -PassThru
+    }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(18)
     do {
         Start-Sleep -Milliseconds 250
-        foreach ($candidate in @(Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue)) {
-            try {
-                if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($core)) { $coreProcess = $candidate; $coreProcess.Refresh(); break }
-            } catch { }
+        if ($coreProcess) {
+            try { $coreProcess.Refresh() } catch { $coreProcess = $null }
         }
-    } while (($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) -and [DateTime]::UtcNow -lt $deadline)
-    if ($null -eq $coreProcess -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Authentic DPopCleaner window did not appear for Zapret UI smoke.' }
+        if (-not $coreProcess) {
+            foreach ($candidate in @(Get-Process -Name $coreProcessName -ErrorAction SilentlyContinue)) {
+                try {
+                    if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($core)) { $coreProcess = $candidate; $coreProcess.Refresh(); break }
+                } catch { }
+            }
+        }
+    } while (($null -eq $coreProcess -or $coreProcess.HasExited -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) -and [DateTime]::UtcNow -lt $deadline)
+    if ($null -eq $coreProcess -or $coreProcess.HasExited -or $coreProcess.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Authentic DPopCleaner window did not appear for Zapret UI smoke.' }
 
     $coreProcess.Refresh()
     $moduleBase = $coreProcess.MainModule.BaseAddress
@@ -170,6 +186,8 @@ try {
 
     [pscustomobject]@{
         root = $RootPath
+        layout = $(if ($installedLayout) { 'installed-bridge' } else { 'stage-direct-core' })
+        core = $core
         zapret_root = $zapretRoot
         frozen_strategy_root = $legacyZapretRoot
         bundled_version = (Get-Content -Raw -LiteralPath (Join-Path $zapretRoot '.service\version.txt')).Trim()
@@ -183,7 +201,7 @@ try {
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'zapret-ui-smoke-report.json') -Encoding utf8
 
     $selectedLabel = if ([string]::IsNullOrWhiteSpace($selectedStrategy)) { '<none>' } else { $selectedStrategy }
-    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK root=$zapretRoot verified=$verifiedStrategy selected=$selectedLabel combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
+    Write-Host "AUTHENTIC_ZAPRET_UI_SMOKE_OK layout=$(if ($installedLayout) { 'installed-bridge' } else { 'stage-direct-core' }) core=$core root=$zapretRoot verified=$verifiedStrategy selected=$selectedLabel combo_count=$strategyCount bundled_files=$($strategyFiles.Count)"
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }

@@ -7,6 +7,7 @@
     <AssemblyName>SimpleUpdate</AssemblyName>
     <RootNamespace>DPopCleaner.SimpleUpdate</RootNamespace>
     <ApplicationIcon>../../../dpopcleaner.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Net.Http" />

@@ -21,17 +21,16 @@ $zapretRoot = Join-Path $installRoot 'Zapret'
 $diskEvidence = Join-Path $OutputDir 'disk-installed'
 $restoreEvidence = Join-Path $OutputDir 'restore-installed'
 $zapretEvidence = Join-Path $OutputDir 'zapret-installed'
+$settingsEvidence = Join-Path $OutputDir 'settings-installed'
 $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
 $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
 $uninstalled = $false
 $documentationAclModify = $false
-$launcherSmoke = $false
+$installedSettingsBridgeSmoke = $false
 $zapretScreenFixPresent = $false
 $zapretRuntimePresent = $false
 $zapretUiSmoke = $false
-$launcherProcess = $null
-$launcherCoreProcess = $null
 
 function Assert-File([string]$RelativePath) {
     $path = Join-Path $installRoot $RelativePath
@@ -45,8 +44,14 @@ try {
     if ($install.ExitCode -ne 0) { throw "Silent install failed with exit code $($install.ExitCode)." }
     $installed = $true
 
-    $core = Assert-File 'DPopCleaner.exe'
+    # Historical DPopCleaner.exe is now the bridge so old shortcuts cannot bypass revision 6 UI fixes.
+    $appLauncher = Assert-File 'DPopCleaner.exe'
+    $core = Assert-File 'DPopCleaner.Core.exe'
     $launcher = Assert-File 'SimpleUpdate.exe'
+    $appLauncherHash = (Get-FileHash -LiteralPath $appLauncher -Algorithm SHA256).Hash
+    $simpleUpdateHash = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
+    if ($appLauncherHash -ne $simpleUpdateHash) { throw 'Installed DPopCleaner.exe is not byte-identical to SimpleUpdate.exe bridge.' }
+
     [void](Assert-File 'Zapret\LICENSE.txt')
     [void](Assert-File 'Zapret\service.bat')
     [void](Assert-File 'Zapret\general.bat')
@@ -88,23 +93,10 @@ try {
     $installedCoreBlob = (& git -C $repoRoot hash-object -- $core).Trim()
     if ($LASTEXITCODE -ne 0 -or $installedCoreBlob -ne $expectedCoreBlob) { throw "Installed immutable core mismatch: $installedCoreBlob" }
 
-    $launcherSettings = Join-Path $OutputDir 'SimpleUpdate-installed-smoke.ini'
-    Remove-Item -LiteralPath $launcherSettings -Force -ErrorAction SilentlyContinue
-    $launcherProcess = Start-Process -FilePath $launcher -ArgumentList @('--no-update-check','--settings-path',('"' + $launcherSettings + '"')) -WorkingDirectory $installRoot -PassThru
-    $launcherDeadline = [DateTime]::UtcNow.AddSeconds(18)
-    do {
-        Start-Sleep -Milliseconds 250
-        foreach ($candidate in @(Get-Process -Name 'DPopCleaner' -ErrorAction SilentlyContinue)) {
-            try { if ([IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($core)) { $launcherCoreProcess = $candidate; break } } catch { }
-        }
-    } while ($null -eq $launcherCoreProcess -and [DateTime]::UtcNow -lt $launcherDeadline)
-    if ($null -eq $launcherCoreProcess) { throw 'Installed SimpleUpdate.exe did not launch the preserved DPopCleaner.exe core.' }
-    Stop-Process -Id $launcherCoreProcess.Id -Force
-    $launcherCoreProcess.WaitForExit(5000) | Out-Null
-    if (-not $launcherProcess.WaitForExit(6000)) { throw 'Installed SimpleUpdate.exe did not exit after its DPopCleaner core closed.' }
-    $launcherSmoke = $true
-    $launcherCoreProcess = $null
-    $launcherProcess = $null
+    & (Join-Path $PSScriptRoot 'dpop0417_installed_settings_smoke.ps1') -RootPath $installRoot -OutputDir $settingsEvidence
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $installedSettingsBridgeSmoke = Test-Path -LiteralPath (Join-Path $settingsEvidence 'installed-settings-smoke-report.json') -PathType Leaf
+    if (-not $installedSettingsBridgeSmoke) { throw 'Installed Settings bridge smoke report was not produced.' }
 
     & (Join-Path $PSScriptRoot 'dpop0417_zapret_ui_smoke.ps1') -RootPath $installRoot -OutputDir $zapretEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -120,16 +112,20 @@ try {
     $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
     if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($uninstall.ExitCode)." }
     Start-Sleep -Milliseconds 500
-    $uninstalled = -not (Test-Path -LiteralPath (Join-Path $installRoot 'DPopCleaner.exe') -PathType Leaf)
-    if (-not $uninstalled) { throw 'Installed DPopCleaner.exe remained after uninstall.' }
+    $wrapperRemoved = -not (Test-Path -LiteralPath (Join-Path $installRoot 'DPopCleaner.exe') -PathType Leaf)
+    $coreRemoved = -not (Test-Path -LiteralPath (Join-Path $installRoot 'DPopCleaner.Core.exe') -PathType Leaf)
+    $uninstalled = $wrapperRemoved -and $coreRemoved
+    if (-not $uninstalled) { throw 'Installed DPopCleaner launcher/core remained after uninstall.' }
 
     [pscustomobject]@{
         installer = $InstallerPath
         install_root = $installRoot
         zapret_root = $zapretRoot
+        installed_core_path = $core
         installed_core_blob = $installedCoreBlob
         expected_core_blob = $expectedCoreBlob
-        simpleupdate_launcher_smoke = [bool]$launcherSmoke
+        legacy_dpopcleaner_path_is_bridge = ($appLauncherHash -eq $simpleUpdateHash)
+        installed_settings_bridge_smoke = [bool]$installedSettingsBridgeSmoke
         zapret_runtime_present = [bool]$zapretRuntimePresent
         zapret_version = $zapretVersion
         zapret_strategy_files = $installedStrategies.Count
@@ -141,10 +137,11 @@ try {
         uninstalled = [bool]$uninstalled
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $reportPath -Encoding utf8
 
-    Write-Host "Installed immutable core: $installedCoreBlob"
+    Write-Host "Installed immutable core: $installedCoreBlob at DPopCleaner.Core.exe"
+    Write-Host 'Historical DPopCleaner.exe path -> elevated Settings UI bridge: PASS'
+    Write-Host 'Installed Settings scroll/auto-update/legacy-version smoke: PASS'
     Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
-    Write-Host 'Installed SimpleUpdate launcher smoke: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'
     Write-Host 'Installed Documentation ACL: BUILTIN\Users Modify PASS'
     Write-Host 'Installed Disk Analyzer smoke: PASS'
@@ -152,8 +149,6 @@ try {
     Write-Host 'Silent uninstall: PASS'
 }
 finally {
-    if ($launcherCoreProcess -and -not $launcherCoreProcess.HasExited) { Stop-Process -Id $launcherCoreProcess.Id -Force -ErrorAction SilentlyContinue }
-    if ($launcherProcess -and -not $launcherProcess.HasExited) { Stop-Process -Id $launcherProcess.Id -Force -ErrorAction SilentlyContinue }
     if ($installed -and -not $uninstalled) {
         $uninstaller = Join-Path $installRoot 'unins000.exe'
         if (Test-Path -LiteralPath $uninstaller -PathType Leaf) { try { Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait | Out-Null } catch { } }
