@@ -8,6 +8,22 @@ function formatBytes(bytes){
   return `${mb.toFixed(mb >= 10 ? 1 : 2)} МБ`;
 }
 
+function applyRevision(m){
+  const revision = Number(m?.revision);
+  if(!Number.isInteger(revision) || revision < 1) return;
+  const label = `rev.${revision}`;
+  document.title = document.title.replace(/rev\.\d+/gi, label);
+  document.querySelectorAll('meta[content]').forEach(meta => {
+    if(/rev\.\d+/i.test(meta.content)) meta.content = meta.content.replace(/rev\.\d+/gi, label);
+  });
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node => {
+    if(/rev\.\d+/i.test(node.nodeValue || '')) node.nodeValue = node.nodeValue.replace(/rev\.\d+/gi, label);
+  });
+}
+
 function setDownloadState(available, url, version){
   document.querySelectorAll('.js-download').forEach(el => {
     const label = el.querySelector('.js-download-label');
@@ -38,6 +54,7 @@ function applyManifest(m){
   const available = globalThis.DPopReleaseManifest?.isUsableManifest(m) === true;
   const currentVersion = document.querySelector('.js-version')?.textContent?.trim() || '';
   const version = available && typeof m.version === 'string' ? m.version : currentVersion;
+  if(available) applyRevision(m);
   if(version){
     document.querySelectorAll('.js-version').forEach(el => el.textContent = version);
   }
