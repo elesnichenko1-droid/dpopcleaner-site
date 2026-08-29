@@ -57,20 +57,22 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
         self.assertIn('ZapretEnhancementHost', launcher)
 
-    def test_existing_zapret_actions_use_one_compact_two_by_two_host(self):
+    def test_existing_zapret_actions_use_one_compact_safe_toolbar(self):
         host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
-        self.assertIn('private IntPtr _actionGrid;', host)
+        self.assertIn('private IntPtr _actionToolbar;', host)
         self.assertNotIn('private IntPtr _updateRow;', host)
         self.assertNotIn('private IntPtr _toolsRow;', host)
-        self.assertIn('CompactGridColumns = 2', host)
-        self.assertIn('CompactGridRows = 2', host)
+        self.assertIn('ToolbarButtonCount = 4', host)
         self.assertIn('ButtonGap = 8', host)
-        self.assertIn('PositionActionGrid', host)
+        self.assertIn('PositionActionToolbar', host)
+        self.assertIn('Дополнительно', host)
+        self.assertIn('Тесты', host)
         self.assertEqual(host.count('CreateHost();'), 1)
 
         smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('Zapret actions overlap', smoke)
-        self.assertIn('Existing Zapret control overlaps compact action grid', smoke)
+        self.assertIn('Existing Zapret control overlaps compact action toolbar', smoke)
+        self.assertIn('Compact Zapret toolbar escaped the safe row', smoke)
 
     def test_installed_rev7_smoke_reproduces_requested_behaviors(self):
         smoke_path = ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1'
