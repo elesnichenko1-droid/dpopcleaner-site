@@ -79,6 +79,20 @@ function Rect-Key($Item) {
     if (-not $Item) { return '<missing>' }
     return "$($Item.Left),$($Item.Top),$($Item.Right),$($Item.Bottom)"
 }
+function Write-ZapretDiagnostic($Children) {
+    $diagnostic = @($Children | Where-Object {
+        $_.Visible -and (
+            $_.Text -match 'Zapret|1\.9|1\.10|сервис|wins|обнов|Скачать|Проверить|Дополнительно' -or
+            $_.Id -in @(1701,1702,1703,1704,1705,1707,1708,1709,1710,1711,1713,1714,1715,1716,1717,1720,1721,1722,1723,1724)
+        )
+    } | Sort-Object Top, Left)
+    Write-Host 'REV9_ZAPRET_CONTROL_DUMP_BEGIN'
+    foreach ($child in $diagnostic) {
+        $escaped = ($child.Text -replace "`r", '<CR>' -replace "`n", '<LF>')
+        Write-Host ("id={0} class={1} visible={2} rect={3},{4},{5},{6} text=[{7}]" -f $child.Id,$child.ClassName,$child.Visible,$child.Left,$child.Top,$child.Right,$child.Bottom,$escaped)
+    }
+    Write-Host 'REV9_ZAPRET_CONTROL_DUMP_END'
+}
 
 $launcher = $null
 $core = $null
@@ -105,13 +119,15 @@ try {
         $zapretChildren = Get-Children $window
         $legacyUpdater = $zapretChildren | Where-Object { $_.Id -eq 1715 -and $_.ClassName -eq 'Button' } | Select-Object -First 1
         $proxyUpdater = $zapretChildren | Where-Object { $_.Id -eq 1724 -and $_.ClassName -eq 'Button' } | Select-Object -First 1
-        $versionStatus = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and $_.Text -like 'Zapret 1.10.2*' } | Select-Object -First 1
+        # The frozen status strip is not guaranteed to expose itself as a Win32 Static control.
+        # Match the user-visible text only; production uses the same class-agnostic semantic match.
+        $versionStatus = $zapretChildren | Where-Object { $_.Visible -and $_.Text -like 'Zapret 1.10.2*' } | Select-Object -First 1
     } while ((-not $legacyUpdater -or -not $proxyUpdater -or -not $versionStatus) -and [DateTime]::UtcNow -lt $deadline)
 
-    if (-not $legacyUpdater) { throw 'Frozen Zapret updater button id=1715 was not found for replacement.' }
-    if ($legacyUpdater.Visible) { throw 'Broken frozen Zapret updater button is still visible' }
-    if (-not $proxyUpdater -or -not $proxyUpdater.Visible -or $proxyUpdater.Text -ne 'Скачать и установить') { throw 'Zapret updater proxy is not visible' }
-    if (-not $versionStatus) { throw 'Displayed Zapret version is not 1.10.2' }
+    if (-not $legacyUpdater) { Write-ZapretDiagnostic $zapretChildren; throw 'Frozen Zapret updater button id=1715 was not found for replacement.' }
+    if ($legacyUpdater.Visible) { Write-ZapretDiagnostic $zapretChildren; throw 'Broken frozen Zapret updater button is still visible' }
+    if (-not $proxyUpdater -or -not $proxyUpdater.Visible -or $proxyUpdater.Text -ne 'Скачать и установить') { Write-ZapretDiagnostic $zapretChildren; throw 'Zapret updater proxy is not visible' }
+    if (-not $versionStatus) { Write-ZapretDiagnostic $zapretChildren; throw 'Displayed Zapret version is not 1.10.2' }
 
     $bundledVersion = (Get-Content -Raw -LiteralPath (Join-Path $RootPath 'Zapret\.service\version.txt')).Trim()
     if ($bundledVersion -ne '1.10.2') { throw "Bundled Zapret version changed unexpectedly: $bundledVersion" }
