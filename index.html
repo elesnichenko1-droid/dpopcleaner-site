@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#07111f" />
-  <meta name="description" content="DPopCleaner 0.4.17 rev.6 для Windows x64: исправленный launcher/UI-bridge, неизменное ядро 0.2.14, автообновление, полный Flowseal Zapret 1.10.2 и прокручиваемые Настройки." />
-  <meta property="og:title" content="DPopCleaner 0.4.17 rev.6" />
-  <meta property="og:description" content="Стабильная Windows-сборка: старые ярлыки больше не обходят UI-bridge, автообновление видно в Настройках, старый version badge скрыт." />
+  <meta name="description" content="DPopCleaner 0.4.17 rev.7 для Windows x64: прежний интерфейс, исправление скрытия/восстановления, ОЗУ 5–95%, полный Flowseal Zapret 1.10.2 и прокручиваемые Настройки." />
+  <meta property="og:title" content="DPopCleaner 0.4.17 rev.7" />
+  <meta property="og:description" content="Функциональный rev.7 без редизайна: исправлен launcher, расширен диапазон ОЗУ, добавлены действия Zapret и автообновление приложения в прокручиваемой левой области Настроек." />
   <meta property="og:type" content="website" />
-  <title>DPopCleaner 0.4.17 rev.6 — Windows utility</title>
+  <title>DPopCleaner 0.4.17 rev.7 — Windows utility</title>
   <link rel="icon" href="./dpopcleaner-icon.png" type="image/png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -16,7 +16,7 @@
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <header class="site-header" id="top">
     <div class="container nav-wrap">
-      <a class="brand" href="#top"><img src="./dpopcleaner-icon.png" alt="" width="42" height="42" /><span>DPopCleaner</span><small>0.4.17 rev.6</small></a>
+      <a class="brand" href="#top"><img src="./dpopcleaner-icon.png" alt="" width="42" height="42" /><span>DPopCleaner</span><small>0.4.17 rev.7</small></a>
       <nav class="nav" aria-label="Основная навигация"><a href="#features">Возможности</a><a href="#screens">Интерфейс</a><a href="#security">Проверка</a><a href="#faq">FAQ</a></nav>
       <a class="button button-small button-ghost js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="js-download-label">Проверяем сборку</span></a>
       <button class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
@@ -26,49 +26,49 @@
   <main>
     <section class="hero"><div class="container hero-grid">
       <div class="hero-copy reveal">
-        <div class="eyebrow"><span class="dot"></span> DPopCleaner <span class="js-version">0.4.17</span> rev.6 · Windows x64</div>
-        <h1>Старый интерфейс.<br><span>Новый запуск без обходов.</span></h1>
-        <p class="lead">DPopCleaner 0.4.17 rev.6 исправляет запуск через старые ярлыки: установленный <strong>DPopCleaner.exe</strong> теперь всегда проходит через UI-bridge, поэтому прокручиваемые Настройки и автообновление не исчезают, а <code>v0.2.11 BETA</code> скрывается. Оригинальное ядро 0.2.14 остаётся byte-identical как <code>DPopCleaner.Core.exe</code>. Полный <strong>Flowseal Zapret 1.10.2</strong> сохранён.</p>
+        <div class="eyebrow"><span class="dot"></span> DPopCleaner <span class="js-version">0.4.17</span> rev.7 · Windows x64</div>
+        <h1>Прежний интерфейс.<br><span>Функциональный rev.7.</span></h1>
+        <p class="lead">DPopCleaner 0.4.17 rev.7 сохраняет прежний интерфейс и существующий bridge без C++-редизайна. Исправлено закрытие при временном скрытии/восстановлении окна, диапазон ОЗУ расширен до <strong>5–95%</strong>, существующая вкладка Zapret получила новые действия, а левая область Настроек стала прокручиваемой. Оригинальное ядро 0.2.14 остаётся byte-identical как <code>DPopCleaner.Core.exe</code>, полный <strong>Flowseal Zapret 1.10.2</strong> сохранён.</p>
         <div class="hero-actions"><a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span><span class="js-download-label">Сборка проверяется</span></a><a class="button button-secondary" href="#screens">Посмотреть программу</a></div>
-        <div class="release-meta"><span>Windows 10 / 11</span><i></i><span>x64</span><i></i><span class="js-size">ожидается публикация</span><i></i><span>0.4.17 rev.6</span></div>
+        <div class="release-meta"><span>Windows 10 / 11</span><i></i><span>x64</span><i></i><span class="js-size">ожидается публикация</span><i></i><span>0.4.17 rev.7</span></div>
       </div>
-      <div class="hero-visual reveal delay-1"><img src="assets/dpopcleaner-current-settings.png" alt="Действующая программа DPopCleaner 0.4.17" style="width:100%;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.35)" /><p class="visual-note">Интерфейс исходного ядра; rev.6 добавляет UI-bridge поверх Настроек.</p></div>
+      <div class="hero-visual reveal delay-1"><img src="assets/dpopcleaner-current-settings.png" alt="Действующая программа DPopCleaner 0.4.17" style="width:100%;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.35)" /><p class="visual-note">Интерфейс сохранён; rev.7 дополняет существующий UI через bridge.</p></div>
     </div></section>
 
-    <section class="release-status-section" id="release-status"><div class="container"><div class="release-status-card reveal"><span class="release-status-dot"></span><div><strong>Статус релиза</strong><p id="releaseStatus">DPopCleaner 0.4.17 rev.6 проходит финальную проверку. Кнопка загрузки включится только после публикации проверенного installer SHA-256.</p></div></div></div></section>
+    <section class="release-status-section" id="release-status"><div class="container"><div class="release-status-card reveal"><span class="release-status-dot"></span><div><strong>Статус релиза</strong><p id="releaseStatus">DPopCleaner 0.4.17 rev.7 проходит финальную проверку. Кнопка загрузки включится только после публикации проверенного installer SHA-256.</p></div></div></div></section>
 
-    <section class="trust-strip"><div class="container trust-grid reveal"><div><strong>0.4.17 rev.6</strong><span>текущий релиз</span></div><div><strong>0.2.14</strong><span>byte-identical core</span></div><div><strong>Zapret 1.10.2</strong><span>Flowseal runtime</span></div><div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div></div></section>
+    <section class="trust-strip"><div class="container trust-grid reveal"><div><strong>0.4.17 rev.7</strong><span>текущий релиз</span></div><div><strong>0.2.14</strong><span>byte-identical core</span></div><div><strong>Zapret 1.10.2</strong><span>Flowseal runtime</span></div><div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div></div></section>
 
-    <section class="section" id="features"><div class="container"><div class="section-head reveal"><p class="kicker">Что исправлено</p><h2>0.4.17 rev.6 — UI-bridge нельзя обойти старым ярлыком</h2><p>Главное изменение rev.6 — исторический путь DPopCleaner.exe теперь сам является launcher-входом.</p></div><div class="feature-grid">
-      <article class="feature-card reveal"><div class="feature-icon">↻</div><h3>Надёжный launcher</h3><p><code>DPopCleaner.exe</code> и совместимый <code>SimpleUpdate.exe</code> ведут в один UI-bridge. Оригинальное ядро хранится отдельно как <code>DPopCleaner.Core.exe</code>.</p><span>revision 6</span></article>
-      <article class="feature-card reveal delay-1"><div class="feature-icon">↕</div><h3>Прокручиваемые Настройки</h3><p>В «Дополнительных настройках» всегда доступны «Включить автообновление», «Проверить обновления» и «Лицензия». Блок прокручивается колесом мыши.</p><span>settings bridge</span></article>
-      <article class="feature-card reveal delay-2"><div class="feature-icon">×</div><h3>Старая версия скрыта</h3><p>Надпись <code>v0.2.11 BETA</code> справа снизу скрывается bridge-ом и больше не остаётся при обычном запуске.</p><span>legacy badge hidden</span></article>
-      <article class="feature-card reveal"><div class="feature-icon">Z</div><h3>Flowseal Zapret 1.10.2</h3><p>Каталог <code>Zapret\</code> содержит <code>Zapret\service.bat</code>, стратегии <code>Zapret\general*.bat</code>, <code>Zapret\bin\winws.exe</code>, WinDivert, lists и utils.</p><span>bundled runtime</span></article>
-      <article class="feature-card reveal delay-1"><div class="feature-icon">▦</div><h3>Анализатор диска</h3><p>Иерархия каталогов, логический и занятый размер, файлы, папки и процент родителя.</p><span>DiskAnalyzer.exe</span></article>
-      <article class="feature-card reveal delay-2"><div class="feature-icon">↶</div><h3>Центр восстановления</h3><p>История операций, детали и явный статус отката.</p><span>RestoreCenter.exe</span></article>
-      <article class="feature-card reveal"><div class="feature-icon">▣</div><h3>Zapret Screen Fix</h3><p>Отдельное исправление демонстрации экрана при использовании Zapret сохранено в установщике.</p><span>ZapretScreenFix.exe</span></article>
-      <article class="feature-card reveal delay-1"><div class="feature-icon">◆</div><h3>Ядро 0.2.14</h3><p><code>DPopCleaner.Core.exe</code> byte-identical оригиналу и проверяется по Git blob перед упаковкой и после установки.</p><span>immutable core</span></article>
+    <section class="section" id="features"><div class="container"><div class="section-head reveal"><p class="kicker">Что исправлено</p><h2>0.4.17 rev.7 — функции исправлены без смены дизайна</h2><p>Главное изменение rev.7 — существующий интерфейс остаётся на месте, а bridge исправляет проблемные сценарии поверх него.</p></div><div class="feature-grid">
+      <article class="feature-card reveal"><div class="feature-icon">↻</div><h3>Скрытие и восстановление</h3><p>Временная невидимость окна при сворачивании или восстановлении больше не приводит к завершению launcher-а. Процесс завершается только после фактического выхода ядра.</p><span>hide / restore fix</span></article>
+      <article class="feature-card reveal delay-1"><div class="feature-icon">%</div><h3>ОЗУ 5–95%</h3><p>Во вкладке ОЗУ используется тот же существующий ComboBox. Диапазон порога очистки расширен до <strong>5–95%</strong> с шагом 5%.</p><span>existing ComboBox</span></article>
+      <article class="feature-card reveal delay-2"><div class="feature-icon">Z</div><h3>Zapret — новые действия</h3><p>Существующая вкладка дополнена кнопками <strong>«Починка трансляции»</strong>, <strong>«Починка подключения»</strong>, <strong>«Игровой фильтр 1.10.2»</strong> и <strong>«Менеджер 1.10.2»</strong>.</p><span>existing Zapret tab</span></article>
+      <article class="feature-card reveal"><div class="feature-icon">↕</div><h3>Прокручиваемые Настройки</h3><p>Прокрутка добавлена именно в существующую левую область. Там остаются прежние чекбоксы, <strong>«Включить автообновление приложения»</strong>, «Проверить обновления» и лицензия; правая колонка исключений не менялась.</p><span>settings bridge</span></article>
+      <article class="feature-card reveal delay-1"><div class="feature-icon">Z</div><h3>Flowseal Zapret 1.10.2</h3><p>Полный runtime и существующие 22 стратегии сохранены: <code>Zapret\service.bat</code>, <code>Zapret\general*.bat</code>, <code>Zapret\bin\winws.exe</code>, WinDivert, lists и utils.</p><span>bundled runtime</span></article>
+      <article class="feature-card reveal delay-2"><div class="feature-icon">▦</div><h3>Анализатор диска</h3><p>Иерархия каталогов, логический и занятый размер, файлы, папки и процент родителя.</p><span>DiskAnalyzer.exe</span></article>
+      <article class="feature-card reveal"><div class="feature-icon">↶</div><h3>Центр восстановления</h3><p>История операций, детали и явный статус отката. Companion-модуль сохранён без замены интерфейса основного приложения.</p><span>RestoreCenter.exe</span></article>
+      <article class="feature-card reveal delay-1"><div class="feature-icon">◆</div><h3>Ядро 0.2.14</h3><p><code>DPopCleaner.Core.exe</code> byte-identical оригиналу и проверяется по Git blob <code>efd0eff1f4962319282363fa85595c25e0cebe11</code> перед упаковкой и после установки.</p><span>immutable core</span></article>
     </div></div></section>
 
-    <section class="section" id="screens"><div class="container"><div class="section-head reveal"><p class="kicker">Действующая программа</p><h2>Интерфейс DPopCleaner</h2><p>Rev.6 сохраняет исходный интерфейс и добавляет прокручиваемый UI-bridge в Настройки.</p></div><div class="feature-grid">
-      <article class="feature-card reveal" style="grid-column:span 4"><img src="assets/dpopcleaner-current-settings.png" alt="Настройки DPopCleaner" style="width:100%;border-radius:14px" /><h3>Настройки DPopCleaner</h3><p>Исходное окно Midnight; установленный rev.6 поверх него добавляет блок автообновления/лицензии и скрывает старый version badge.</p></article>
+    <section class="section" id="screens"><div class="container"><div class="section-head reveal"><p class="kicker">Действующая программа</p><h2>Интерфейс DPopCleaner</h2><p>Rev.7 сохраняет исходный интерфейс и добавляет функциональные исправления через существующий UI-bridge.</p></div><div class="feature-grid">
+      <article class="feature-card reveal" style="grid-column:span 4"><img src="assets/dpopcleaner-current-settings.png" alt="Настройки DPopCleaner" style="width:100%;border-radius:14px" /><h3>Настройки DPopCleaner</h3><p>Исходное окно Midnight сохранено. Rev.7 делает существующую левую область прокручиваемой, добавляет автообновление приложения и ручную проверку, оставляя правую колонку «Исключения очистки» без изменений.</p></article>
       <article class="feature-card reveal" style="grid-column:span 2"><img src="assets/dpopcleaner-0.4.17-disk.png" alt="Анализатор диска DPopCleaner" style="width:100%;border-radius:14px" /><h3>Анализатор диска</h3></article>
       <article class="feature-card reveal delay-1" style="grid-column:span 2"><img src="assets/dpopcleaner-0.4.17-restore.png" alt="Центр восстановления DPopCleaner" style="width:100%;border-radius:14px" /><h3>Центр восстановления</h3></article>
     </div></div></section>
 
-    <section class="section" id="security"><div class="container security-card reveal"><div class="shield-wrap"><img src="./dpopcleaner-icon.png" alt="Иконка DPopCleaner" /></div><div class="security-copy"><p class="kicker">Проверка сборки</p><h2>Проверяется именно установленный путь запуска</h2><p>Windows pipeline собирает Inno Setup, устанавливает пакет и запускает <code>DPopCleaner.exe</code> — тот же путь, который используют старые ярлыки. Smoke требует scroll-area, автообновление, ручную проверку, лицензию, колесо мыши и отсутствие видимой <code>v0.2.11 BETA</code>.</p><div class="hash-box"><div><small>SHA-256</small><code id="hashValue">будет опубликован после финальной сборки</code></div><button id="copyHash2" class="copy-button" type="button">Копировать</button></div><div class="build-facts"><span><b>Релиз</b> 0.4.17 rev.6</span><span><b>Архитектура</b> x86-64</span><span><b>Сборка</b> GitHub Actions · Windows 2022</span></div></div></div></section>
+    <section class="section" id="security"><div class="container security-card reveal"><div class="shield-wrap"><img src="./dpopcleaner-icon.png" alt="Иконка DPopCleaner" /></div><div class="security-copy"><p class="kicker">Проверка сборки</p><h2>Проверяется именно установленный rev.7</h2><p>Windows pipeline собирает Inno Setup, устанавливает пакет и запускает <code>DPopCleaner.exe</code>. Installed smoke проверяет hide/restore, ОЗУ 5–95%, новые действия Zapret, прокрутку Настроек, автообновление приложения, отсутствие видимой <code>v0.2.11 BETA</code>, полный Flowseal Zapret 1.10.2 и uninstall.</p><div class="hash-box"><div><small>SHA-256</small><code id="hashValue">будет опубликован после финальной сборки</code></div><button id="copyHash2" class="copy-button" type="button">Копировать</button></div><div class="build-facts"><span><b>Релиз</b> 0.4.17 rev.7</span><span><b>Архитектура</b> x86-64</span><span><b>Сборка</b> GitHub Actions · Windows 2022</span></div></div></div></section>
 
-    <section class="section" id="faq"><div class="container faq-layout"><div class="section-head reveal"><p class="kicker">FAQ</p><h2>Перед установкой</h2><p>Коротко о rev.6.</p></div><div class="faq-list reveal delay-1">
-      <details open><summary>Старый ярлык снова запустит старое окно без автообновления?</summary><p>Нет. В rev.6 установленный <code>DPopCleaner.exe</code> — это launcher/UI-bridge. Он запускает сохранённое ядро <code>DPopCleaner.Core.exe</code>.</p></details>
-      <details><summary>Оригинальное ядро изменено?</summary><p>Нет. Оно перенесено под имя <code>DPopCleaner.Core.exe</code> и остаётся byte-identical оригиналу 0.2.14.</p></details>
-      <details><summary>Zapret уже находится внутри?</summary><p>Да. В пакет входит полный Flowseal Zapret 1.10.2 в каталоге <code>Zapret\</code>.</p></details>
+    <section class="section" id="faq"><div class="container faq-layout"><div class="section-head reveal"><p class="kicker">FAQ</p><h2>Перед установкой</h2><p>Коротко о rev.7.</p></div><div class="faq-list reveal delay-1">
+      <details open><summary>Интерфейс программы переделан?</summary><p>Нет. Прежний интерфейс сохранён; C++-интерфейс не внедрялся. Rev.7 работает поверх существующего окна через UI-bridge.</p></details>
+      <details><summary>Оригинальное ядро изменено?</summary><p>Нет. Оно работает как <code>DPopCleaner.Core.exe</code> и остаётся byte-identical оригиналу 0.2.14.</p></details>
+      <details><summary>Zapret уже находится внутри?</summary><p>Да. В пакет входит полный Flowseal Zapret 1.10.2 и существующие стратегии; rev.7 добавляет кнопки ремонта и запуска утилит в существующую вкладку.</p></details>
       <details><summary>Сохранился Zapret Screen Fix?</summary><p>Да. <code>Modules\ZapretScreenFix.exe</code> и исправление демонстрации экрана остаются в сборке.</p></details>
     </div></div></section>
 
-    <section class="cta-section"><div class="container cta reveal"><div><p class="kicker">DPopCleaner 0.4.17 rev.6</p><h2>Скачать проверенную сборку</h2><p>Windows x64 · <span class="js-size">ожидается публикация</span></p></div><a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span> <span class="js-download-label">Сборка проверяется</span></a></div></section>
+    <section class="cta-section"><div class="container cta reveal"><div><p class="kicker">DPopCleaner 0.4.17 rev.7</p><h2>Скачать проверенную сборку</h2><p>Windows x64 · <span class="js-size">ожидается публикация</span></p></div><a class="button button-primary js-download is-disabled" href="#release-status" aria-disabled="true" data-disabled="true"><span class="download-icon">↓</span> <span class="js-download-label">Сборка проверяется</span></a></div></section>
   </main>
 
-  <footer class="footer"><div class="container footer-grid"><div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · 0.4.17 rev.6</span></div></div><div class="footer-links"><a href="#features">Возможности</a><a href="#screens">Интерфейс</a><a href="#security">Проверка</a><a href="#top">Наверх ↑</a></div><p>© 2026 DPopCleaner.</p></div></footer>
+  <footer class="footer"><div class="container footer-grid"><div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · 0.4.17 rev.7</span></div></div><div class="footer-links"><a href="#features">Возможности</a><a href="#screens">Интерфейс</a><a href="#security">Проверка</a><a href="#top">Наверх ↑</a></div><p>© 2026 DPopCleaner.</p></div></footer>
   <div class="toast" id="toast" role="status" aria-live="polite">SHA-256 скопирован</div>
   <script src="release-manifest.js"></script><script src="script.js"></script>
 </body>
