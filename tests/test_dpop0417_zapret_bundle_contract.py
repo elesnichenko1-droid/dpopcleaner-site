@@ -137,6 +137,7 @@ def print_updater_code_refs():
         ("BAT_GLOB", "*.bat"),
         ("WINWS", "bin\\winws.exe"),
         ("SERVICE", "service.bat"),
+        ("LEGACY_ZAPRET_VERSION", "1.9.9d"),
     ):
         offsets = find_string_offsets(data, value)
         print(label + "_STRING_OFFSETS=" + ",".join(f"0x{x:08x}" for x in offsets))
