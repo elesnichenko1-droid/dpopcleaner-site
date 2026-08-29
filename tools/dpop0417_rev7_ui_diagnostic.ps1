@@ -33,6 +33,7 @@ public static class Rev7Native {
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp);
     public static Rev7Child[] Children(IntPtr parent) {
         var list = new List<Rev7Child>();
         EnumProc cb = delegate(IntPtr h, IntPtr _) {
@@ -42,6 +43,18 @@ public static class Rev7Native {
             return true;
         };
         EnumChildWindows(parent, cb, IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
+    }
+    public static string[] ComboItems(IntPtr combo) {
+        const uint CB_GETCOUNT = 0x0146, CB_GETLBTEXT = 0x0148, CB_GETLBTEXTLEN = 0x0149;
+        int count = SendMessage(combo, CB_GETCOUNT, IntPtr.Zero, IntPtr.Zero).ToInt32();
+        var values = new List<string>();
+        for (int i=0;i<count;i++) {
+            int len = SendMessage(combo, CB_GETLBTEXTLEN, (IntPtr)i, IntPtr.Zero).ToInt32();
+            var text = new StringBuilder(Math.Max(1,len+1));
+            SendMessage(combo, CB_GETLBTEXT, (IntPtr)i, text);
+            values.Add(text.ToString());
+        }
+        return values.ToArray();
     }
 }
 '@
@@ -70,6 +83,11 @@ try {
     Dump-Page 'overview' $window
     Click-ByText $window 'ОЗУ'
     Dump-Page 'ram' $window
+    $ramCombo = Get-Children $window | Where-Object { $_.Id -eq 1956 -and $_.ClassName -eq 'ComboBox' } | Select-Object -First 1
+    if (-not $ramCombo) { throw 'RAM threshold ComboBox id=1956 not found.' }
+    $ramItems = @([Rev7Native]::ComboItems($ramCombo.Handle))
+    Write-Host "REV7_RAM_THRESHOLD_ITEMS=$($ramItems -join '|')"
+
     Click-ByText $window 'Zapret'
     Dump-Page 'zapret' $window
 
