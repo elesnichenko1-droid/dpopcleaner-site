@@ -75,8 +75,13 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
             "Wait-Visible $Window 1703",
             "Zapret page did not stabilize after retry",
             "Click-Id $Window 905",
+            "lowerEditBefore",
+            "lowerEditAfter",
+            "zapret_native_status_click_matches_frozen_behavior",
+            "Native Status click preserved frozen Edit layout: PASS",
         ):
             self.assertIn(token, smoke)
+        self.assertNotIn("RequireNativeSuffix", smoke)
 
     def test_rev11_direct_frozen_core_diagnostic_records_native_status_click_effect(self):
         diagnostic = (ROOT / "tools" / "dpop0417_rev7_ui_diagnostic.ps1").read_text(encoding="utf-8")
