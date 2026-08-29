@@ -14,6 +14,10 @@ namespace DPopCleaner.SimpleUpdate
         internal const int GameFilterButtonId = 1722;
         internal const int ManagerButtonId = 1723;
 
+        private const int ToolbarButtonCount = 4;
+        private const int ButtonGap = 8;
+        private const int ToolbarHeight = 27;
+        private const int ToolbarWidth = 709;
         private const string UpstreamStatusCommand = "status_zapret";
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
@@ -32,8 +36,7 @@ namespace DPopCleaner.SimpleUpdate
 
         private readonly IntPtr _parent;
         private readonly string _applicationRoot;
-        private IntPtr _updateRow;
-        private IntPtr _toolsRow;
+        private IntPtr _actionToolbar;
         private bool _disposed;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -86,46 +89,51 @@ namespace DPopCleaner.SimpleUpdate
             _parent = parent;
             _applicationRoot = Path.GetFullPath(applicationRoot ?? string.Empty);
             EnsureHostClass();
-            CreateRows();
+            CreateToolbar();
         }
 
         internal void Show()
         {
             if (_disposed) return;
-            PositionRows();
-            NativeBridge.ShowWindow(_updateRow, NativeBridge.SW_SHOW);
-            NativeBridge.ShowWindow(_toolsRow, NativeBridge.SW_SHOW);
+            PositionActionToolbar();
+            NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_SHOW);
         }
 
         internal void Hide()
         {
             if (_disposed) return;
-            NativeBridge.ShowWindow(_updateRow, NativeBridge.SW_HIDE);
-            NativeBridge.ShowWindow(_toolsRow, NativeBridge.SW_HIDE);
+            NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_HIDE);
         }
 
-        private void CreateRows()
+        private void CreateToolbar()
         {
-            var updateAnchor = NativeBridge.FindChildById(_parent, NativeBridge.ZapretCheckVersionButtonId);
-            var toolsAnchor = NativeBridge.FindChildById(_parent, NativeBridge.ZapretApplyButtonId);
-            var font = updateAnchor != IntPtr.Zero
-                ? NativeBridge.SendMessage(updateAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero)
+            var fontAnchor = NativeBridge.FindChildById(_parent, NativeBridge.ZapretCheckVersionButtonId);
+            var font = fontAnchor != IntPtr.Zero
+                ? NativeBridge.SendMessage(fontAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero)
                 : IntPtr.Zero;
 
-            _updateRow = CreateHost();
-            _toolsRow = CreateHost();
-            CreateButton(_updateRow, "Починка трансляции", RepairBroadcastButtonId, 0, 0, 168, 27, font);
-            CreateButton(_updateRow, "Починка подключения", RepairConnectionButtonId, 176, 0, 177, 27, font);
-            CreateButton(_toolsRow, "Игровой фильтр 1.10.2", GameFilterButtonId, 0, 0, 185, 27, font);
-            CreateButton(_toolsRow, "Менеджер 1.10.2", ManagerButtonId, 193, 0, 160, 27, font);
-            PositionRows();
+            _actionToolbar = CreateHost();
+
+            // One safe row beside the frozen "Дополнительно" heading. Widths deliberately
+            // preserve the full Russian labels while keeping all four actions inside the old page.
+            var x = 0;
+            CreateButton(_actionToolbar, "Починка трансляции", RepairBroadcastButtonId, x, 0, 165, ToolbarHeight, font);
+            x += 165 + ButtonGap;
+            CreateButton(_actionToolbar, "Починка подключения", RepairConnectionButtonId, x, 0, 175, ToolbarHeight, font);
+            x += 175 + ButtonGap;
+            CreateButton(_actionToolbar, "Игровой фильтр 1.10.2", GameFilterButtonId, x, 0, 185, ToolbarHeight, font);
+            x += 185 + ButtonGap;
+            CreateButton(_actionToolbar, "Менеджер 1.10.2", ManagerButtonId, x, 0, 160, ToolbarHeight, font);
+
+            GC.KeepAlive(ToolbarButtonCount);
+            PositionActionToolbar();
         }
 
         private IntPtr CreateHost()
         {
             var handle = CreateWindowEx(0, HostClassName, string.Empty, WS_CHILD | WS_VISIBLE,
-                0, 0, 353, 27, _parent, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
-            if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret enhancement row.");
+                0, 0, ToolbarWidth, ToolbarHeight, _parent, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
+            if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret compact action toolbar.");
             lock (Sync) Hosts[handle] = this;
             return handle;
         }
@@ -140,30 +148,29 @@ namespace DPopCleaner.SimpleUpdate
             try { SetWindowTheme(button, "DarkMode_Explorer", null); } catch { }
         }
 
-        private void PositionRows()
+        private void PositionActionToolbar()
         {
-            var update = NativeBridge.GetChildClientBounds(_parent, NativeBridge.FindChildById(_parent, NativeBridge.ZapretCheckVersionButtonId));
-            var tools = NativeBridge.GetChildClientBounds(_parent, NativeBridge.FindChildById(_parent, NativeBridge.ZapretApplyButtonId));
-            if (update != null)
+            var additional = NativeBridge.GetChildClientBounds(
+                _parent,
+                NativeBridge.FindChildByText(_parent, "Дополнительно", "Static", true));
+            var tests = NativeBridge.GetChildClientBounds(
+                _parent,
+                NativeBridge.FindChildByText(_parent, "Тесты", "Button", true));
+            if (additional == null || tests == null) return;
+
+            var right = tests.Right;
+            var left = right - ToolbarWidth;
+            var minimumLeft = additional.Right + 12;
+            if (left < minimumLeft) left = minimumLeft;
+            var top = Math.Max(0, additional.Top - 4);
+
+            NativeBridge.PositionChildWindow(_actionToolbar, new NativeBridge.ClientBounds
             {
-                NativeBridge.PositionChildWindow(_updateRow, new NativeBridge.ClientBounds
-                {
-                    Left = 245,
-                    Top = Math.Max(0, update.Top - 31),
-                    Right = 598,
-                    Bottom = Math.Max(0, update.Top - 31) + 27
-                });
-            }
-            if (tools != null)
-            {
-                NativeBridge.PositionChildWindow(_toolsRow, new NativeBridge.ClientBounds
-                {
-                    Left = 245,
-                    Top = Math.Max(0, tools.Top - 31),
-                    Right = 598,
-                    Bottom = Math.Max(0, tools.Top - 31) + 27
-                });
-            }
+                Left = left,
+                Top = top,
+                Right = left + ToolbarWidth,
+                Bottom = top + ToolbarHeight
+            });
         }
 
         private IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
@@ -331,14 +338,12 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var handle in new[] { _updateRow, _toolsRow })
+            if (_actionToolbar != IntPtr.Zero)
             {
-                if (handle == IntPtr.Zero) continue;
-                lock (Sync) Hosts.Remove(handle);
-                try { DestroyWindow(handle); } catch { }
+                lock (Sync) Hosts.Remove(_actionToolbar);
+                try { DestroyWindow(_actionToolbar); } catch { }
             }
-            _updateRow = IntPtr.Zero;
-            _toolsRow = IntPtr.Zero;
+            _actionToolbar = IntPtr.Zero;
         }
     }
 }
