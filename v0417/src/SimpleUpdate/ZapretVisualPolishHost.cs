@@ -13,7 +13,6 @@ namespace DPopCleaner.SimpleUpdate
         private const long BS_TYPEMASK = 0x0000000F;
         private const long BS_OWNERDRAW = 0x0000000B;
         private const uint WM_DRAWITEM = 0x002B;
-        private const uint WM_SETTEXT = 0x000C;
         private const uint DT_CENTER = 0x0001;
         private const uint DT_VCENTER = 0x0004;
         private const uint DT_SINGLELINE = 0x0020;
@@ -22,7 +21,6 @@ namespace DPopCleaner.SimpleUpdate
         private const uint ODS_DISABLED = 0x0004;
         private const uint ODT_BUTTON = 4;
         private const uint ToolbarSubclassId = 0xD510;
-        private const uint VersionSubclassId = 0xD511;
 
         private static readonly int[] BridgeButtonIds =
         {
@@ -36,9 +34,7 @@ namespace DPopCleaner.SimpleUpdate
 
         private static readonly object Sync = new object();
         private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> ToolbarOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
-        private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> VersionOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
         private static readonly SubclassProc ToolbarSubclassDelegate = StaticToolbarSubclassProc;
-        private static readonly SubclassProc VersionSubclassDelegate = StaticVersionSubclassProc;
         private static readonly IntPtr ButtonBrush = CreateSolidBrush(Rgb(18, 27, 38));
         private static readonly IntPtr ButtonPressedBrush = CreateSolidBrush(Rgb(27, 39, 53));
         private static readonly IntPtr ButtonBorderBrush = CreateSolidBrush(Rgb(45, 61, 78));
@@ -192,21 +188,24 @@ namespace DPopCleaner.SimpleUpdate
         private void AttachToExistingVersionStatus()
         {
             var current = SelectExistingStatusEdit();
-            if (current == IntPtr.Zero) return;
-
-            if (_versionStatus != current)
+            if (current == IntPtr.Zero)
             {
-                DetachVersionStatus();
-                _versionStatus = current;
-                lock (Sync) VersionOwners[_versionStatus] = this;
-                if (!SetWindowSubclass(_versionStatus, VersionSubclassDelegate, new UIntPtr(VersionSubclassId), UIntPtr.Zero))
-                {
-                    lock (Sync) VersionOwners.Remove(_versionStatus);
-                    _versionStatus = IntPtr.Zero;
-                    return;
-                }
+                _versionStatus = IntPtr.Zero;
+                return;
             }
 
+            _versionStatus = current;
+            RefreshExistingVersionStatus();
+        }
+
+        private void RefreshExistingVersionStatus()
+        {
+            if (_versionStatus == IntPtr.Zero) return;
+
+            // The frozen core is a different process. Cross-process SetWindowSubclass is not a
+            // valid way to intercept its Edit control. NativeBridge.WriteWindowText sends
+            // WM_SETTEXT to the existing native HWND instead. LauncherContext already calls Show()
+            // on its UI tick, so we only write when the frozen core actually changed the text.
             var existing = NativeBridge.ReadWindowText(_versionStatus);
             var rewritten = RewriteVersionStatusText(existing);
             if (!string.Equals(existing, rewritten, StringComparison.Ordinal))
@@ -286,24 +285,6 @@ namespace DPopCleaner.SimpleUpdate
             return DefSubclassProc(hwnd, msg, wParam, lParam);
         }
 
-        private static IntPtr StaticVersionSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr refData)
-        {
-            ZapretVisualPolishHost owner;
-            lock (Sync) VersionOwners.TryGetValue(hwnd, out owner);
-            if (owner != null && msg == WM_SETTEXT && lParam != IntPtr.Zero)
-            {
-                var incoming = Marshal.PtrToStringUni(lParam) ?? string.Empty;
-                var rewritten = owner.RewriteVersionStatusText(incoming);
-                if (!string.Equals(incoming, rewritten, StringComparison.Ordinal))
-                {
-                    var replacement = Marshal.StringToHGlobalUni(rewritten);
-                    try { return DefSubclassProc(hwnd, msg, wParam, replacement); }
-                    finally { Marshal.FreeHGlobal(replacement); }
-                }
-            }
-            return DefSubclassProc(hwnd, msg, wParam, lParam);
-        }
-
         private void DrawOwnerButton(ref DRAWITEMSTRUCT item)
         {
             var rect = item.rcItem;
@@ -314,19 +295,6 @@ namespace DPopCleaner.SimpleUpdate
             SetBkMode(item.hDC, TRANSPARENT);
             SetTextColor(item.hDC, (item.itemState & ODS_DISABLED) != 0 ? Rgb(145, 154, 164) : Rgb(242, 246, 250));
             DrawText(item.hDC, text.ToString(), -1, ref rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        }
-
-        private void DetachVersionStatus()
-        {
-            if (_versionStatus == IntPtr.Zero) return;
-            try { RemoveWindowSubclass(_versionStatus, VersionSubclassDelegate, new UIntPtr(VersionSubclassId)); } catch { }
-            lock (Sync) VersionOwners.Remove(_versionStatus);
-            _versionStatus = IntPtr.Zero;
-        }
-
-        private static uint Rgb(byte r, byte g, byte b)
-        {
-            return (uint)(r | (g << 8) | (b << 16));
         }
 
         public void Dispose()
@@ -341,7 +309,7 @@ namespace DPopCleaner.SimpleUpdate
             }
             _toolbarParents.Clear();
             _buttons.Clear();
-            DetachVersionStatus();
+            _versionStatus = IntPtr.Zero;
         }
     }
 }
