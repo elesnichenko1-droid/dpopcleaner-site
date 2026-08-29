@@ -7,7 +7,7 @@ namespace DPopCleaner.SimpleUpdate
     internal static class Program
     {
         internal const int CurrentVersionCode = 417;
-        internal const int CurrentRevision = 8;
+        internal const int CurrentRevision = 9;
         internal const string StableManifestUrl = LauncherOptions.DefaultManifestUrl;
 
         [STAThread]
@@ -20,9 +20,6 @@ namespace DPopCleaner.SimpleUpdate
             {
                 var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
-                // The immutable 0.2.14 Zapret page launches DPopUpdate.exe from the application root.
-                // Ship the verified SimpleUpdate binary under that legacy name and dispatch it here
-                // before taking the launcher mutex, because DPopCleaner is normally still running.
                 if (string.Equals(Path.GetFileName(Application.ExecutablePath), "DPopUpdate.exe", StringComparison.OrdinalIgnoreCase))
                 {
                     LegacyZapretUpdater.Run(baseDirectory);
@@ -40,11 +37,7 @@ namespace DPopCleaner.SimpleUpdate
                     bool acquired;
                     try { acquired = mutex.WaitOne(0, false); }
                     catch (System.Threading.AbandonedMutexException) { acquired = true; }
-                    if (!acquired)
-                    {
-                        // Never start the frozen core without its UI bridge.
-                        return;
-                    }
+                    if (!acquired) return;
 
                     var context = new LauncherContext(corePath, settingsPath, options);
                     Application.Run(context);

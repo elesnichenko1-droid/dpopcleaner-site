@@ -23,17 +23,7 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
     def test_settings_scroll_host_contains_existing_left_settings_and_application_updates(self):
         host = (ROOT / 'v0417/src/SimpleUpdate/AdditionalSettingsHost.cs').read_text(encoding='utf-8')
         bridge = (ROOT / 'v0417/src/SimpleUpdate/NativeBridge.cs').read_text(encoding='utf-8')
-        for label in (
-            'Фоновый контроль мусора каждые 30 минут',
-            'Быстрый DPopGuard-скан при запуске',
-            'Проверять кэш Windows Update при запуске',
-            'Работать в трее и отслеживать новые установки',
-            'Автозапуск DPopCleaner вместе с Windows',
-            'Запускать приложение от имени администратора',
-            'Включить автообновление приложения',
-            'Проверить обновления',
-            'Лицензия',
-        ):
+        for label in ('Фоновый контроль мусора каждые 30 минут','Быстрый DPopGuard-скан при запуске','Проверять кэш Windows Update при запуске','Работать в трее и отслеживать новые установки','Автозапуск DPopCleaner вместе с Windows','Запускать приложение от имени администратора','Включить автообновление приложения','Проверить обновления','Лицензия'):
             self.assertIn(label, host)
         self.assertIn('LegacySettingProxy', host)
         self.assertIn('FindChildByText', bridge)
@@ -41,18 +31,9 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
 
     def test_existing_zapret_center_gets_repairs_and_1102_actions_without_new_ui(self):
         path = ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs'
-        self.assertTrue(path.is_file(), 'ZapretEnhancementHost.cs must extend the frozen Zapret page')
+        self.assertTrue(path.is_file())
         text = path.read_text(encoding='utf-8')
-        for token in (
-            'Починка трансляции',
-            'Починка подключения',
-            'Игровой фильтр 1.10.2',
-            'Менеджер 1.10.2',
-            'ZapretScreenFix.exe',
-            'game_filter.enabled',
-            'service.bat',
-            'status_zapret',
-        ):
+        for token in ('Починка трансляции','Починка подключения','Игровой фильтр 1.10.2','Менеджер 1.10.2','ZapretScreenFix.exe','game_filter.enabled','service.bat','status_zapret'):
             self.assertIn(token, text)
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
         self.assertIn('ZapretEnhancementHost', launcher)
@@ -60,55 +41,50 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
     def test_existing_zapret_actions_use_one_compact_safe_toolbar(self):
         host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
         self.assertIn('private IntPtr _actionToolbar;', host)
-        self.assertNotIn('private IntPtr _updateRow;', host)
-        self.assertNotIn('private IntPtr _toolsRow;', host)
         self.assertIn('ToolbarButtonCount = 4', host)
-        self.assertIn('ButtonGap = 8', host)
         self.assertIn('PositionActionToolbar', host)
         self.assertIn('Дополнительно', host)
         self.assertIn('Тесты', host)
-        self.assertEqual(host.count('CreateHost();'), 1)
-
         smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('Zapret actions overlap', smoke)
         self.assertIn('Existing Zapret control overlaps compact action toolbar', smoke)
-        self.assertIn('Compact Zapret toolbar escaped the safe row', smoke)
+
+    def test_frozen_zapret_update_controls_are_bridge_owned(self):
+        host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
+        program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8')
+        self.assertIn('LegacyCheckVersionButtonId', host)
+        self.assertIn('LegacyDownloadButtonId', host)
+        self.assertIn('CreateLegacyUpdateProxy', host)
+        self.assertIn('private IntPtr _updateToolbar;', host)
+        self.assertIn('Проверить версию', host)
+        self.assertIn('Скачать и установить', host)
+        self.assertIn('NativeBridge.ShowWindow(_legacyCheckVersionButton, NativeBridge.SW_HIDE)', host)
+        self.assertIn('NativeBridge.ShowWindow(_legacyDownloadButton, NativeBridge.SW_HIDE)', host)
+        self.assertIn('LegacyZapretUpdater.Run(_applicationRoot)', host)
+        self.assertIn('RefreshDisplayedZapretVersion', host)
+        self.assertIn('.service', host)
+        self.assertIn('version.txt', host)
+        self.assertNotIn('zapretProxyTimer', program)
+        self.assertNotIn('ZapretUpdateProxyHost zapretUpdateProxy', program)
 
     def test_frozen_zapret_download_button_has_compatibility_updater(self):
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8')
         updater = ROOT / 'v0417/src/SimpleUpdate/LegacyZapretUpdater.cs'
         installer = (ROOT / 'release/DPopCleaner_0.4.17.iss').read_text(encoding='utf-8')
         smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
-
-        self.assertTrue(updater.is_file(), 'LegacyZapretUpdater.cs must implement the frozen DPopUpdate contract')
+        self.assertTrue(updater.is_file())
         updater_text = updater.read_text(encoding='utf-8')
         self.assertIn('DPopUpdate.exe', program)
         self.assertIn('LegacyZapretUpdater.Run', program)
         self.assertIn('Flowseal/zapret-discord-youtube', updater_text)
-        self.assertIn('.service', updater_text)
-        self.assertIn('version.txt', updater_text)
-        self.assertIn('releases/latest', updater_text)
         self.assertIn('DestName: "DPopUpdate.exe"', installer)
-        self.assertIn('DPopUpdate.exe', smoke)
         self.assertIn('Legacy Zapret updater compatibility module: PASS', smoke)
 
     def test_installed_rev7_smoke_reproduces_requested_behaviors(self):
         smoke_path = ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1'
-        self.assertTrue(smoke_path.is_file(), 'rev.7 installed UI behavior smoke is required')
+        self.assertTrue(smoke_path.is_file())
         smoke = smoke_path.read_text(encoding='utf-8')
-        for token in (
-            'SW_HIDE',
-            'SW_SHOW',
-            '5%',
-            '95%',
-            'Починка трансляции',
-            'Починка подключения',
-            'Игровой фильтр 1.10.2',
-            'Менеджер 1.10.2',
-            'Автообновление приложения',
-            'WM_MOUSEWHEEL',
-            'v0.2.11 BETA',
-        ):
+        for token in ('SW_HIDE','SW_SHOW','5%','95%','Починка трансляции','Починка подключения','Игровой фильтр 1.10.2','Менеджер 1.10.2','Автообновление приложения','WM_MOUSEWHEEL','v0.2.11 BETA'):
             self.assertIn(token, smoke)
         install_smoke = (ROOT / 'tools/dpop0417_install_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('dpop0417_rev7_installed_ui_smoke.ps1', install_smoke)

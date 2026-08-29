@@ -36,7 +36,7 @@ namespace DPopCleaner.SimpleUpdate
             _lastSetting = _settings.LoadAutoUpdateEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev8");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev9");
             _updateClient = new UpdateClient(_http);
 
             _core = Process.Start(new ProcessStartInfo(corePath)
@@ -104,8 +104,10 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateZapretEnhancements()
         {
-            var anchor = NativeBridge.FindChildById(_mainWindow, NativeBridge.ZapretCheckVersionButtonId);
-            var zapretVisible = anchor != IntPtr.Zero && NativeBridge.IsWindowVisible(anchor);
+            // The rev.9 updater proxy intentionally hides the frozen core's update buttons.
+            // Detect the Zapret page using a stable native heading instead of one of those buttons.
+            var marker = NativeBridge.FindChildByText(_mainWindow, "Дополнительно", "Static", true);
+            var zapretVisible = marker != IntPtr.Zero;
             if (!zapretVisible)
             {
                 if (_zapretHost != null) _zapretHost.Hide();
