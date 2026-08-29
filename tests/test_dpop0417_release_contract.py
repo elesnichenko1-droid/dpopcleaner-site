@@ -40,27 +40,32 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('assets/dpopcleaner-0.4.17-disk.png', stage_site_text)
         self.assertIn('assets/dpopcleaner-0.4.17-restore.png', stage_site_text)
 
-    def test_site_manifest_and_publisher_are_one_stable_0417_rev9_release(self):
+    def test_site_manifest_and_publisher_are_one_stable_0417_rev10_release(self):
         publisher = ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml'
         notes = ROOT / 'release/RELEASE_NOTES_0.4.17.md'
         stable_manifest = ROOT / 'update/stable.json'
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
-        self.assertEqual(version['revision'], 9)
+        self.assertEqual(version['revision'], 10)
         stable = json.loads(stable_manifest.read_text(encoding='utf-8'))
-        self.assertEqual(stable['revision'], 9)
+        self.assertEqual(stable['revision'], 10)
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
-        self.assertIn("number(m.revision) === 9", manifest)
-        self.assertIn('v0\\.4\\.17-rev9', manifest)
+        self.assertIn("number(m.revision) === 10", manifest)
+        self.assertIn('v0\\.4\\.17-rev10', manifest)
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
         zapret_host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8').lower()
-        self.assertIn('currentrevision = 9', program)
+        visual_host = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8').lower()
+        launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
+        self.assertIn('currentrevision = 10', program)
         self.assertIn('dpopcleaner.core.exe', program)
         self.assertIn('dpopupdate.exe', program)
         self.assertIn('createlegacyupdateproxy', zapret_host)
         self.assertIn('legacydownloadbuttonid', zapret_host)
+        self.assertIn('versionstatusproxyid = 1726', visual_host)
+        self.assertIn('bs_ownerdraw', visual_host)
+        self.assertIn('_settingshostbounds', launcher)
 
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
-        for token in ('flowseal zapret 1.10.2', SCREENSHOT_PATH, 'dpopcleaner.core.exe', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2', 'автообновление приложения', 'прокрут'):
+        for token in ('flowseal zapret 1.10.2', SCREENSHOT_PATH, 'dpopcleaner.core.exe', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2', 'автообновление приложения', 'прокрут', 'rev.10', '1.9.9d', 'тёмн', 'улета'):
             self.assertIn(token, index)
         self.assertTrue('прежний интерфейс' in index or 'интерфейс сохран' in index)
 
@@ -70,15 +75,15 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('rev.${revision}', script)
 
         notes_text = notes.read_text(encoding='utf-8').lower()
-        for token in ('revision 9', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'модуль обновления zapret не найден', 'проверить версию', 'скачать и установить', '1.9.9d', 'компакт', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2'):
+        for token in ('revision 10', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'модуль обновления zapret не найден', 'проверить версию', 'скачать и установить', '1.9.9d', 'компакт', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2', 'улет', 'owner-draw'):
             self.assertIn(token, notes_text)
         self.assertTrue('прежний интерфейс' in notes_text or 'интерфейс сохран' in notes_text)
 
         workflow = publisher.read_text(encoding='utf-8').lower()
-        for token in ('release_tag: v0.4.17-rev9', 'dpop0417_prepare_zapret.ps1', 'dpop0417_installed_settings_smoke.ps1', 'dpop0417_rev7_installed_ui_smoke.ps1', 'dpop0417_rev9_zapret_update_smoke.ps1', SCREENSHOT_PATH, 'revision=9', 'actions/deploy-pages', 'sha256', 'dpopcleaner-0.4.17-rev9-release-candidate'):
+        for token in ('release_tag: v0.4.17-rev10', 'dpop0417_prepare_zapret.ps1', 'dpop0417_installed_settings_smoke.ps1', 'dpop0417_rev7_installed_ui_smoke.ps1', 'dpop0417_rev9_zapret_update_smoke.ps1', 'dpop0417_rev10_ui_stability_smoke.ps1', SCREENSHOT_PATH, 'revision=10', 'actions/deploy-pages', 'sha256', 'dpopcleaner-0.4.17-rev10-release-candidate'):
             self.assertIn(token, workflow)
-        self.assertIn('$live.revision -ne 9', workflow)
-        self.assertIn('v0\\.4\\.17-rev9', workflow)
+        self.assertIn('$live.revision -ne 10', workflow)
+        self.assertIn('v0\\.4\\.17-rev10', workflow)
 
 
 if __name__ == '__main__':
