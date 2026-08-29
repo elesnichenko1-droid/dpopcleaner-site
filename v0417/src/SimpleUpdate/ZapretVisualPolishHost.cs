@@ -297,6 +297,11 @@ namespace DPopCleaner.SimpleUpdate
             DrawText(item.hDC, text.ToString(), -1, ref rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         }
 
+        private static uint Rgb(byte r, byte g, byte b)
+        {
+            return (uint)(r | (g << 8) | (b << 16));
+        }
+
         public void Dispose()
         {
             if (_disposed) return;
