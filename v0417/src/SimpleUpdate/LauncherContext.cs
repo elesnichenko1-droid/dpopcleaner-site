@@ -11,6 +11,7 @@ namespace DPopCleaner.SimpleUpdate
     internal sealed class LauncherContext : ApplicationContext
     {
         private readonly Process _core;
+        private readonly string _applicationRoot;
         private readonly SettingsStore _settings;
         private readonly LauncherOptions _options;
         private readonly System.Windows.Forms.Timer _timer;
@@ -19,16 +20,17 @@ namespace DPopCleaner.SimpleUpdate
         private readonly UpdateClient _updateClient;
         private IntPtr _mainWindow;
         private AdditionalSettingsHost _settingsHost;
+        private ZapretEnhancementHost _zapretHost;
         private bool _lastSetting;
         private bool _iconApplied;
-        private bool _mainWindowWasVisible;
         private bool _automaticCheckStarted;
         private bool _updateCheckRunning;
         private bool _updateInstallInProgress;
 
         internal LauncherContext(string corePath, string settingsPath, LauncherOptions options)
         {
-            if (!File.Exists(corePath)) throw new FileNotFoundException("DPopCleaner.exe not found.", corePath);
+            if (!File.Exists(corePath)) throw new FileNotFoundException("DPopCleaner core not found.", corePath);
+            _applicationRoot = Path.GetDirectoryName(Path.GetFullPath(corePath));
             _options = options ?? LauncherOptions.Parse(new string[0]);
             _settings = new SettingsStore(settingsPath);
             _lastSetting = _settings.LoadAutoUpdateEnabled();
@@ -39,10 +41,10 @@ namespace DPopCleaner.SimpleUpdate
 
             _core = Process.Start(new ProcessStartInfo(corePath)
             {
-                WorkingDirectory = Path.GetDirectoryName(corePath),
+                WorkingDirectory = _applicationRoot,
                 UseShellExecute = true
             });
-            if (_core == null) throw new InvalidOperationException("Failed to start DPopCleaner.exe.");
+            if (_core == null) throw new InvalidOperationException("Failed to start DPopCleaner core.");
 
             _timer = new System.Windows.Forms.Timer { Interval = 100 };
             _timer.Tick += OnTick;
@@ -67,21 +69,20 @@ namespace DPopCleaner.SimpleUpdate
                     _mainWindow = _core.MainWindowHandle;
                 if (_mainWindow == IntPtr.Zero) return;
 
-                if (NativeBridge.IsWindowVisible(_mainWindow))
+                if (!NativeBridge.IsWindowVisible(_mainWindow))
                 {
-                    _mainWindowWasVisible = true;
-                    if (!_automaticCheckStarted && _options.UpdateCheckEnabled && _lastSetting)
-                    {
-                        _automaticCheckStarted = true;
-                        BeginUpdateCheck(false);
-                    }
-                }
-                else if (_mainWindowWasVisible)
-                {
-                    try { _core.Kill(); } catch { }
-                    _timer.Stop();
-                    if (!_updateInstallInProgress) ExitThread();
+                    // Temporary visibility changes are not exit signals. The frozen application can
+                    // hide itself while minimizing/restoring or working in the tray; only HasExited
+                    // above is allowed to terminate the launcher.
+                    if (_settingsHost != null) _settingsHost.Hide();
+                    if (_zapretHost != null) _zapretHost.Hide();
                     return;
+                }
+
+                if (!_automaticCheckStarted && _options.UpdateCheckEnabled && _lastSetting)
+                {
+                    _automaticCheckStarted = true;
+                    BeginUpdateCheck(false);
                 }
 
                 if (!_iconApplied)
@@ -91,45 +92,69 @@ namespace DPopCleaner.SimpleUpdate
                 }
 
                 NativeBridge.HideLegacyVersionBadge(_mainWindow);
-
-                var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
-                var settingsVisible = admin != IntPtr.Zero && NativeBridge.IsWindowVisible(admin);
-                if (!settingsVisible)
-                {
-                    if (_settingsHost != null) _settingsHost.Hide();
-                    return;
-                }
-
-                var hostBounds = NativeBridge.GetAdditionalSettingsBounds(_mainWindow, admin);
-                if (hostBounds == null) return;
-
-                if (_settingsHost == null)
-                {
-                    var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, hostBounds);
-                    var legacySave = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseSaveButtonId);
-                    var legacyBuy = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseBuyButtonId);
-                    _settingsHost = new AdditionalSettingsHost(
-                        _mainWindow,
-                        hostBounds,
-                        admin,
-                        _lastSetting,
-                        OnAutoUpdateSettingChanged,
-                        delegate { BeginUpdateCheck(true); },
-                        legacyKey,
-                        legacySave,
-                        legacyBuy);
-                }
-                else
-                {
-                    _settingsHost.Show(hostBounds);
-                }
-
-                NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, hostBounds);
+                NativeBridge.EnsureRamThresholdRange(_mainWindow);
+                UpdateZapretEnhancements();
+                UpdateSettingsEnhancements();
             }
             catch
             {
                 // UI bridge failures must never terminate the immutable authentic core.
             }
+        }
+
+        private void UpdateZapretEnhancements()
+        {
+            var anchor = NativeBridge.FindChildById(_mainWindow, NativeBridge.ZapretCheckVersionButtonId);
+            var zapretVisible = anchor != IntPtr.Zero && NativeBridge.IsWindowVisible(anchor);
+            if (!zapretVisible)
+            {
+                if (_zapretHost != null) _zapretHost.Hide();
+                return;
+            }
+
+            if (_zapretHost == null)
+                _zapretHost = new ZapretEnhancementHost(_mainWindow, _applicationRoot);
+            else
+                _zapretHost.Show();
+        }
+
+        private void UpdateSettingsEnhancements()
+        {
+            var settingsMarker = NativeBridge.FindChildByText(_mainWindow, "Настройки", "Static", true);
+            var settingsVisible = settingsMarker != IntPtr.Zero;
+            if (!settingsVisible)
+            {
+                if (_settingsHost != null) _settingsHost.Hide();
+                return;
+            }
+
+            var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
+            if (admin == IntPtr.Zero) return;
+            var hostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);
+            if (hostBounds == null) return;
+
+            if (_settingsHost == null)
+            {
+                var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, hostBounds);
+                var legacySave = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseSaveButtonId);
+                var legacyBuy = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseBuyButtonId);
+                _settingsHost = new AdditionalSettingsHost(
+                    _mainWindow,
+                    hostBounds,
+                    admin,
+                    _lastSetting,
+                    OnAutoUpdateSettingChanged,
+                    delegate { BeginUpdateCheck(true); },
+                    legacyKey,
+                    legacySave,
+                    legacyBuy);
+            }
+            else
+            {
+                _settingsHost.Show(hostBounds);
+            }
+
+            NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, hostBounds);
         }
 
         private void OnAutoUpdateSettingChanged(bool enabled)
@@ -283,6 +308,7 @@ namespace DPopCleaner.SimpleUpdate
         {
             try { _updateCancellation.Cancel(); } catch { }
             if (_settingsHost != null) _settingsHost.Dispose();
+            if (_zapretHost != null) _zapretHost.Dispose();
             if (_timer != null) _timer.Dispose();
             if (_http != null) _http.Dispose();
             if (_updateCancellation != null) _updateCancellation.Dispose();
