@@ -14,6 +14,19 @@ namespace DPopCleaner.SimpleUpdate
         internal static void Run(string applicationRoot)
         {
             var root = Path.GetFullPath(applicationRoot ?? string.Empty);
+
+            // Runtime smoke seam: when explicitly requested by CI, prove that the visible
+            // Zapret update button reached this bridge-owned handler without opening UI/network.
+            var smokeMarker = Environment.GetEnvironmentVariable("DPOPCLEANER_ZAPRET_UPDATE_SMOKE_MARKER");
+            if (!string.IsNullOrWhiteSpace(smokeMarker))
+            {
+                var markerPath = Path.GetFullPath(smokeMarker);
+                var markerDirectory = Path.GetDirectoryName(markerPath);
+                if (!string.IsNullOrWhiteSpace(markerDirectory)) Directory.CreateDirectory(markerDirectory);
+                File.WriteAllText(markerPath, "BRIDGE_ZAPRET_UPDATER_OK" + Environment.NewLine);
+                return;
+            }
+
             var zapretRoot = Path.Combine(root, "Zapret");
             var servicePath = Path.Combine(zapretRoot, "service.bat");
             var localVersionPath = Path.Combine(zapretRoot, ".service", "version.txt");
@@ -34,7 +47,7 @@ namespace DPopCleaner.SimpleUpdate
                 string latestVersion;
                 using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) })
                 {
-                    http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-DPopUpdate/0.4.17");
+                    http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-DPopUpdate/0.4.17-rev9");
                     latestVersion = (http.GetStringAsync(LatestVersionUrl).GetAwaiter().GetResult() ?? string.Empty).Trim();
                 }
 
