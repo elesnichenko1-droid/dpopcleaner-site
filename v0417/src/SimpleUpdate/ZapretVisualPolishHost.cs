@@ -134,8 +134,8 @@ namespace DPopCleaner.SimpleUpdate
 
         internal void Hide()
         {
-            // Rev.11 does not create or hide a replacement version control.
-            // The native frozen-core Static remains owned by the original page.
+            // Rev.11 creates no replacement status control. The native frozen-core Edit
+            // stays owned by the original Zapret page and follows its normal visibility.
         }
 
         private void EnsureDarkBridgeButtons()
@@ -179,11 +179,11 @@ namespace DPopCleaner.SimpleUpdate
             IntPtr current = IntPtr.Zero;
             foreach (var child in NativeBridge.GetChildren(_parent))
             {
-                if (!string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
+                // The authentic frozen-core control dump shows the Zapret status/version row
+                // as an Edit control. "Zapret Center" is a separate Static and must never be touched.
+                if (!string.Equals(child.ClassName, "Edit", StringComparison.OrdinalIgnoreCase)) continue;
                 var text = (child.Text ?? string.Empty).Trim();
                 if (!text.StartsWith("Zapret ", StringComparison.OrdinalIgnoreCase)) continue;
-                // Only the native status row has the bullet-separated service/winws suffix.
-                // Never attach to the "Zapret Center" heading.
                 if (text.IndexOf('•') < 0) continue;
                 current = child.Handle;
                 break;
