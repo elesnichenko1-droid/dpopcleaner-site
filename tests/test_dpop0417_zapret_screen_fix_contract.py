@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DPop0417ZapretScreenFixContractTests(unittest.TestCase):
-    def test_rev10_preserves_zapret_screen_fix_as_a_staged_shell_companion(self):
+    def test_rev11_preserves_zapret_screen_fix_as_a_staged_shell_companion(self):
         project = ROOT / 'v0417/src/ZapretScreenFix/ZapretScreenFix.csproj'
         patcher = ROOT / 'v0417/src/ZapretScreenFix/ZapretStrategyPatcher.cs'
         command = ROOT / 'v0417/payload/Shell/commands/zapret-screen-fix.json'
@@ -29,19 +29,19 @@ class DPop0417ZapretScreenFixContractTests(unittest.TestCase):
         self.assertIn('DPopUpdate.exe', installer)
         self.assertIn('ZapretScreenFix.exe', installer)
 
-    def test_rev10_builds_and_tests_the_preserved_companion(self):
+    def test_rev11_builds_and_tests_the_preserved_companion(self):
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         stable = json.loads((ROOT / 'update/stable.json').read_text(encoding='utf-8'))
-        self.assertEqual(version['revision'], 10)
-        self.assertEqual(stable['revision'], 10)
+        self.assertEqual(version['revision'], 11)
+        self.assertEqual(stable['revision'], 11)
         workflow = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
         self.assertIn('zapretscreenfix.tests.csproj', workflow)
         self.assertIn('zapretscreenfix.csproj', workflow)
         self.assertIn('simpleupdate.csproj', workflow)
-        self.assertIn('revision=10', workflow)
-        self.assertIn('v0.4.17-rev10', workflow)
+        self.assertIn('revision=11', workflow)
+        self.assertIn('v0.4.17-rev11', workflow)
 
-    def test_rev10_release_notes_and_site_disclose_preserved_screen_share_fix(self):
+    def test_rev11_release_notes_and_site_disclose_preserved_screen_share_fix(self):
         notes = (ROOT / 'release/RELEASE_NOTES_0.4.17.md').read_text(encoding='utf-8').lower()
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         self.assertIn('zapret', notes)
