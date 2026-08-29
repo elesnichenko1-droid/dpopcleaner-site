@@ -79,6 +79,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('begindeferwindowpos', settings_host)
         self.assertIn('redrawsettingshost', settings_host)
         self.assertIn('_settingshostbounds', launcher)
+        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev12', launcher)
 
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         for token in ('flowseal zapret 1.10.2', SCREENSHOT_PATH, 'dpopcleaner.core.exe', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2', 'автообновление приложения', 'rev.12', '1.9.9d', 'utils\\dpop_version.txt', 'родн', 'перерис'):
@@ -92,7 +93,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('rev.${revision}', script)
 
         notes_text = notes.read_text(encoding='utf-8').lower()
-        for token in ('revision 12', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'модуль обновления zapret не найден', 'проверить версию', 'скачать и установить', '1.9.9d', 'utils\\dpop_version.txt', 'wm_settext', 'перерис', 'owner-draw', 'real', 'png'):
+        for token in ('revision 12', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'модуль обновления zapret не найден', 'проверить версию', 'скачать и установить', '1.9.9d', 'utils\\dpop_version.txt', 'wm_settext', 'перерис', 'owner-draw', 'реальн', 'png'):
             self.assertIn(token, notes_text)
         self.assertTrue('прежний интерфейс' in notes_text or 'интерфейс' in notes_text)
         self.assertIn('bridge больше не ищет', notes_text)
