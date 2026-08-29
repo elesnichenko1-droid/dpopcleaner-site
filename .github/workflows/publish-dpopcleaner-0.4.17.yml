@@ -161,7 +161,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer missing.' }
           "DPOP0417_INSTALLER=$((Resolve-Path $installer).Path)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run installed package smoke
+      - name: Run installed package smoke (includes dpop0417_installed_settings_smoke.ps1)
         shell: pwsh
         run: ./tools/dpop0417_install_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/install'
 
