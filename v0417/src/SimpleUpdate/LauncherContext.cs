@@ -20,7 +20,9 @@ namespace DPopCleaner.SimpleUpdate
         private readonly UpdateClient _updateClient;
         private IntPtr _mainWindow;
         private AdditionalSettingsHost _settingsHost;
+        private NativeBridge.ClientBounds _settingsHostBounds;
         private ZapretEnhancementHost _zapretHost;
+        private ZapretVisualPolishHost _zapretVisualHost;
         private bool _lastSetting;
         private bool _iconApplied;
         private bool _automaticCheckStarted;
@@ -36,7 +38,7 @@ namespace DPopCleaner.SimpleUpdate
             _lastSetting = _settings.LoadAutoUpdateEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev9");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev10");
             _updateClient = new UpdateClient(_http);
 
             _core = Process.Start(new ProcessStartInfo(corePath)
@@ -76,6 +78,7 @@ namespace DPopCleaner.SimpleUpdate
                     // above is allowed to terminate the launcher.
                     if (_settingsHost != null) _settingsHost.Hide();
                     if (_zapretHost != null) _zapretHost.Hide();
+                    if (_zapretVisualHost != null) _zapretVisualHost.Hide();
                     return;
                 }
 
@@ -104,13 +107,14 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateZapretEnhancements()
         {
-            // The rev.9 updater proxy intentionally hides the frozen core's update buttons.
+            // The bridge-owned updater hides the frozen core's update buttons.
             // Detect the Zapret page using a stable native heading instead of one of those buttons.
             var marker = NativeBridge.FindChildByText(_mainWindow, "Дополнительно", "Static", true);
             var zapretVisible = marker != IntPtr.Zero;
             if (!zapretVisible)
             {
                 if (_zapretHost != null) _zapretHost.Hide();
+                if (_zapretVisualHost != null) _zapretVisualHost.Hide();
                 return;
             }
 
@@ -118,6 +122,11 @@ namespace DPopCleaner.SimpleUpdate
                 _zapretHost = new ZapretEnhancementHost(_mainWindow, _applicationRoot);
             else
                 _zapretHost.Show();
+
+            if (_zapretVisualHost == null)
+                _zapretVisualHost = new ZapretVisualPolishHost(_mainWindow, _applicationRoot);
+            else
+                _zapretVisualHost.Show();
         }
 
         private void UpdateSettingsEnhancements()
@@ -130,19 +139,20 @@ namespace DPopCleaner.SimpleUpdate
                 return;
             }
 
-            var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
-            if (admin == IntPtr.Zero) return;
-            var hostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);
-            if (hostBounds == null) return;
-
             if (_settingsHost == null)
             {
-                var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, hostBounds);
+                var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
+                if (admin == IntPtr.Zero) return;
+
+                _settingsHostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);
+                if (_settingsHostBounds == null) return;
+
+                var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, _settingsHostBounds);
                 var legacySave = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseSaveButtonId);
                 var legacyBuy = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseBuyButtonId);
                 _settingsHost = new AdditionalSettingsHost(
                     _mainWindow,
-                    hostBounds,
+                    _settingsHostBounds,
                     admin,
                     _lastSetting,
                     OnAutoUpdateSettingChanged,
@@ -153,10 +163,13 @@ namespace DPopCleaner.SimpleUpdate
             }
             else
             {
-                _settingsHost.Show(hostBounds);
+                // Keep the bounds captured from the authentic page before proxy controls were created.
+                // Re-querying by label would recursively find our own proxy checkbox and feed its
+                // scrolled coordinates back into the host position, causing the pane to "fly away".
+                _settingsHost.Show(_settingsHostBounds);
             }
 
-            NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, hostBounds);
+            NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds);
         }
 
         private void OnAutoUpdateSettingChanged(bool enabled)
@@ -310,6 +323,7 @@ namespace DPopCleaner.SimpleUpdate
         {
             try { _updateCancellation.Cancel(); } catch { }
             if (_settingsHost != null) _settingsHost.Dispose();
+            if (_zapretVisualHost != null) _zapretVisualHost.Dispose();
             if (_zapretHost != null) _zapretHost.Dispose();
             if (_timer != null) _timer.Dispose();
             if (_http != null) _http.Dispose();
