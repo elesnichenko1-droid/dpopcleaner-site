@@ -20,11 +20,11 @@ DPopCleaner 0.4.17 rev.9 — hotfix реальной ошибки вкладки
 - Во вкладке **ОЗУ** сохранён существующий ComboBox, диапазон порога очистки — **5–95%** с шагом 5%.
 - В **Настройках** прокручивается существующая левая область с прежними чекбоксами, **«Включить автообновление приложения»**, **«Проверить обновления»** и лицензией; правая колонка **«Исключения очистки»** не изменена.
 - `DPopCleaner.exe` остаётся launcher/UI-bridge, `SimpleUpdate.exe` — совместимым вторым именем, неизменное ядро запускается как `DPopCleaner.Core.exe`.
-- `ZapretScreenFix.exe`, Disk Analyzer и Restore Center сохраняются.
+- Исправление **демонстрации экрана Zapret** через `ZapretScreenFix.exe` сохраняется, как и Disk Analyzer и Restore Center.
 
 ## Проверка rev.9
 
-Windows CI собирает настоящий Inno Setup installer и устанавливает его на чистом runner. Release-контракты требуют `CurrentRevision = 9`, bridge-owned Zapret update controls, скрытие старых кнопок, чтение `Zapret\.service\version.txt`, Flowseal Zapret 1.10.2 и сохранение byte-identical frozen-core.
+Windows CI собирает настоящий Inno Setup installer и устанавливает его на чистом runner. Release-контракты требуют `CurrentRevision = 9`, bridge-owned Zapret update controls, скрытие старых кнопок, чтение `Zapret\.service\version.txt`, Flowseal Zapret 1.10.2 и сохранение byte-identical frozen-core. Дополнительный runtime-smoke нажимает видимую кнопку **«Скачать и установить»** в установленном приложении и требует маркер `BRIDGE_ZAPRET_UPDATER_OK`, то есть доказывает, что клик попал в новый bridge-обработчик, а не в старый frozen-core.
 
 ## Публикация
 
