@@ -61,7 +61,6 @@ Add-Type -TypeDefinition $native -Language CSharp
 $launcher = $null
 $coreProcess = $null
 try {
-    # Launch through the historical DPopCleaner.exe path. Rev.6 reserves this path for the bridge.
     $launcher = Start-Process -FilePath (Join-Path $work 'DPopCleaner.exe') -ArgumentList @('--no-update-check','--settings-path',('"' + $settings + '"')) -WorkingDirectory $work -PassThru
 
     $deadline = [DateTime]::UtcNow.AddSeconds(18)
@@ -94,15 +93,19 @@ try {
         Start-Sleep -Milliseconds 150
         $settingsChildren = [SmokeNative]::Children($coreProcess.MainWindowHandle)
         $scrollHost = $settingsChildren | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
-        $checkbox = $settingsChildren | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление' -and $_.Visible } | Select-Object -First 1
+        $checkbox = $settingsChildren | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление приложения' -and $_.Visible } | Select-Object -First 1
         $checkNow = $settingsChildren | Where-Object { $_.Id -eq 1491 -and $_.Text -eq 'Проверить обновления' -and $_.Visible } | Select-Object -First 1
         $licenseHeading = $settingsChildren | Where-Object { $_.Id -eq 1493 -and $_.Text -eq 'Лицензия' -and $_.Visible } | Select-Object -First 1
     } while ((-not $scrollHost -or -not $checkbox -or -not $checkNow -or -not $licenseHeading) -and [DateTime]::UtcNow -lt $deadline)
 
-    if (-not $scrollHost) { throw 'Scrollable additional-settings host id=1492 was not bridged into authentic Settings.' }
-    if (-not $checkbox) { throw 'Auto-update checkbox was not bridged into the scroll host.' }
+    if (-not $scrollHost) { throw 'Scrollable settings host id=1492 was not bridged into authentic Settings.' }
+    if (-not $checkbox) { throw 'Application auto-update checkbox was not bridged into the scroll host.' }
     if (-not $checkNow) { throw 'Check-update button was not bridged into the scroll host.' }
     if (-not $licenseHeading) { throw 'License section was not placed inside the scroll host.' }
+
+    foreach ($label in @('Фоновый контроль мусора каждые 30 минут','Быстрый DPopGuard-скан при запуске','Проверять кэш Windows Update при запуске','Работать в трее и отслеживать новые установки','Автозапуск DPopCleaner вместе с Windows','Запускать приложение от имени администратора')) {
+        if (-not ($settingsChildren | Where-Object { $_.Text -eq $label -and $_.Visible } | Select-Object -First 1)) { throw "Legacy Settings proxy missing: $label" }
+    }
 
     $legacyVersion = $settingsChildren | Where-Object { $_.Text -eq 'v0.2.11 BETA' -and $_.Visible } | Select-Object -First 1
     if ($legacyVersion) { throw 'Legacy bottom-right v0.2.11 BETA badge must be hidden by SimpleUpdate.' }

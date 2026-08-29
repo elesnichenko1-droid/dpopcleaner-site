@@ -6,11 +6,9 @@ namespace DPopCleaner.SimpleUpdate
 {
     internal sealed class AdditionalSettingsHost : IDisposable
     {
-        // Native equivalent of a WinForms scroll container. These names are kept explicit because
-        // the release contract treats scrolling as behavior, not as a one-off coordinate shift.
         private const bool AutoScroll = true;
-        private const int AutoScrollMinSize = 270;
-        private const int ContentHeight = 280;
+        private const int AutoScrollMinSize = 390;
+        private const int ContentHeight = 410;
         private const int WheelStep = 48;
 
         private const uint WS_CHILD = 0x40000000;
@@ -19,7 +17,6 @@ namespace DPopCleaner.SimpleUpdate
         private const uint WS_CLIPSIBLINGS = 0x04000000;
         private const uint WS_CLIPCHILDREN = 0x02000000;
         private const uint WS_VSCROLL = 0x00200000;
-        private const uint WS_BORDER = 0x00800000;
         private const uint BS_AUTOCHECKBOX = 0x00000003;
         private const uint BS_PUSHBUTTON = 0x00000000;
         private const uint ES_AUTOHSCROLL = 0x0080;
@@ -51,6 +48,16 @@ namespace DPopCleaner.SimpleUpdate
 
         private const string HostClassName = "DPopCleanerAdditionalSettingsHost";
 
+        private static readonly string[] LegacySettingTexts =
+        {
+            "Фоновый контроль мусора каждые 30 минут",
+            "Быстрый DPopGuard-скан при запуске",
+            "Проверять кэш Windows Update при запуске",
+            "Работать в трее и отслеживать новые установки",
+            "Автозапуск DPopCleaner вместе с Windows",
+            "Запускать приложение от имени администратора"
+        };
+
         private sealed class ScrollItem
         {
             public IntPtr Handle;
@@ -58,6 +65,14 @@ namespace DPopCleaner.SimpleUpdate
             public int Y;
             public int Width;
             public int Height;
+        }
+
+        private sealed class LegacySettingProxy
+        {
+            public IntPtr LegacyHandle;
+            public IntPtr ProxyHandle;
+            public string Text;
+            public int Id;
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -101,6 +116,7 @@ namespace DPopCleaner.SimpleUpdate
 
         private readonly List<ScrollItem> _items = new List<ScrollItem>();
         private readonly List<IntPtr> _wheelChildren = new List<IntPtr>();
+        private readonly List<LegacySettingProxy> _legacySettings = new List<LegacySettingProxy>();
         private readonly Action<bool> _autoUpdateChanged;
         private readonly Action _checkUpdatesRequested;
         private readonly IntPtr _legacyKeyEdit;
@@ -174,6 +190,9 @@ namespace DPopCleaner.SimpleUpdate
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hwnd, string subAppName, string subIdList);
 
+        [DllImport("user32.dll")]
+        private static extern int GetDlgCtrlID(IntPtr hwnd);
+
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT { public int Left, Top, Right, Bottom; }
 
@@ -201,14 +220,27 @@ namespace DPopCleaner.SimpleUpdate
                 ? NativeBridge.SendMessage(adminAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero)
                 : IntPtr.Zero;
 
+            for (var i = 0; i < LegacySettingTexts.Length; i++)
+            {
+                var legacy = NativeBridge.FindChildByText(parent, LegacySettingTexts[i], "Button", true);
+                if (legacy == IntPtr.Zero)
+                    throw new InvalidOperationException("Frozen Settings control was not found: " + LegacySettingTexts[i]);
+                _legacySettings.Add(new LegacySettingProxy
+                {
+                    LegacyHandle = legacy,
+                    Text = LegacySettingTexts[i],
+                    Id = 1500 + i
+                });
+            }
+
             EnsureHostClass();
             _viewportHeight = bounds.Height;
             _host = CreateWindowEx(0, HostClassName, string.Empty,
-                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_VSCROLL | WS_BORDER,
+                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_VSCROLL,
                 bounds.Left, bounds.Top, bounds.Width, bounds.Height,
                 parent, new IntPtr(NativeBridge.SettingsScrollHostId), GetModuleHandle(null), IntPtr.Zero);
             if (_host == IntPtr.Zero)
-                throw new InvalidOperationException("Could not create scrollable Additional Settings host.");
+                throw new InvalidOperationException("Could not create scrollable Settings host.");
 
             lock (Sync) Hosts[_host] = this;
             CreateContents(autoUpdateEnabled);
@@ -221,6 +253,7 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (_disposed || _host == IntPtr.Zero || bounds == null) return;
             _viewportHeight = bounds.Height;
+            SyncLegacySettingsFromCore();
             NativeBridge.PositionChildWindow(_host, bounds);
             UpdateScrollInfo();
             NativeBridge.ShowWindow(_host, NativeBridge.SW_SHOW);
@@ -234,31 +267,42 @@ namespace DPopCleaner.SimpleUpdate
 
         private void CreateContents(bool autoUpdateEnabled)
         {
-            CreateStatic("Дополнительные настройки", 1497, 12, 8, 420, 24);
+            var y = 4;
+            foreach (var setting in _legacySettings)
+            {
+                setting.ProxyHandle = CreateChild("Button", setting.Text,
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                    setting.Id, 10, y, 460, 24);
+                NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
+                y += 30;
+            }
 
-            _autoUpdateCheckbox = CreateChild("Button", "Включить автообновление",
+            _autoUpdateCheckbox = CreateChild("Button", "Включить автообновление приложения",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                NativeBridge.AutoUpdateCheckboxId, 12, 40, 275, 26);
-            NativeBridge.SendMessage(_autoUpdateCheckbox, NativeBridge.BM_SETCHECK,
-                new IntPtr(autoUpdateEnabled ? NativeBridge.BST_CHECKED : NativeBridge.BST_UNCHECKED), IntPtr.Zero);
+                NativeBridge.AutoUpdateCheckboxId, 10, y, 280, 26);
+            NativeBridge.SetChecked(_autoUpdateCheckbox, autoUpdateEnabled);
 
             _checkUpdatesButton = CreateChild("Button", "Проверить обновления",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                NativeBridge.CheckNowButtonId, 300, 36, 170, 32);
+                NativeBridge.CheckNowButtonId, 300, y - 3, 170, 32);
+            y += 46;
 
-            CreateStatic("Лицензия", NativeBridge.LicenseHeadingProxyId, 12, 92, 220, 26);
-            CreateStatic("Бесплатная БЕТА. Лицензионный сервер будет подключён позже.", 1498, 12, 120, 448, 36);
+            CreateStatic("Лицензия", NativeBridge.LicenseHeadingProxyId, 10, y, 220, 26);
+            y += 28;
+            CreateStatic("Бесплатная BETA. Лицензионный сервер будет подключён позже.", 1498, 10, y, 460, 34);
+            y += 40;
 
             _licenseKeyEdit = CreateChild("Edit", NativeBridge.ReadWindowText(_legacyKeyEdit),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                NativeBridge.LicenseKeyProxyId, 12, 162, 300, 30);
+                NativeBridge.LicenseKeyProxyId, 10, y, 300, 30);
             CreateChild("Button", "Сохранить ключ",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                NativeBridge.LicenseSaveProxyId, 320, 160, 140, 32);
+                NativeBridge.LicenseSaveProxyId, 320, y - 2, 140, 32);
+            y += 42;
             CreateChild("Button", "Купить лицензию",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                NativeBridge.LicenseBuyProxyId, 12, 204, 155, 32);
-            CreateStatic("Покупка и проверка ключей будут подключены позже.", 1499, 180, 207, 280, 30);
+                NativeBridge.LicenseBuyProxyId, 10, y, 155, 32);
+            CreateStatic("Покупка и проверка ключей будут подключены позже.", 1499, 178, y + 3, 282, 30);
 
             if (AutoScrollMinSize > ContentHeight)
                 throw new InvalidOperationException("AutoScrollMinSize cannot exceed the content layout height.");
@@ -273,7 +317,7 @@ namespace DPopCleaner.SimpleUpdate
         {
             var child = CreateWindowEx(0, className, text ?? string.Empty, style,
                 x, y, width, height, _host, new IntPtr(id), GetModuleHandle(null), IntPtr.Zero);
-            if (child == IntPtr.Zero) throw new InvalidOperationException("Could not create Additional Settings control id=" + id + ".");
+            if (child == IntPtr.Zero) throw new InvalidOperationException("Could not create Settings control id=" + id + ".");
 
             if (_font != IntPtr.Zero)
                 NativeBridge.SendMessage(child, WM_SETFONT, _font, new IntPtr(1));
@@ -305,9 +349,18 @@ namespace DPopCleaner.SimpleUpdate
             if (msg == WM_COMMAND)
             {
                 var id = (int)(wParam.ToInt64() & 0xffff);
+                foreach (var setting in _legacySettings)
+                {
+                    if (id == setting.Id)
+                    {
+                        SyncLegacySetting(setting);
+                        return IntPtr.Zero;
+                    }
+                }
+
                 if (id == NativeBridge.AutoUpdateCheckboxId)
                 {
-                    var enabled = NativeBridge.SendMessage(_autoUpdateCheckbox, NativeBridge.BM_GETCHECK, IntPtr.Zero, IntPtr.Zero).ToInt32() == NativeBridge.BST_CHECKED;
+                    var enabled = NativeBridge.IsChecked(_autoUpdateCheckbox);
                     if (_autoUpdateChanged != null) _autoUpdateChanged(enabled);
                     return IntPtr.Zero;
                 }
@@ -345,6 +398,22 @@ namespace DPopCleaner.SimpleUpdate
             }
 
             return DefWindowProc(hwnd, msg, wParam, lParam);
+        }
+
+        private void SyncLegacySetting(LegacySettingProxy setting)
+        {
+            if (setting == null || setting.LegacyHandle == IntPtr.Zero || setting.ProxyHandle == IntPtr.Zero) return;
+            var desired = NativeBridge.IsChecked(setting.ProxyHandle);
+            var actual = NativeBridge.IsChecked(setting.LegacyHandle);
+            if (desired != actual) NativeBridge.ClickButton(setting.LegacyHandle);
+            NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
+        }
+
+        private void SyncLegacySettingsFromCore()
+        {
+            foreach (var setting in _legacySettings)
+                if (setting.ProxyHandle != IntPtr.Zero)
+                    NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
         }
 
         private void HandleVerticalScroll(int request)
@@ -412,7 +481,7 @@ namespace DPopCleaner.SimpleUpdate
                 if (atom == 0)
                 {
                     var error = Marshal.GetLastWin32Error();
-                    if (error != 1410) throw new InvalidOperationException("Could not register Additional Settings host class. Win32=" + error);
+                    if (error != 1410) throw new InvalidOperationException("Could not register Settings host class. Win32=" + error);
                 }
                 _classRegistered = true;
             }
@@ -447,7 +516,7 @@ namespace DPopCleaner.SimpleUpdate
             _disposed = true;
             foreach (var child in _wheelChildren)
             {
-                var id = new UIntPtr((uint)Math.Max(1, GetControlId(child)));
+                var id = new UIntPtr((uint)Math.Max(1, GetDlgCtrlID(child)));
                 try { RemoveWindowSubclass(child, ChildSubclassDelegate, id); } catch { }
             }
             _wheelChildren.Clear();
@@ -457,14 +526,6 @@ namespace DPopCleaner.SimpleUpdate
                 try { DestroyWindow(_host); } catch { }
                 _host = IntPtr.Zero;
             }
-        }
-
-        [DllImport("user32.dll")]
-        private static extern int GetDlgCtrlID(IntPtr hwnd);
-
-        private static int GetControlId(IntPtr hwnd)
-        {
-            try { return GetDlgCtrlID(hwnd); } catch { return 1; }
         }
     }
 }
