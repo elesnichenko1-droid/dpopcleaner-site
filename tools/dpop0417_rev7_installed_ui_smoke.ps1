@@ -138,7 +138,7 @@ try {
     [void][Rev7InstalledNative]::SendMessage($ramCombo.Handle, 0x014E, [IntPtr]::new(0), [IntPtr]::Zero)
     [void][Rev7InstalledNative]::SendMessage($ramCombo.Handle, 0x014E, [IntPtr]::new(18), [IntPtr]::Zero)
 
-    # Existing Zapret page gets only additional actions; the old buttons remain present.
+    # Zapret keeps the old layout, but rev.9 deliberately replaces the two broken frozen updater controls in-place.
     Click-Button $window 'Zapret'
     $deadline = [DateTime]::UtcNow.AddSeconds(6)
     $zapretChildren = @()
@@ -150,7 +150,14 @@ try {
     foreach ($label in @('Починка трансляции','Починка подключения','Игровой фильтр 1.10.2','Менеджер 1.10.2')) {
         if (-not ($zapretChildren | Where-Object { $_.Visible -and $_.Text -eq $label } | Select-Object -First 1)) { throw "Zapret rev.7 action missing: $label" }
     }
-    foreach ($legacyLabel in @('Проверить версию','Скачать и установить','Диагностика','Тесты')) {
+
+    $proxyCheck = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1724 -and $_.Text -eq 'Проверить версию' } | Select-Object -First 1
+    $proxyDownload = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1725 -and $_.Text -eq 'Скачать и установить' } | Select-Object -First 1
+    if (-not $proxyCheck) { throw 'Bridge-owned Zapret check-version proxy id=1724 is missing.' }
+    if (-not $proxyDownload) { throw 'Bridge-owned Zapret updater proxy id=1725 is missing.' }
+    if ($zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1709 } | Select-Object -First 1) { throw 'Broken frozen Zapret check-version button id=1709 is still visible.' }
+    if ($zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1715 } | Select-Object -First 1) { throw 'Broken frozen Zapret updater button id=1715 is still visible.' }
+    foreach ($legacyLabel in @('Диагностика','Тесты')) {
         if (-not ($zapretChildren | Where-Object { $_.Visible -and $_.Text -eq $legacyLabel } | Select-Object -First 1)) { throw "Existing Zapret control disappeared: $legacyLabel" }
     }
 
@@ -170,7 +177,7 @@ try {
             throw "Compact Zapret toolbar escaped the safe row: $($action.Text) [$($action.Top),$($action.Bottom)]"
         }
     }
-    $legacyZapretIds = @(1701,1713,1714,1703,1709,1715,1702,1716,1717,1704,1705,1707,1708,1710,1711)
+    $legacyZapretIds = @(1701,1713,1714,1703,1702,1716,1717,1704,1705,1707,1708,1710,1711,1724,1725)
     $legacyZapretControls = @($zapretChildren | Where-Object { $_.Visible -and $_.Id -in $legacyZapretIds })
     foreach ($action in $actions) {
         foreach ($legacy in $legacyZapretControls) {
@@ -222,6 +229,8 @@ try {
         zapret_1102_actions = $true
         zapret_compact_toolbar = $true
         legacy_zapret_updater_module = $true
+        zapret_update_proxy_controls = $true
+        frozen_zapret_update_controls_hidden = $true
         settings_existing_controls_scroll = $true
         application_auto_update_in_scroll = $true
         legacy_version_hidden = $true
