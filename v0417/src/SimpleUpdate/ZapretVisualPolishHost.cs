@@ -43,7 +43,6 @@ namespace DPopCleaner.SimpleUpdate
         private readonly string _applicationRoot;
         private readonly HashSet<IntPtr> _buttons = new HashSet<IntPtr>();
         private readonly HashSet<IntPtr> _toolbarParents = new HashSet<IntPtr>();
-        private IntPtr _versionStatus;
         private bool _disposed;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -125,13 +124,12 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (_disposed) return;
             EnsureDarkBridgeButtons();
-            AttachToExistingVersionStatus();
         }
 
         internal void Hide()
         {
-            // Rev.11 creates no replacement status control. The native frozen-core Edit
-            // stays owned by the original Zapret page and follows its normal visibility.
+            // Rev.12 does not create, replace or rewrite any native Zapret version control.
+            // The frozen core renders its own version from Zapret\utils\dpop_version.txt.
         }
 
         private void EnsureDarkBridgeButtons()
@@ -168,67 +166,6 @@ namespace DPopCleaner.SimpleUpdate
                 NativeBridge.WriteWindowText(manager, managerText);
                 InvalidateRect(manager, IntPtr.Zero, true);
             }
-        }
-
-        private IntPtr SelectExistingStatusEdit()
-        {
-            NativeBridge.ChildInfo candidate = null;
-            foreach (var child in NativeBridge.GetChildren(_parent))
-            {
-                // The frozen Zapret page has two visible Edit controls. The upper one is the
-                // native one-line status row (initially just "—"); the lower one is winws output.
-                // Select by the authentic layout, not by status text that may not exist yet.
-                if (!child.Visible) continue;
-                if (!string.Equals(child.ClassName, "Edit", StringComparison.OrdinalIgnoreCase)) continue;
-                if (candidate == null || child.Top < candidate.Top) candidate = child;
-            }
-            return candidate != null ? candidate.Handle : IntPtr.Zero;
-        }
-
-        private void AttachToExistingVersionStatus()
-        {
-            var current = SelectExistingStatusEdit();
-            if (current == IntPtr.Zero)
-            {
-                _versionStatus = IntPtr.Zero;
-                return;
-            }
-
-            _versionStatus = current;
-            RefreshExistingVersionStatus();
-        }
-
-        private void RefreshExistingVersionStatus()
-        {
-            if (_versionStatus == IntPtr.Zero) return;
-
-            // The frozen core is a different process. Cross-process SetWindowSubclass is not a
-            // valid way to intercept its Edit control. NativeBridge.WriteWindowText sends
-            // WM_SETTEXT to the existing native HWND instead. LauncherContext already calls Show()
-            // on its UI tick, so we only write when the frozen core actually changed the text.
-            var existing = NativeBridge.ReadWindowText(_versionStatus);
-            var rewritten = RewriteVersionStatusText(existing);
-            if (!string.Equals(existing, rewritten, StringComparison.Ordinal))
-                NativeBridge.WriteWindowText(_versionStatus, rewritten);
-        }
-
-        private string RewriteVersionStatusText(string source)
-        {
-            var text = (source ?? string.Empty).Trim();
-            var version = GetInstalledZapretVersion();
-            if (string.IsNullOrWhiteSpace(text) || string.Equals(text, "—", StringComparison.Ordinal))
-                return "Zapret " + version;
-
-            var bullet = text.IndexOf('•');
-            if (bullet >= 0)
-                return "Zapret " + version + "  " + text.Substring(bullet).TrimStart();
-
-            if (text.StartsWith("Zapret ", StringComparison.OrdinalIgnoreCase))
-                return "Zapret " + version;
-
-            // Preserve native frozen-core status messages while keeping the installed version
-            // visible in the same original Edit control; no replacement/proxy control is created.
-            return "Zapret " + version + "  •  " + text;
         }
 
         private string GetInstalledZapretVersion()
@@ -314,7 +251,6 @@ namespace DPopCleaner.SimpleUpdate
             }
             _toolbarParents.Clear();
             _buttons.Clear();
-            _versionStatus = IntPtr.Zero;
         }
     }
 }
