@@ -88,6 +88,25 @@ function Wait-Visible([IntPtr]$Window, [int]$Id, [int]$TimeoutMs = 6000) {
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Visible control id=$Id did not appear."
 }
+function Wait-ZapretPage([IntPtr]$Window) {
+    $lastError = ''
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        Click-Id $Window 905
+        Start-Sleep -Milliseconds 450
+        try {
+            # Native Status is the page-level proof. Do not test bridge controls until the frozen page is actually visible.
+            return Wait-Visible $Window 1703 2500
+        }
+        catch {
+            $lastError = $_.Exception.Message
+        }
+    }
+    $visible = Children $Window | Where-Object { $_.Visible } | Sort-Object Top,Left
+    Write-Host 'REV11_ZAPRET_NAV_DIAGNOSTIC_BEGIN'
+    foreach ($child in $visible) { Write-Host ("id={0} class={1} top={2} text={3}" -f $child.Id,$child.ClassName,$child.Top,$child.Text) }
+    Write-Host 'REV11_ZAPRET_NAV_DIAGNOSTIC_END'
+    throw "Zapret page did not stabilize after retry. $lastError"
+}
 function Top-VisibleEdit([IntPtr]$Window) {
     Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 1
 }
@@ -164,7 +183,8 @@ try {
     }
 
     # Rev.11 uses the existing upper frozen-core Edit. No version proxy is allowed.
-    Click-Id $window 905
+    $nativeStatusButton = Wait-ZapretPage $window
+    if (-not $nativeStatusButton -or $nativeStatusButton.Id -ne 1703) { throw 'Native Zapret Status control was not confirmed.' }
     foreach ($id in @(1720,1721,1722,1723,1724,1725)) { [void](Wait-Visible $window $id) }
     $proxy = Find-Child $window 1726
     if ($proxy) { throw 'Rev.11 must not create version proxy id=1726.' }
@@ -206,6 +226,7 @@ try {
         settings_fixed_rect = $true
         settings_aggressive_wheel_rounds = 4
         settings_reopen_cycles = 3
+        zapret_page_native_status_button_confirmed = $true
         zapret_installed_version = $bundleVersion
         zapret_native_status_class = 'Edit'
         zapret_native_status_handle = $nativeStatusHandle.ToInt64()
@@ -218,6 +239,7 @@ try {
 
     Write-Host 'REV11_EXISTING_UI_SMOKE_OK'
     Write-Host 'Settings aggressive wheel + repaint stability: PASS'
+    Write-Host 'Native Zapret page stabilization: PASS'
     Write-Host "Existing native Zapret status Edit attached before text and rewritten to ${bundleVersion}: PASS"
     Write-Host 'Native Status button write intercepted on same Edit handle: PASS'
     Write-Host 'Zapret version proxy id=1726 absent: PASS'
