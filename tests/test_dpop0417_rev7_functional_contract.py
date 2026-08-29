@@ -33,8 +33,10 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         path = ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs'
         self.assertTrue(path.is_file())
         text = path.read_text(encoding='utf-8')
-        for token in ('Починка трансляции','Починка подключения','Игровой фильтр 1.10.2','Менеджер 1.10.2','ZapretScreenFix.exe','game_filter.enabled','service.bat','status_zapret'):
+        for token in ('Починка трансляции','Починка подключения','ZapretScreenFix.exe','game_filter.enabled','service.bat','status_zapret'):
             self.assertIn(token, text)
+        self.assertIn('Игровой фильтр ', text)
+        self.assertIn('Менеджер ', text)
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
         self.assertIn('ZapretEnhancementHost', launcher)
 
@@ -61,11 +63,27 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertIn('NativeBridge.ShowWindow(_legacyCheckVersionButton, NativeBridge.SW_HIDE)', host)
         self.assertIn('NativeBridge.ShowWindow(_legacyDownloadButton, NativeBridge.SW_HIDE)', host)
         self.assertIn('LegacyZapretUpdater.Run(_applicationRoot)', host)
-        self.assertIn('RefreshDisplayedZapretVersion', host)
         self.assertIn('.service', host)
         self.assertIn('version.txt', host)
         self.assertNotIn('zapretProxyTimer', program)
         self.assertNotIn('ZapretUpdateProxyHost zapretUpdateProxy', program)
+
+    def test_rev10_zapret_uses_persistent_installed_version_proxy_and_dark_buttons(self):
+        host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
+        self.assertIn('VersionStatusProxyId = 1726', host)
+        self.assertIn('CreateVersionStatusProxy', host)
+        self.assertIn('RefreshVersionStatusProxy', host)
+        self.assertIn('GetInstalledZapretVersion', host)
+        self.assertIn('BS_OWNERDRAW', host)
+        self.assertIn('WM_DRAWITEM', host)
+        self.assertIn('DrawOwnerButton', host)
+        self.assertIn('NativeBridge.ShowWindow(_legacyVersionStatus, NativeBridge.SW_HIDE)', host)
+        self.assertIn('"Игровой фильтр " + version', host)
+        self.assertIn('"Менеджер " + version', host)
+        smoke = (ROOT / 'tools/dpop0417_rev10_ui_stability_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('zapret_owner_draw_buttons = 6', smoke)
+        self.assertIn('Stale visible Zapret 1.9.9d returned', smoke)
+        self.assertIn('BS_OWNERDRAW', smoke)
 
     def test_frozen_zapret_download_button_has_compatibility_updater(self):
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8')
