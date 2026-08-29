@@ -52,8 +52,8 @@ namespace DPopCleaner.SimpleUpdate
                             var mainWindow = core.MainWindowHandle;
                             if (mainWindow == IntPtr.Zero) return;
 
-                            var anchor = NativeBridge.FindChildById(mainWindow, NativeBridge.ZapretCheckVersionButtonId);
-                            var visible = anchor != IntPtr.Zero && NativeBridge.IsWindowVisible(anchor);
+                            var marker = NativeBridge.FindChildByText(mainWindow, "Дополнительно", "Static", true);
+                            var visible = marker != IntPtr.Zero;
                             if (!visible)
                             {
                                 if (zapretUpdateProxy != null) zapretUpdateProxy.Hide();
