@@ -41,7 +41,7 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
 
     def test_rev9_settings_scroll_host_keeps_initial_bounds_instead_of_reanchoring_to_its_own_proxies(self):
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
-        smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
+        smoke = (ROOT / 'tools/dpop0417_rev9_runtime_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('private NativeBridge.ClientBounds _settingsHostBounds;', launcher)
         self.assertIn('_settingsHostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);', launcher)
         self.assertIn('_settingsHost.Show(_settingsHostBounds);', launcher)
@@ -102,15 +102,16 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertIn('Legacy Zapret updater compatibility module: PASS', smoke)
 
     def test_rev9_bypasses_broken_frozen_zapret_updater_handler_and_displays_real_bundle_version(self):
-        bridge = (ROOT / 'v0417/src/SimpleUpdate/NativeBridge.cs').read_text(encoding='utf-8')
-        host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
-        smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
-        self.assertIn('ZapretDownloadButtonId = 1715', bridge)
-        self.assertIn('ZapretDownloadProxyButtonId', host)
-        self.assertIn('LegacyZapretUpdater.Run(_applicationRoot)', host)
-        self.assertIn('UpdateDisplayedVersion', host)
-        self.assertIn('.service', host)
-        self.assertIn('version.txt', host)
+        runtime_fix = (ROOT / 'v0417/src/SimpleUpdate/ZapretRuntimeFixHost.cs').read_text(encoding='utf-8')
+        launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
+        smoke = (ROOT / 'tools/dpop0417_rev9_runtime_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('LegacyZapretDownloadButtonId = 1715', runtime_fix)
+        self.assertIn('ZapretDownloadProxyButtonId = 1724', runtime_fix)
+        self.assertIn('LegacyZapretUpdater.Run(_applicationRoot)', runtime_fix)
+        self.assertIn('UpdateDisplayedVersion', runtime_fix)
+        self.assertIn('.service', runtime_fix)
+        self.assertIn('version.txt', runtime_fix)
+        self.assertIn('ZapretRuntimeFixHost', launcher)
         self.assertIn('Broken frozen Zapret updater button is still visible', smoke)
         self.assertIn('Zapret updater proxy is not visible', smoke)
         self.assertIn('Displayed Zapret version is not 1.10.2', smoke)
@@ -135,6 +136,7 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
             self.assertIn(token, smoke)
         install_smoke = (ROOT / 'tools/dpop0417_install_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('dpop0417_rev7_installed_ui_smoke.ps1', install_smoke)
+        self.assertIn('dpop0417_rev9_runtime_smoke.ps1', install_smoke)
 
 
 if __name__ == '__main__':
