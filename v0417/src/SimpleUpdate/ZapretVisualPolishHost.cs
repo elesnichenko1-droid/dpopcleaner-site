@@ -174,20 +174,24 @@ namespace DPopCleaner.SimpleUpdate
             }
         }
 
-        private void AttachToExistingVersionStatus()
+        private IntPtr SelectExistingStatusEdit()
         {
-            IntPtr current = IntPtr.Zero;
+            NativeBridge.ChildInfo candidate = null;
             foreach (var child in NativeBridge.GetChildren(_parent))
             {
-                // The authentic frozen-core control dump shows the Zapret status/version row
-                // as an Edit control. "Zapret Center" is a separate Static and must never be touched.
+                // The frozen Zapret page has two visible Edit controls. The upper one is the
+                // native one-line status row (initially just "—"); the lower one is winws output.
+                // Select by the authentic layout, not by status text that may not exist yet.
+                if (!child.Visible) continue;
                 if (!string.Equals(child.ClassName, "Edit", StringComparison.OrdinalIgnoreCase)) continue;
-                var text = (child.Text ?? string.Empty).Trim();
-                if (!text.StartsWith("Zapret ", StringComparison.OrdinalIgnoreCase)) continue;
-                if (text.IndexOf('•') < 0) continue;
-                current = child.Handle;
-                break;
+                if (candidate == null || child.Top < candidate.Top) candidate = child;
             }
+            return candidate != null ? candidate.Handle : IntPtr.Zero;
+        }
+
+        private void AttachToExistingVersionStatus()
+        {
+            var current = SelectExistingStatusEdit();
             if (current == IntPtr.Zero) return;
 
             if (_versionStatus != current)
@@ -211,12 +215,21 @@ namespace DPopCleaner.SimpleUpdate
 
         private string RewriteVersionStatusText(string source)
         {
-            var text = source ?? string.Empty;
+            var text = (source ?? string.Empty).Trim();
             var version = GetInstalledZapretVersion();
+            if (string.IsNullOrWhiteSpace(text) || string.Equals(text, "—", StringComparison.Ordinal))
+                return "Zapret " + version;
+
             var bullet = text.IndexOf('•');
             if (bullet >= 0)
                 return "Zapret " + version + "  " + text.Substring(bullet).TrimStart();
-            return text;
+
+            if (text.StartsWith("Zapret ", StringComparison.OrdinalIgnoreCase))
+                return "Zapret " + version;
+
+            // Preserve native frozen-core status messages while keeping the installed version
+            // visible in the same original Edit control; no replacement/proxy control is created.
+            return "Zapret " + version + "  •  " + text;
         }
 
         private string GetInstalledZapretVersion()
