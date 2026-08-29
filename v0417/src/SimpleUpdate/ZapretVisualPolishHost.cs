@@ -182,6 +182,9 @@ namespace DPopCleaner.SimpleUpdate
                 if (!string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
                 var text = (child.Text ?? string.Empty).Trim();
                 if (!text.StartsWith("Zapret ", StringComparison.OrdinalIgnoreCase)) continue;
+                // Only the native status row has the bullet-separated service/winws suffix.
+                // Never attach to the "Zapret Center" heading.
+                if (text.IndexOf('•') < 0) continue;
                 current = child.Handle;
                 break;
             }
@@ -213,7 +216,7 @@ namespace DPopCleaner.SimpleUpdate
             var bullet = text.IndexOf('•');
             if (bullet >= 0)
                 return "Zapret " + version + "  " + text.Substring(bullet).TrimStart();
-            return "Zapret " + version;
+            return text;
         }
 
         private string GetInstalledZapretVersion()
