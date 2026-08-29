@@ -122,24 +122,24 @@ try {
 
     # Reproduce the user video: Settings -> wheel -> wait -> another tab -> Settings, several times.
     Click-Id $window 906
-    $host0 = Wait-Visible $window 1492
-    $initialRect = $host0
+    $settingsPane0 = Wait-Visible $window 1492
+    $initialRect = $settingsPane0
     $wheelDown = [IntPtr]::new([long]0xFF880000)
-    for ($i = 0; $i -lt 3; $i++) { [void][Rev10Native]::SendMessage($host0.Handle, 0x020A, $wheelDown, [IntPtr]::Zero) }
+    for ($i = 0; $i -lt 3; $i++) { [void][Rev10Native]::SendMessage($settingsPane0.Handle, 0x020A, $wheelDown, [IntPtr]::Zero) }
     Start-Sleep -Milliseconds 1400
-    $hostAfterWheel = Wait-Visible $window 1492
-    if (-not (Same-Rect $initialRect $hostAfterWheel)) {
-        throw "Settings host drifted after wheel: initial=($($initialRect.Left),$($initialRect.Top),$($initialRect.Right),$($initialRect.Bottom)) after=($($hostAfterWheel.Left),$($hostAfterWheel.Top),$($hostAfterWheel.Right),$($hostAfterWheel.Bottom))"
+    $settingsPaneAfterWheel = Wait-Visible $window 1492
+    if (-not (Same-Rect $initialRect $settingsPaneAfterWheel)) {
+        throw "Settings host drifted after wheel: initial=($($initialRect.Left),$($initialRect.Top),$($initialRect.Right),$($initialRect.Bottom)) after=($($settingsPaneAfterWheel.Left),$($settingsPaneAfterWheel.Top),$($settingsPaneAfterWheel.Right),$($settingsPaneAfterWheel.Bottom))"
     }
 
     for ($cycle = 1; $cycle -le 3; $cycle++) {
         Click-Id $window 905
         Start-Sleep -Milliseconds 350
         Click-Id $window 906
-        $host = Wait-Visible $window 1492
+        $settingsPane = Wait-Visible $window 1492
         Start-Sleep -Milliseconds 450
-        $hostStable = Wait-Visible $window 1492
-        if (-not (Same-Rect $initialRect $hostStable)) { throw "Settings host moved after reopen cycle ${cycle}." }
+        $settingsPaneStable = Wait-Visible $window 1492
+        if (-not (Same-Rect $initialRect $settingsPaneStable)) { throw "Settings host moved after reopen cycle ${cycle}." }
     }
 
     # Zapret must show the installed version persistently and bridge buttons must use our dark owner-draw format.
