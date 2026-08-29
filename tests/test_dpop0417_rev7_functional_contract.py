@@ -77,6 +77,7 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertIn('WM_SETTEXT', visual)
         self.assertIn('AttachToExistingVersionStatus', visual)
         self.assertIn('RewriteVersionStatusText', visual)
+        self.assertIn("text.IndexOf('•') < 0", visual)
         self.assertIn('SetWindowSubclass(_versionStatus', visual)
         self.assertIn('BS_OWNERDRAW', visual)
         self.assertIn('WM_DRAWITEM', visual)
