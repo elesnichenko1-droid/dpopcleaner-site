@@ -64,7 +64,6 @@ Add-Type -TypeDefinition $native -Language CSharp
 $launcherProcess = $null
 $coreProcess = $null
 try {
-    # This is intentionally the historical path used by old shortcuts and pinned icons.
     $launcherProcess = Start-Process -FilePath $launcherPath -ArgumentList @('--no-update-check','--settings-path',('"' + $settingsPath + '"')) -WorkingDirectory $RootPath -PassThru
 
     $deadline = [DateTime]::UtcNow.AddSeconds(18)
@@ -99,13 +98,13 @@ try {
         Start-Sleep -Milliseconds 150
         $settingsChildren = [InstalledSettingsNative]::Children($coreProcess.MainWindowHandle)
         $scrollHost = $settingsChildren | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
-        $autoUpdate = $settingsChildren | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление' -and $_.Visible } | Select-Object -First 1
+        $autoUpdate = $settingsChildren | Where-Object { $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление приложения' -and $_.Visible } | Select-Object -First 1
         $checkNow = $settingsChildren | Where-Object { $_.Id -eq 1491 -and $_.Text -eq 'Проверить обновления' -and $_.Visible } | Select-Object -First 1
         $licenseHeading = $settingsChildren | Where-Object { $_.Id -eq 1493 -and $_.Text -eq 'Лицензия' -and $_.Visible } | Select-Object -First 1
     } while ((-not $scrollHost -or -not $autoUpdate -or -not $checkNow -or -not $licenseHeading) -and [DateTime]::UtcNow -lt $deadline)
 
-    if (-not $scrollHost) { throw 'Installed scrollable Additional Settings host id=1492 is missing.' }
-    if (-not $autoUpdate) { throw 'Installed auto-update control id=1490 is missing.' }
+    if (-not $scrollHost) { throw 'Installed scrollable Settings host id=1492 is missing.' }
+    if (-not $autoUpdate) { throw 'Installed application auto-update control id=1490 is missing.' }
     if (-not $checkNow) { throw 'Installed check-update control id=1491 is missing.' }
     if (-not $licenseHeading) { throw 'Installed License heading id=1493 is missing from scroll area.' }
 
