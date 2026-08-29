@@ -20,7 +20,9 @@ namespace DPopCleaner.SimpleUpdate
         private readonly UpdateClient _updateClient;
         private IntPtr _mainWindow;
         private AdditionalSettingsHost _settingsHost;
+        private NativeBridge.ClientBounds _settingsHostBounds;
         private ZapretEnhancementHost _zapretHost;
+        private ZapretRuntimeFixHost _zapretRuntimeFix;
         private bool _lastSetting;
         private bool _iconApplied;
         private bool _automaticCheckStarted;
@@ -76,6 +78,7 @@ namespace DPopCleaner.SimpleUpdate
                     // above is allowed to terminate the launcher.
                     if (_settingsHost != null) _settingsHost.Hide();
                     if (_zapretHost != null) _zapretHost.Hide();
+                    if (_zapretRuntimeFix != null) _zapretRuntimeFix.Hide();
                     return;
                 }
 
@@ -109,6 +112,7 @@ namespace DPopCleaner.SimpleUpdate
             if (!zapretVisible)
             {
                 if (_zapretHost != null) _zapretHost.Hide();
+                if (_zapretRuntimeFix != null) _zapretRuntimeFix.Hide();
                 return;
             }
 
@@ -116,6 +120,11 @@ namespace DPopCleaner.SimpleUpdate
                 _zapretHost = new ZapretEnhancementHost(_mainWindow, _applicationRoot);
             else
                 _zapretHost.Show();
+
+            if (_zapretRuntimeFix == null)
+                _zapretRuntimeFix = new ZapretRuntimeFixHost(_mainWindow, _applicationRoot);
+            else
+                _zapretRuntimeFix.Show();
         }
 
         private void UpdateSettingsEnhancements()
@@ -130,17 +139,21 @@ namespace DPopCleaner.SimpleUpdate
 
             var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
             if (admin == IntPtr.Zero) return;
-            var hostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);
-            if (hostBounds == null) return;
 
             if (_settingsHost == null)
             {
-                var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, hostBounds);
+                // Capture the frozen Settings layout exactly once. Recomputing these bounds after the
+                // proxy controls exist makes EnumChildWindows discover our own scrolled checkboxes and
+                // recursively moves the host on every launcher tick.
+                _settingsHostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);
+                if (_settingsHostBounds == null) return;
+
+                var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, _settingsHostBounds);
                 var legacySave = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseSaveButtonId);
                 var legacyBuy = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseBuyButtonId);
                 _settingsHost = new AdditionalSettingsHost(
                     _mainWindow,
-                    hostBounds,
+                    _settingsHostBounds,
                     admin,
                     _lastSetting,
                     OnAutoUpdateSettingChanged,
@@ -151,10 +164,10 @@ namespace DPopCleaner.SimpleUpdate
             }
             else
             {
-                _settingsHost.Show(hostBounds);
+                _settingsHost.Show(_settingsHostBounds);
             }
 
-            NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, hostBounds);
+            NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds);
         }
 
         private void OnAutoUpdateSettingChanged(bool enabled)
@@ -309,6 +322,7 @@ namespace DPopCleaner.SimpleUpdate
             try { _updateCancellation.Cancel(); } catch { }
             if (_settingsHost != null) _settingsHost.Dispose();
             if (_zapretHost != null) _zapretHost.Dispose();
+            if (_zapretRuntimeFix != null) _zapretRuntimeFix.Dispose();
             if (_timer != null) _timer.Dispose();
             if (_http != null) _http.Dispose();
             if (_updateCancellation != null) _updateCancellation.Dispose();
