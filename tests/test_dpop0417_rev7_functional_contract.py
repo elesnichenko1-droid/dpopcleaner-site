@@ -74,6 +74,24 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertIn('Existing Zapret control overlaps compact action toolbar', smoke)
         self.assertIn('Compact Zapret toolbar escaped the safe row', smoke)
 
+    def test_frozen_zapret_download_button_has_compatibility_updater(self):
+        program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8')
+        updater = ROOT / 'v0417/src/SimpleUpdate/LegacyZapretUpdater.cs'
+        installer = (ROOT / 'release/DPopCleaner_0.4.17.iss').read_text(encoding='utf-8')
+        smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
+
+        self.assertTrue(updater.is_file(), 'LegacyZapretUpdater.cs must implement the frozen DPopUpdate contract')
+        updater_text = updater.read_text(encoding='utf-8')
+        self.assertIn('DPopUpdate.exe', program)
+        self.assertIn('LegacyZapretUpdater.Run', program)
+        self.assertIn('Flowseal/zapret-discord-youtube', updater_text)
+        self.assertIn('.service', updater_text)
+        self.assertIn('version.txt', updater_text)
+        self.assertIn('releases/latest', updater_text)
+        self.assertIn('DestName: "DPopUpdate.exe"', installer)
+        self.assertIn('DPopUpdate.exe', smoke)
+        self.assertIn('Legacy Zapret updater compatibility module: PASS', smoke)
+
     def test_installed_rev7_smoke_reproduces_requested_behaviors(self):
         smoke_path = ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1'
         self.assertTrue(smoke_path.is_file(), 'rev.7 installed UI behavior smoke is required')
