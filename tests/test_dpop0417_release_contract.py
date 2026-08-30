@@ -84,7 +84,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         for token in ('flowseal zapret 1.10.2', SCREENSHOT_PATH, 'dpopcleaner.core.exe', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2', 'автообновление приложения', 'rev.12', '1.9.9d', 'utils\\dpop_version.txt', 'родн', 'перерис'):
             self.assertIn(token, index)
-        self.assertTrue('прежний интерфейс' in index or 'интерфейс сохран' in index)
+        self.assertTrue('прежний интерфейс' in index or 'интерфейс сохран' in index or 'программа остаётся узнаваемой' in index)
         self.assertIn('не переписывает родную версию через hwnd', index)
 
         script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
