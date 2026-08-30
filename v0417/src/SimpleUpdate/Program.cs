@@ -18,6 +18,8 @@ namespace DPopCleaner.SimpleUpdate
 
             try
             {
+                if (!ElevationBootstrap.EnsureAdministrator(args)) return;
+
                 var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
                 if (string.Equals(Path.GetFileName(Application.ExecutablePath), "DPopUpdate.exe", StringComparison.OrdinalIgnoreCase))
