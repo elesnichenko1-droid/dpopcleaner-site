@@ -12,7 +12,7 @@ namespace DPopCleaner.SimpleUpdate
     internal sealed class TrayRamBadgeHost : IDisposable
     {
         private readonly NotifyIcon _notifyIcon;
-        private readonly ToolStripMenuItem _openItem;
+        private readonly ContextMenuStrip _menu;
         private Icon _currentIcon;
         private IntPtr _mainWindow;
         private int _lastPercent = -1;
@@ -23,16 +23,16 @@ namespace DPopCleaner.SimpleUpdate
         internal TrayRamBadgeHost(IntPtr mainWindow)
         {
             _mainWindow = mainWindow;
-            _openItem = new ToolStripMenuItem("Открыть DPopCleaner");
-            _openItem.Click += delegate { RestoreMainWindow(); };
-            var menu = new ContextMenuStrip();
-            menu.Items.Add(_openItem);
+            _menu = new ContextMenuStrip();
+            var openItem = new ToolStripMenuItem("Открыть DPopCleaner");
+            openItem.Click += delegate { RestoreMainWindow(); };
+            _menu.Items.Add(openItem);
 
             _notifyIcon = new NotifyIcon
             {
                 Text = "DPopCleaner",
                 Visible = false,
-                ContextMenuStrip = menu
+                ContextMenuStrip = _menu
             };
             _notifyIcon.DoubleClick += delegate { RestoreMainWindow(); };
         }
@@ -44,7 +44,7 @@ namespace DPopCleaner.SimpleUpdate
 
             if (!enabled)
             {
-                if (_notifyIcon.Visible) _notifyIcon.Visible = false;
+                _notifyIcon.Visible = false;
                 return;
             }
 
@@ -73,11 +73,11 @@ namespace DPopCleaner.SimpleUpdate
         private void RestoreMainWindow()
         {
             if (_mainWindow == IntPtr.Zero) return;
-            NativeBridge.ShowWindow(_mainWindow, 9); // SW_RESTORE
-            NativeBridge.SetForegroundWindowSafe(_mainWindow);
+            ShowWindow(_mainWindow, 9); // SW_RESTORE
+            SetForegroundWindow(_mainWindow);
         }
 
-        private static int ReadMemoryLoad()
+        internal static int ReadMemoryLoad()
         {
             var status = new MEMORYSTATUSEX();
             status.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
@@ -85,7 +85,7 @@ namespace DPopCleaner.SimpleUpdate
             return Math.Max(0, Math.Min(100, (int)status.dwMemoryLoad));
         }
 
-        private static Icon RenderRamBadge(int percent)
+        internal static Icon RenderRamBadge(int percent)
         {
             using (var bitmap = new Bitmap(32, 32, PixelFormat.Format32bppArgb))
             using (var graphics = Graphics.FromImage(bitmap))
@@ -107,14 +107,8 @@ namespace DPopCleaner.SimpleUpdate
                 var fontSize = text.Length >= 3 ? 9.0f : 11.0f;
                 using (var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Pixel))
                 using (var textBrush = new SolidBrush(Color.FromArgb(8, 24, 38)))
-                {
-                    var format = new StringFormat
-                    {
-                        Alignment = StringAlignment.Center,
-                        LineAlignment = StringAlignment.Center
-                    };
+                using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                     graphics.DrawString(text, font, textBrush, new RectangleF(1, 16, 30, 15), format);
-                }
 
                 var hIcon = bitmap.GetHicon();
                 try
@@ -143,7 +137,7 @@ namespace DPopCleaner.SimpleUpdate
             _disposed = true;
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
-            _openItem.Dispose();
+            _menu.Dispose();
             if (_currentIcon != null) _currentIcon.Dispose();
         }
 
@@ -161,11 +155,10 @@ namespace DPopCleaner.SimpleUpdate
             public ulong ullAvailExtendedVirtual;
         }
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
-
-        [DllImport("user32.dll")]
-        private static extern bool DestroyIcon(IntPtr hIcon);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+        [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr hIcon);
+        [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int command);
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
     }
 
     internal static class LegacyTrayIconSuppressor
@@ -181,15 +174,13 @@ namespace DPopCleaner.SimpleUpdate
         private const uint MEM_RESERVE = 0x2000;
         private const uint MEM_RELEASE = 0x8000;
         private const uint PAGE_READWRITE = 0x04;
-
         private delegate bool EnumChildProc(IntPtr hwnd, IntPtr lParam);
 
         internal static int RemoveIconsForProcess(int processId)
         {
             if (processId <= 0 || !Environment.Is64BitProcess) return 0;
             var removed = 0;
-            foreach (var toolbar in FindTrayToolbars())
-                removed += RemoveFromToolbar(toolbar, processId);
+            foreach (var toolbar in FindTrayToolbars()) removed += RemoveFromToolbar(toolbar, processId);
             return removed;
         }
 
@@ -208,8 +199,7 @@ namespace DPopCleaner.SimpleUpdate
             {
                 var name = new StringBuilder(128);
                 GetClassName(hwnd, name, name.Capacity);
-                if (string.Equals(name.ToString(), "ToolbarWindow32", StringComparison.Ordinal))
-                    result.Add(hwnd);
+                if (string.Equals(name.ToString(), "ToolbarWindow32", StringComparison.Ordinal)) result.Add(hwnd);
                 return true;
             };
             EnumChildWindows(root, callback, IntPtr.Zero);
@@ -221,18 +211,12 @@ namespace DPopCleaner.SimpleUpdate
             uint explorerPid;
             GetWindowThreadProcessId(toolbar, out explorerPid);
             if (explorerPid == 0) return 0;
-
-            var process = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION,
-                false, explorerPid);
+            var process = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION, false, explorerPid);
             if (process == IntPtr.Zero) return 0;
 
             var buttonSize = Marshal.SizeOf(typeof(TBBUTTON64));
             var remote = VirtualAllocEx(process, IntPtr.Zero, new UIntPtr((uint)buttonSize), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-            if (remote == IntPtr.Zero)
-            {
-                CloseHandle(process);
-                return 0;
-            }
+            if (remote == IntPtr.Zero) { CloseHandle(process); return 0; }
 
             var removed = 0;
             try
@@ -243,19 +227,12 @@ namespace DPopCleaner.SimpleUpdate
                     if (SendMessage(toolbar, TB_GETBUTTON, new IntPtr(i), remote) == IntPtr.Zero) continue;
                     TBBUTTON64 button;
                     if (!ReadRemote(process, remote, out button) || button.dwData == UIntPtr.Zero) continue;
-
                     TRAYDATA64 tray;
-                    if (!ReadRemote(process, new IntPtr(unchecked((long)button.dwData.ToUInt64())), out tray)) continue;
-                    if (tray.hwnd == IntPtr.Zero) continue;
-
+                    if (!ReadRemote(process, new IntPtr(unchecked((long)button.dwData.ToUInt64())), out tray) || tray.hwnd == IntPtr.Zero) continue;
                     uint trayOwner;
                     GetWindowThreadProcessId(tray.hwnd, out trayOwner);
                     if (trayOwner != (uint)ownerProcessId) continue;
-
-                    var data = new NOTIFYICONDATA();
-                    data.cbSize = (uint)Marshal.SizeOf(typeof(NOTIFYICONDATA));
-                    data.hWnd = tray.hwnd;
-                    data.uID = tray.uID;
+                    var data = new NOTIFYICONDATA { cbSize = (uint)Marshal.SizeOf(typeof(NOTIFYICONDATA)), hWnd = tray.hwnd, uID = tray.uID };
                     if (Shell_NotifyIcon(NIM_DELETE, ref data)) removed++;
                 }
             }
@@ -282,10 +259,7 @@ namespace DPopCleaner.SimpleUpdate
                 value = (T)Marshal.PtrToStructure(local, typeof(T));
                 return true;
             }
-            finally
-            {
-                Marshal.FreeHGlobal(local);
-            }
+            finally { Marshal.FreeHGlobal(local); }
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -295,7 +269,7 @@ namespace DPopCleaner.SimpleUpdate
             public int idCommand;
             public byte fsState;
             public byte fsStyle;
-            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 6)] public byte[] bReserved;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 6)] public byte[] reserved;
             public UIntPtr dwData;
             public IntPtr iString;
         }
@@ -305,7 +279,7 @@ namespace DPopCleaner.SimpleUpdate
         {
             public IntPtr hwnd;
             public uint uID;
-            public uint uCallbackMessage;
+            public uint callback;
             public uint reserved0;
             public uint reserved1;
             public IntPtr hIcon;
@@ -331,37 +305,16 @@ namespace DPopCleaner.SimpleUpdate
             public IntPtr hBalloonIcon;
         }
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern IntPtr FindWindow(string className, string windowName);
-
-        [DllImport("user32.dll")]
-        private static extern bool EnumChildWindows(IntPtr parent, EnumChildProc callback, IntPtr lParam);
-
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetClassName(IntPtr hwnd, StringBuilder className, int maxCount);
-
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, UIntPtr size, uint allocationType, uint protect);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool VirtualFreeEx(IntPtr process, IntPtr address, UIntPtr size, uint freeType);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool ReadProcessMemory(IntPtr process, IntPtr address, IntPtr buffer, UIntPtr size, out UIntPtr bytesRead);
-
-        [DllImport("kernel32.dll")]
-        private static extern bool CloseHandle(IntPtr handle);
-
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-        private static extern bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATA data);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string windowName);
+        [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumChildProc callback, IntPtr lParam);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder className, int maxCount);
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, UIntPtr size, uint allocationType, uint protect);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern bool VirtualFreeEx(IntPtr process, IntPtr address, UIntPtr size, uint freeType);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern bool ReadProcessMemory(IntPtr process, IntPtr address, IntPtr buffer, UIntPtr size, out UIntPtr bytesRead);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATA data);
     }
 }
