@@ -22,9 +22,10 @@ class DPop0417Rev13UacTrayContractTests(unittest.TestCase):
         self.assertIn('buildarguments', elevation)
         self.assertIn('runascurrentuser', installer)
 
-    def test_ram_badge_uses_one_stable_native_tray_identity_and_suppresses_legacy_core_icon(self):
+    def test_ram_badge_uses_one_stable_native_tray_identity_and_suppresses_legacy_and_ghost_icons(self):
         tray = (ROOT / 'v0417/src/SimpleUpdate/TrayRamBadgeHost.cs').read_text(encoding='utf-8').lower()
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
+        ghost = (ROOT / 'v0417/src/SimpleUpdate/BridgeTrayGhostSuppressor.cs').read_text(encoding='utf-8').lower()
         csproj = (ROOT / 'v0417/src/SimpleUpdate/SimpleUpdate.csproj').read_text(encoding='utf-8').lower()
 
         self.assertIn('notifyicondata', tray)
@@ -43,6 +44,12 @@ class DPop0417Rev13UacTrayContractTests(unittest.TestCase):
         self.assertIn('getwindowthreadprocessid', tray)
         self.assertIn('_trayramhost', launcher)
         self.assertIn('update(_core.id', launcher)
+        self.assertIn('bridgetrayghostsuppressor.cleanupcurrentprocess()', launcher)
+        self.assertIn('dpopcleaner.trayrambadgehost', ghost)
+        self.assertIn('keepiconid = 1', ghost)
+        self.assertIn('shell_notifyicon', ghost)
+        self.assertIn('nim_delete', ghost)
+        self.assertIn('tb_getbutton', ghost)
         self.assertIn('system.drawing', csproj)
 
     def test_rev13_has_installed_runtime_smoke_for_uac_and_single_ram_tray_icon(self):
@@ -52,6 +59,9 @@ class DPop0417Rev13UacTrayContractTests(unittest.TestCase):
         for token in ('code 740', 'requestedexecutionlevel', 'tray', 'ram', 'one tray icon', 'rev13_uac_tray_smoke_ok'):
             self.assertIn(token, smoke)
         self.assertIn('uniqueidentitiesforprocess', smoke)
+        self.assertIn('class=', smoke)
+        self.assertIn('title=', smoke)
+        self.assertIn('thread=', smoke)
         self.assertIn('dpop0417_rev13_uac_tray_smoke.ps1', install_smoke)
 
 
