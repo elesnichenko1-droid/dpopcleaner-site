@@ -17,6 +17,7 @@ on:
       - 'assets/dpopcleaner-current-settings.png'
       - 'index.html'
       - 'styles.css'
+      - 'site-shell.css'
       - 'script.js'
       - 'release-manifest.js'
       - 'version.json'
@@ -36,6 +37,7 @@ on:
       - 'assets/dpopcleaner-current-settings.png'
       - 'index.html'
       - 'styles.css'
+      - 'site-shell.css'
       - 'script.js'
       - 'release-manifest.js'
       - 'version.json'
@@ -231,7 +233,7 @@ jobs:
           set -euo pipefail
           rm -rf _site
           mkdir -p _site/assets _site/update
-          cp index.html styles.css script.js release-manifest.js version.json dpopcleaner-icon.png _site/
+          cp index.html styles.css site-shell.css script.js release-manifest.js version.json dpopcleaner-icon.png _site/
           cp assets/dpopcleaner-0.4.17-disk.png assets/dpopcleaner-0.4.17-restore.png assets/dpopcleaner-current-settings.png _site/assets/
           cp publish/update/stable.json _site/update/stable.json
       - name: Upload Pages artifact

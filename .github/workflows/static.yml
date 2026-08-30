@@ -26,6 +26,12 @@ jobs:
       - name: Materialize exact current settings screenshot
         shell: pwsh
         run: ./tools/dpop0417_materialize_current_screenshot.ps1
+      - name: Verify site shell stylesheet
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath 'site-shell.css' -PathType Leaf)) {
+            throw 'site-shell.css missing.'
+          }
       - name: Stage public website only
         shell: pwsh
         run: ./scripts/Stage-Site.ps1 -Root . -Destination _site
