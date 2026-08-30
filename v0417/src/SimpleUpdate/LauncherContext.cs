@@ -128,6 +128,7 @@ namespace DPopCleaner.SimpleUpdate
             if (_trayRamHost == null)
                 _trayRamHost = new TrayRamBadgeHost(_mainWindow);
             _trayRamHost.Update(_core.Id, _mainWindow, _trayEnabled);
+            if (_trayEnabled) BridgeTrayGhostSuppressor.CleanupCurrentProcess();
         }
 
         private void UpdateZapretEnhancements()
