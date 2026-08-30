@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,7 +28,7 @@ class DPop0417Rev13UacTrayContractTests(unittest.TestCase):
         csproj = (ROOT / 'v0417/src/SimpleUpdate/SimpleUpdate.csproj').read_text(encoding='utf-8').lower()
 
         self.assertIn('notifyicondata', tray)
-        self.assertNotIn('new notifyicon', tray)
+        self.assertIsNone(re.search(r'\bnew\s+notifyicon\s*(?:\{|\()', tray))
         self.assertIn('createhandle', tray)
         self.assertIn('nim_add', tray)
         self.assertIn('nim_modify', tray)
