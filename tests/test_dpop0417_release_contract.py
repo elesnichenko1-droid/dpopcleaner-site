@@ -79,7 +79,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('begindeferwindowpos', settings_host)
         self.assertIn('redrawsettingshost', settings_host)
         self.assertIn('_settingshostbounds', launcher)
-        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev12', launcher)
+        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev13', launcher)
 
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         for token in ('flowseal zapret 1.10.2', SCREENSHOT_PATH, 'dpopcleaner.core.exe', '5–95', 'починка трансляции', 'починка подключения', 'игровой фильтр 1.10.2', 'менеджер 1.10.2', 'автообновление приложения', 'rev.12', '1.9.9d', 'utils\\dpop_version.txt', 'родн', 'перерис'):
