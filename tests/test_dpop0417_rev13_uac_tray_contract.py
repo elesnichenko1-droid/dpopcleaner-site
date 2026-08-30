@@ -21,19 +21,23 @@ class DPop0417Rev13UacTrayContractTests(unittest.TestCase):
         self.assertIn('buildarguments', elevation)
         self.assertIn('runascurrentuser', installer)
 
-    def test_ram_badge_updates_one_bridge_tray_icon_and_suppresses_legacy_core_icon(self):
+    def test_ram_badge_uses_one_stable_native_tray_identity_and_suppresses_legacy_core_icon(self):
         tray = (ROOT / 'v0417/src/SimpleUpdate/TrayRamBadgeHost.cs').read_text(encoding='utf-8').lower()
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
         csproj = (ROOT / 'v0417/src/SimpleUpdate/SimpleUpdate.csproj').read_text(encoding='utf-8').lower()
 
-        self.assertIn('notifyicon', tray)
+        self.assertIn('notifyicondata', tray)
+        self.assertNotIn('new notifyicon', tray)
+        self.assertIn('createhandle', tray)
+        self.assertIn('nim_add', tray)
+        self.assertIn('nim_modify', tray)
+        self.assertIn('nim_delete', tray)
+        self.assertIn('shell_notifyicon', tray)
         self.assertIn('globalmemorystatusex', tray)
         self.assertIn('dwmemoryload', tray)
         self.assertIn('drawstring', tray)
         self.assertIn('1000', tray)
         self.assertIn('legacytrayiconsuppressor', tray)
-        self.assertIn('shell_notifyicon', tray)
-        self.assertIn('nim_delete', tray)
         self.assertIn('tb_getbutton', tray)
         self.assertIn('getwindowthreadprocessid', tray)
         self.assertIn('_trayramhost', launcher)
@@ -46,6 +50,7 @@ class DPop0417Rev13UacTrayContractTests(unittest.TestCase):
 
         for token in ('code 740', 'requestedexecutionlevel', 'tray', 'ram', 'one tray icon', 'rev13_uac_tray_smoke_ok'):
             self.assertIn(token, smoke)
+        self.assertIn('uniqueidentitiesforprocess', smoke)
         self.assertIn('dpop0417_rev13_uac_tray_smoke.ps1', install_smoke)
 
 
