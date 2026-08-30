@@ -2,6 +2,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+SUPPORT_EMAIL = 'elesnichenko1@gmail.com'
 
 
 class SiteSkeletonContractTests(unittest.TestCase):
@@ -26,6 +27,22 @@ class SiteSkeletonContractTests(unittest.TestCase):
         ):
             self.assertIn(token, index)
 
+    def test_hero_describes_product_usefulness_not_release_changes(self):
+        index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
+        hero_start = index.index('<section class="hero')
+        hero_end = index.index('</section>', hero_start)
+        hero = index[hero_start:hero_end]
+        for token in (
+            'очистка системы',
+            'оперативной памяти',
+            'zapret center',
+            'анализатор диска',
+            'центр восстановления',
+        ):
+            self.assertIn(token, hero)
+        for forbidden in ('1.9.9d', 'frozen-core', 'wm_settext', 'исправляет оставшуюся строку'):
+            self.assertNotIn(forbidden, hero)
+
     def test_download_block_keeps_live_release_contract(self):
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
@@ -34,7 +51,7 @@ class SiteSkeletonContractTests(unittest.TestCase):
         for token in ('loadmanifest', 'applymanifest', 'download_url', 'sha256'):
             self.assertIn(token, script)
 
-    def test_support_and_license_are_ready_for_configuration_without_hardcoded_private_data(self):
+    def test_support_and_basic_license_purchase_use_confirmed_support_email(self):
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         script = (ROOT / 'script.js').read_text(encoding='utf-8').lower()
         for token in (
@@ -44,19 +61,14 @@ class SiteSkeletonContractTests(unittest.TestCase):
             'id="supportmessage"',
             'class="button button-primary js-license-buy',
             'js-support-email',
+            SUPPORT_EMAIL,
+            'покупка лицензии dpopcleaner',
         ):
-            self.assertIn(token, index)
-        for token in (
-            'supportemail',
-            'licensepurchaseurl',
-            'mailto:',
-            'supportform',
-            'js-license-buy',
-        ):
-            self.assertIn(token, script)
-        self.assertNotIn('@gmail.com', index)
-        self.assertNotIn('@yandex.', index)
-        self.assertNotIn('@mail.ru', index)
+            self.assertIn(token, index + script)
+        self.assertIn(f"supportemail: '{SUPPORT_EMAIL}'", script)
+        self.assertIn('buildlicensemailto', script)
+        self.assertIn('mailto:', script)
+        self.assertIn('licensepurchaseurl', script)
 
     def test_mobile_navigation_and_accessibility_hooks_are_preserved(self):
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
