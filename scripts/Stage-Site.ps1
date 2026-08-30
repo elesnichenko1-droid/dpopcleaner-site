@@ -27,6 +27,7 @@ $requiredFiles = @(
     'release-manifest.js',
     'script.js',
     'styles.css',
+    'site-shell.css',
     'version.json',
     'update/beta.json',
     'assets/dpopcleaner-current-settings.png',
