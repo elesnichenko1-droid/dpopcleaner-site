@@ -105,6 +105,7 @@ public static class Rev13TrayProbe
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr FindWindow(string cls, string title);
     [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumChildProc cb, IntPtr p);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder text, int max);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wp, IntPtr lp);
     [DllImport("kernel32.dll", SetLastError=true)] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
@@ -141,6 +142,10 @@ public static class Rev13TrayProbe
         EnumChildProc cb = delegate(IntPtr h, IntPtr _) { var s=new StringBuilder(128); GetClassName(h,s,s.Capacity); if (s.ToString()=="ToolbarWindow32" && !result.Contains(h)) result.Add(h); return true; };
         EnumChildWindows(root, cb, IntPtr.Zero); GC.KeepAlive(cb);
     }
+    private static string Clean(string value)
+    {
+        return (value ?? String.Empty).Replace(";", ",").Replace("\r", " ").Replace("\n", " ");
+    }
     private static void CollectToolbar(IntPtr toolbar, int ownerPid, List<string> result)
     {
         uint shellPid; GetWindowThreadProcessId(toolbar, out shellPid); if (shellPid==0) return;
@@ -154,9 +159,11 @@ public static class Rev13TrayProbe
                 if(SendMessage(toolbar,TB_GETBUTTON,new IntPtr(i),remote)==IntPtr.Zero)continue;
                 TBBUTTON64 b; if(!Read(p,remote,out b)||b.dwData==UIntPtr.Zero)continue;
                 TRAYDATA64 d; if(!Read(p,new IntPtr(unchecked((long)b.dwData.ToUInt64())),out d)||d.hwnd==IntPtr.Zero)continue;
-                uint pid; GetWindowThreadProcessId(d.hwnd,out pid); if(pid!=(uint)ownerPid)continue;
+                uint pid; uint threadId=GetWindowThreadProcessId(d.hwnd,out pid); if(pid!=(uint)ownerPid)continue;
+                var cls=new StringBuilder(256); GetClassName(d.hwnd,cls,cls.Capacity);
+                var title=new StringBuilder(512); GetWindowText(d.hwnd,title,title.Capacity);
                 string identity = "0x" + d.hwnd.ToInt64().ToString("X") + ":" + d.uID.ToString();
-                result.Add("toolbar=0x" + toolbar.ToInt64().ToString("X") + ";icon=" + identity);
+                result.Add("toolbar=0x" + toolbar.ToInt64().ToString("X") + ";class=" + Clean(cls.ToString()) + ";title=" + Clean(title.ToString()) + ";thread=" + threadId.ToString() + ";icon=" + identity);
             }
         }
         finally { VirtualFreeEx(p,remote,UIntPtr.Zero,MEM_RELEASE); CloseHandle(p); }
@@ -192,9 +199,9 @@ try {
     if ($trayCheck -eq [IntPtr]::Zero) { throw 'Frozen tray setting checkbox was not found.' }
     if (-not [Rev13Native]::IsChecked($trayCheck)) { [void][Rev13Native]::SendMessage($trayCheck, [Rev13Native]::BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero); Start-Sleep -Milliseconds 400 }
 
-    # Closing with the existing tray setting must keep the core alive. One NotifyIcon identity can
-    # be mirrored by Explorer in both the main and overflow ToolbarWindow32 collections, so the
-    # contract counts unique (owner HWND,uID) identities rather than raw toolbar rows.
+    # Closing with the existing tray setting must keep the core alive. One tray identity can
+    # be mirrored by Explorer collections, so the contract counts unique (owner HWND,uID)
+    # identities rather than raw toolbar rows.
     [void][Rev13Native]::PostMessage($core.MainWindowHandle, [Rev13Native]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
     Start-Sleep -Milliseconds 600
     $core.Refresh(); if ($core.HasExited) { throw 'Frozen core exited instead of entering tray mode.' }
