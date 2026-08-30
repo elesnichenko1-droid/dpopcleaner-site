@@ -67,6 +67,16 @@ class SiteSkeletonContractTests(unittest.TestCase):
         self.assertIn('@media(max-width:900px)', styles)
         self.assertIn("nav.classlist.toggle('open')", script)
 
+    def test_site_shell_styles_are_in_every_public_staging_path(self):
+        index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
+        stage = (ROOT / 'scripts/Stage-Site.ps1').read_text(encoding='utf-8').lower()
+        publisher = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
+        static = (ROOT / '.github/workflows/static.yml').read_text(encoding='utf-8').lower()
+        self.assertIn('site-shell.css', index)
+        self.assertIn('site-shell.css', stage)
+        self.assertIn('site-shell.css', publisher)
+        self.assertIn('site-shell.css', static)
+
 
 if __name__ == '__main__':
     unittest.main()
