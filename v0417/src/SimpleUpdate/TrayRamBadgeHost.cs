@@ -11,13 +11,27 @@ namespace DPopCleaner.SimpleUpdate
 {
     internal sealed class TrayRamBadgeHost : IDisposable
     {
-        private readonly NotifyIcon _notifyIcon;
+        private const uint NIM_ADD = 0x00000000;
+        private const uint NIM_MODIFY = 0x00000001;
+        private const uint NIM_DELETE = 0x00000002;
+        private const uint NIF_MESSAGE = 0x00000001;
+        private const uint NIF_ICON = 0x00000002;
+        private const uint NIF_TIP = 0x00000004;
+        private const uint TrayIconId = 1;
+        private const int TrayCallbackMessage = 0x8051;
+        private const int WM_LBUTTONDBLCLK = 0x0203;
+        private const int WM_RBUTTONUP = 0x0205;
+        private const int WM_CONTEXTMENU = 0x007B;
+
+        private readonly TrayMessageWindow _messageWindow;
         private readonly ContextMenuStrip _menu;
         private Icon _currentIcon;
         private IntPtr _mainWindow;
         private int _lastPercent = -1;
         private DateTime _nextBadgeUtc = DateTime.MinValue;
         private DateTime _nextSuppressUtc = DateTime.MinValue;
+        private bool _added;
+        private bool _enabled;
         private bool _disposed;
 
         internal TrayRamBadgeHost(IntPtr mainWindow)
@@ -28,23 +42,21 @@ namespace DPopCleaner.SimpleUpdate
             openItem.Click += delegate { RestoreMainWindow(); };
             _menu.Items.Add(openItem);
 
-            _notifyIcon = new NotifyIcon
-            {
-                Text = "DPopCleaner",
-                Visible = false,
-                ContextMenuStrip = _menu
-            };
-            _notifyIcon.DoubleClick += delegate { RestoreMainWindow(); };
+            // Keep one native HWND for the entire launcher lifetime. System.Windows.Forms.NotifyIcon
+            // owns an internal window that can be recreated; Explorer can then retain the old
+            // (HWND,uID) identity and show a duplicate icon. This window never changes its handle.
+            _messageWindow = new TrayMessageWindow(OnTrayMessage, OnTaskbarCreated);
         }
 
         internal void Update(int coreProcessId, IntPtr mainWindow, bool enabled)
         {
             if (_disposed) return;
             if (mainWindow != IntPtr.Zero) _mainWindow = mainWindow;
+            _enabled = enabled;
 
             if (!enabled)
             {
-                _notifyIcon.Visible = false;
+                RemoveTrayIcon();
                 return;
             }
 
@@ -63,11 +75,67 @@ namespace DPopCleaner.SimpleUpdate
                     ReplaceIcon(RenderRamBadge(percent));
                     _lastPercent = percent;
                 }
-                _notifyIcon.Text = "DPopCleaner — ОЗУ " + percent + "%";
+                PublishTrayIcon();
                 _nextBadgeUtc = now.AddMilliseconds(1000);
             }
+            else if (!_added)
+            {
+                PublishTrayIcon();
+            }
+        }
 
-            if (!_notifyIcon.Visible) _notifyIcon.Visible = true;
+        private void OnTrayMessage(int message)
+        {
+            if (_disposed) return;
+            if (message == WM_LBUTTONDBLCLK)
+            {
+                RestoreMainWindow();
+                return;
+            }
+            if (message == WM_RBUTTONUP || message == WM_CONTEXTMENU)
+            {
+                try { _menu.Show(Cursor.Position); } catch { }
+            }
+        }
+
+        private void OnTaskbarCreated()
+        {
+            if (_disposed || !_enabled) return;
+            // Explorer restart discards all notification icons. The stable HWND/uID is reused.
+            _added = false;
+            PublishTrayIcon();
+        }
+
+        private void PublishTrayIcon()
+        {
+            if (_disposed || !_enabled || _currentIcon == null || _messageWindow.Handle == IntPtr.Zero) return;
+            var data = CreateNotifyIconData(NIF_MESSAGE | NIF_ICON | NIF_TIP);
+            var operation = _added ? NIM_MODIFY : NIM_ADD;
+            if (Shell_NotifyIcon(operation, ref data)) _added = true;
+        }
+
+        private void RemoveTrayIcon()
+        {
+            if (!_added || _messageWindow.Handle == IntPtr.Zero) return;
+            var data = CreateNotifyIconData(0);
+            Shell_NotifyIcon(NIM_DELETE, ref data);
+            _added = false;
+        }
+
+        private NOTIFYICONDATA CreateNotifyIconData(uint flags)
+        {
+            return new NOTIFYICONDATA
+            {
+                cbSize = (uint)Marshal.SizeOf(typeof(NOTIFYICONDATA)),
+                hWnd = _messageWindow.Handle,
+                uID = TrayIconId,
+                uFlags = flags,
+                uCallbackMessage = TrayCallbackMessage,
+                hIcon = _currentIcon == null ? IntPtr.Zero : _currentIcon.Handle,
+                szTip = _lastPercent < 0 ? "DPopCleaner" : "DPopCleaner — ОЗУ " + _lastPercent + "%",
+                szInfo = string.Empty,
+                szInfoTitle = string.Empty
+            };
         }
 
         private void RestoreMainWindow()
@@ -127,18 +195,53 @@ namespace DPopCleaner.SimpleUpdate
         {
             var previous = _currentIcon;
             _currentIcon = icon;
-            _notifyIcon.Icon = _currentIcon;
             if (previous != null) previous.Dispose();
         }
 
         public void Dispose()
         {
             if (_disposed) return;
+            RemoveTrayIcon();
             _disposed = true;
-            _notifyIcon.Visible = false;
-            _notifyIcon.Dispose();
+            _messageWindow.Dispose();
             _menu.Dispose();
             if (_currentIcon != null) _currentIcon.Dispose();
+        }
+
+        private sealed class TrayMessageWindow : NativeWindow, IDisposable
+        {
+            private readonly Action<int> _trayMessage;
+            private readonly Action _taskbarCreatedAction;
+            private readonly uint _taskbarCreatedMessage;
+            private bool _disposed;
+
+            internal TrayMessageWindow(Action<int> trayMessage, Action taskbarCreatedAction)
+            {
+                _trayMessage = trayMessage;
+                _taskbarCreatedAction = taskbarCreatedAction;
+                _taskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
+                CreateHandle(new CreateParams { Caption = "DPopCleaner.TrayRamBadgeHost" });
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                if ((uint)m.Msg == _taskbarCreatedMessage)
+                {
+                    if (_taskbarCreatedAction != null) _taskbarCreatedAction();
+                }
+                else if (m.Msg == TrayCallbackMessage)
+                {
+                    if (_trayMessage != null) _trayMessage(m.LParam.ToInt32());
+                }
+                base.WndProc(ref m);
+            }
+
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                if (Handle != IntPtr.Zero) DestroyHandle();
+            }
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -155,10 +258,32 @@ namespace DPopCleaner.SimpleUpdate
             public ulong ullAvailExtendedVirtual;
         }
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct NOTIFYICONDATA
+        {
+            public uint cbSize;
+            public IntPtr hWnd;
+            public uint uID;
+            public uint uFlags;
+            public int uCallbackMessage;
+            public IntPtr hIcon;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
+            public uint dwState;
+            public uint dwStateMask;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
+            public uint uTimeoutOrVersion;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
+            public uint dwInfoFlags;
+            public Guid guidItem;
+            public IntPtr hBalloonIcon;
+        }
+
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
         [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr hIcon);
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int command);
         [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterWindowMessage(string message);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATA data);
     }
 
     internal static class LegacyTrayIconSuppressor
