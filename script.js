@@ -3,7 +3,7 @@ let toastTimer;
 let currentHash = '';
 
 const siteConfig = {
-  supportEmail: String(globalThis.DPopSiteConfig?.supportEmail || '').trim(),
+  supportEmail: 'elesnichenko1@gmail.com',
   licensePurchaseUrl: String(globalThis.DPopSiteConfig?.licensePurchaseUrl || '').trim()
 };
 
@@ -125,10 +125,26 @@ function isValidHttpUrl(value){
   }
 }
 
+function isValidSupportEmail(value){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value || '');
+}
+
+function buildLicenseMailto(){
+  const subject = 'Покупка лицензии DPopCleaner';
+  const body = [
+    'Здравствуйте!',
+    '',
+    'Хочу приобрести лицензию DPopCleaner.',
+    'Пожалуйста, пришлите информацию о стоимости, способе оплаты и получении ключа.',
+    '',
+    `Версия на сайте: ${document.querySelector('.js-version')?.textContent?.trim() || 'не определена'}`
+  ].join('\r\n');
+  return `mailto:${siteConfig.supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 function applyContactConfig(){
-  const supportLabels = document.querySelectorAll('.js-support-email');
-  supportLabels.forEach(el => {
-    el.textContent = siteConfig.supportEmail || 'будет подключена';
+  document.querySelectorAll('.js-support-email').forEach(el => {
+    el.textContent = siteConfig.supportEmail;
   });
 
   document.querySelectorAll('.js-license-buy').forEach(link => {
@@ -139,12 +155,23 @@ function applyContactConfig(){
       link.classList.remove('is-disabled');
       link.removeAttribute('aria-disabled');
       link.removeAttribute('data-disabled');
-    }else{
-      link.href = '#license';
-      link.classList.add('is-disabled');
-      link.setAttribute('aria-disabled','true');
-      link.setAttribute('data-disabled','true');
+      return;
     }
+
+    if(isValidSupportEmail(siteConfig.supportEmail)){
+      link.href = buildLicenseMailto();
+      link.removeAttribute('target');
+      link.removeAttribute('rel');
+      link.classList.remove('is-disabled');
+      link.removeAttribute('aria-disabled');
+      link.removeAttribute('data-disabled');
+      return;
+    }
+
+    link.href = '#license';
+    link.classList.add('is-disabled');
+    link.setAttribute('aria-disabled','true');
+    link.setAttribute('data-disabled','true');
   });
 }
 
@@ -169,8 +196,8 @@ function setupSupportForm(){
   form.addEventListener('submit', event => {
     event.preventDefault();
     if(!form.reportValidity()) return;
-    if(!siteConfig.supportEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(siteConfig.supportEmail)){
-      showToast('Почта поддержки ещё не подключена');
+    if(!isValidSupportEmail(siteConfig.supportEmail)){
+      showToast('Почта поддержки недоступна');
       return;
     }
     const name = document.getElementById('supportName')?.value.trim() || '';
@@ -190,7 +217,7 @@ document.querySelectorAll('.js-download').forEach(el => el.addEventListener('cli
 document.querySelectorAll('.js-license-buy').forEach(el => el.addEventListener('click', e => {
   if(el.dataset.disabled === 'true'){
     e.preventDefault();
-    showToast('Ссылка покупки лицензии ещё не подключена');
+    showToast('Покупка лицензии временно недоступна');
   }
 }));
 
