@@ -113,11 +113,22 @@ public static class Rev13TrayProbe
     [DllImport("kernel32.dll", SetLastError=true)] private static extern bool ReadProcessMemory(IntPtr p, IntPtr a, IntPtr b, UIntPtr s, out UIntPtr read);
     [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
 
-    public static int CountForProcess(int ownerPid)
+    public static string[] RawEntriesForProcess(int ownerPid)
     {
-        int result = 0;
-        foreach (var toolbar in Toolbars()) result += CountToolbar(toolbar, ownerPid);
-        return result;
+        var result = new List<string>();
+        foreach (var toolbar in Toolbars()) CollectToolbar(toolbar, ownerPid, result);
+        return result.ToArray();
+    }
+
+    public static string[] UniqueIdentitiesForProcess(int ownerPid)
+    {
+        var unique = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in RawEntriesForProcess(ownerPid))
+        {
+            var split = raw.IndexOf(";icon=", StringComparison.Ordinal);
+            unique.Add(split >= 0 ? raw.Substring(split + 6) : raw);
+        }
+        var result = new string[unique.Count]; unique.CopyTo(result); return result;
     }
 
     private static List<IntPtr> Toolbars()
@@ -130,15 +141,25 @@ public static class Rev13TrayProbe
         EnumChildProc cb = delegate(IntPtr h, IntPtr _) { var s=new StringBuilder(128); GetClassName(h,s,s.Capacity); if (s.ToString()=="ToolbarWindow32" && !result.Contains(h)) result.Add(h); return true; };
         EnumChildWindows(root, cb, IntPtr.Zero); GC.KeepAlive(cb);
     }
-    private static int CountToolbar(IntPtr toolbar, int ownerPid)
+    private static void CollectToolbar(IntPtr toolbar, int ownerPid, List<string> result)
     {
-        uint shellPid; GetWindowThreadProcessId(toolbar, out shellPid); if (shellPid==0) return 0;
-        IntPtr p=OpenProcess(PROCESS_VM_OPERATION|PROCESS_VM_READ|PROCESS_VM_WRITE|PROCESS_QUERY_INFORMATION,false,shellPid); if(p==IntPtr.Zero)return 0;
-        int size=Marshal.SizeOf(typeof(TBBUTTON64)); IntPtr remote=VirtualAllocEx(p,IntPtr.Zero,new UIntPtr((uint)size),MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE); if(remote==IntPtr.Zero){CloseHandle(p);return 0;}
-        int result=0;
-        try { int count=SendMessage(toolbar,TB_BUTTONCOUNT,IntPtr.Zero,IntPtr.Zero).ToInt32(); for(int i=0;i<count;i++){ if(SendMessage(toolbar,TB_GETBUTTON,new IntPtr(i),remote)==IntPtr.Zero)continue; TBBUTTON64 b; if(!Read(p,remote,out b)||b.dwData==UIntPtr.Zero)continue; TRAYDATA64 d; if(!Read(p,new IntPtr(unchecked((long)b.dwData.ToUInt64())),out d)||d.hwnd==IntPtr.Zero)continue; uint pid; GetWindowThreadProcessId(d.hwnd,out pid); if(pid==(uint)ownerPid)result++; } }
+        uint shellPid; GetWindowThreadProcessId(toolbar, out shellPid); if (shellPid==0) return;
+        IntPtr p=OpenProcess(PROCESS_VM_OPERATION|PROCESS_VM_READ|PROCESS_VM_WRITE|PROCESS_QUERY_INFORMATION,false,shellPid); if(p==IntPtr.Zero)return;
+        int size=Marshal.SizeOf(typeof(TBBUTTON64)); IntPtr remote=VirtualAllocEx(p,IntPtr.Zero,new UIntPtr((uint)size),MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE); if(remote==IntPtr.Zero){CloseHandle(p);return;}
+        try
+        {
+            int count=SendMessage(toolbar,TB_BUTTONCOUNT,IntPtr.Zero,IntPtr.Zero).ToInt32();
+            for(int i=0;i<count;i++)
+            {
+                if(SendMessage(toolbar,TB_GETBUTTON,new IntPtr(i),remote)==IntPtr.Zero)continue;
+                TBBUTTON64 b; if(!Read(p,remote,out b)||b.dwData==UIntPtr.Zero)continue;
+                TRAYDATA64 d; if(!Read(p,new IntPtr(unchecked((long)b.dwData.ToUInt64())),out d)||d.hwnd==IntPtr.Zero)continue;
+                uint pid; GetWindowThreadProcessId(d.hwnd,out pid); if(pid!=(uint)ownerPid)continue;
+                string identity = "0x" + d.hwnd.ToInt64().ToString("X") + ":" + d.uID.ToString();
+                result.Add("toolbar=0x" + toolbar.ToInt64().ToString("X") + ";icon=" + identity);
+            }
+        }
         finally { VirtualFreeEx(p,remote,UIntPtr.Zero,MEM_RELEASE); CloseHandle(p); }
-        return result;
     }
     private static bool Read<T>(IntPtr p, IntPtr remote, out T value) where T:struct
     {
@@ -171,22 +192,30 @@ try {
     if ($trayCheck -eq [IntPtr]::Zero) { throw 'Frozen tray setting checkbox was not found.' }
     if (-not [Rev13Native]::IsChecked($trayCheck)) { [void][Rev13Native]::SendMessage($trayCheck, [Rev13Native]::BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero); Start-Sleep -Milliseconds 400 }
 
-    # Closing with the existing tray setting must keep the core alive; rev.13 then removes
-    # the legacy core tray icon and leaves exactly one bridge-owned RAM tray icon.
+    # Closing with the existing tray setting must keep the core alive. One NotifyIcon identity can
+    # be mirrored by Explorer in both the main and overflow ToolbarWindow32 collections, so the
+    # contract counts unique (owner HWND,uID) identities rather than raw toolbar rows.
     [void][Rev13Native]::PostMessage($core.MainWindowHandle, [Rev13Native]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
     Start-Sleep -Milliseconds 600
     $core.Refresh(); if ($core.HasExited) { throw 'Frozen core exited instead of entering tray mode.' }
 
     $trayDeadline = [DateTime]::UtcNow.AddSeconds(8)
-    $launcherTray = 0; $coreTray = 0
+    $launcherRaw = @(); $coreRaw = @(); $launcherUnique = @(); $coreUnique = @()
     do {
         Start-Sleep -Milliseconds 250
-        $launcherTray = [Rev13TrayProbe]::CountForProcess($launcher.Id)
-        $coreTray = [Rev13TrayProbe]::CountForProcess($core.Id)
-    } while (($launcherTray -ne 1 -or $coreTray -ne 0) -and [DateTime]::UtcNow -lt $trayDeadline)
+        $launcherRaw = @([Rev13TrayProbe]::RawEntriesForProcess($launcher.Id))
+        $coreRaw = @([Rev13TrayProbe]::RawEntriesForProcess($core.Id))
+        $launcherUnique = @([Rev13TrayProbe]::UniqueIdentitiesForProcess($launcher.Id))
+        $coreUnique = @([Rev13TrayProbe]::UniqueIdentitiesForProcess($core.Id))
+    } while (($launcherUnique.Count -ne 1 -or $coreUnique.Count -ne 0) -and [DateTime]::UtcNow -lt $trayDeadline)
 
-    if ($launcherTray -ne 1 -or $coreTray -ne 0) {
-        throw "Expected one tray icon (bridge RAM badge) and zero legacy core icons; bridge=$launcherTray core=$coreTray"
+    Write-Host "REV13_TRAY_DIAGNOSTIC bridge_raw=$($launcherRaw.Count) bridge_unique=$($launcherUnique.Count) core_raw=$($coreRaw.Count) core_unique=$($coreUnique.Count)"
+    Write-Host ("REV13_TRAY_BRIDGE_ROWS " + ($launcherRaw -join ' | '))
+    Write-Host ("REV13_TRAY_BRIDGE_IDENTITIES " + ($launcherUnique -join ' | '))
+    Write-Host ("REV13_TRAY_CORE_ROWS " + ($coreRaw -join ' | '))
+
+    if ($launcherUnique.Count -ne 1 -or $coreUnique.Count -ne 0) {
+        throw "Expected one tray icon identity (bridge RAM badge) and zero legacy core identities; bridge_unique=$($launcherUnique.Count) core_unique=$($coreUnique.Count)"
     }
 
     [pscustomobject]@{
@@ -195,11 +224,14 @@ try {
         requestedExecutionLevel = 'asInvoker'
         elevated = $true
         createProcessAsUser_code_740 = 'not_reproduced'
-        bridge_ram_tray_icons = $launcherTray
-        legacy_core_tray_icons = $coreTray
+        bridge_ram_tray_raw_rows = $launcherRaw.Count
+        bridge_ram_tray_icons = $launcherUnique.Count
+        bridge_ram_tray_identities = @($launcherUnique)
+        legacy_core_tray_raw_rows = $coreRaw.Count
+        legacy_core_tray_icons = $coreUnique.Count
         one_tray_icon = $true
         ram_badge = $true
-    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDir 'rev13-uac-tray-smoke-report.json') -Encoding utf8
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'rev13-uac-tray-smoke-report.json') -Encoding utf8
 
     Write-Host 'REV13_UAC_TRAY_SMOKE_OK'
     Write-Host 'CreateProcessAsUser code 740 regression: PASS'
