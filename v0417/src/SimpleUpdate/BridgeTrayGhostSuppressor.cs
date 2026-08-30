@@ -22,7 +22,7 @@ namespace DPopCleaner.SimpleUpdate
         private const uint MEM_RELEASE = 0x8000;
         private const uint PAGE_READWRITE = 0x04;
         private delegate bool EnumWindowProc(IntPtr hwnd, IntPtr lParam);
-        private DateTime _nextCleanupUtc = DateTime.MinValue;
+        private static DateTime _nextCleanupUtc = DateTime.MinValue;
 
         internal static void CleanupCurrentProcess()
         {
