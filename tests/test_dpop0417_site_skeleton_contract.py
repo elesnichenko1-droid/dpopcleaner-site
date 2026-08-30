@@ -63,6 +63,8 @@ class SiteSkeletonContractTests(unittest.TestCase):
             'js-support-email',
             SUPPORT_EMAIL,
             'покупка лицензии dpopcleaner',
+            'платёжный модуль пока не подключён',
+            'базовый режим покупки',
         ):
             self.assertIn(token, index + script)
         self.assertIn(f"supportemail: '{SUPPORT_EMAIL}'", script)
