@@ -33,6 +33,7 @@ class SiteSkeletonContractTests(unittest.TestCase):
         hero_end = index.index('</section>', hero_start)
         hero = index[hero_start:hero_end]
         for token in (
+            'чистее система',
             'очистка системы',
             'оперативной памяти',
             'zapret center',
