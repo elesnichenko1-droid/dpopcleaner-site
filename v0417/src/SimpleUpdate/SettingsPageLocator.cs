@@ -6,7 +6,7 @@ namespace DPopCleaner.SimpleUpdate
     {
         // These two controls live in the frozen Settings right column, outside the bridge-owned
         // left scroll host. HideLegacyOverflowControls never hides them, so they cannot create
-        // the self-hiding feedback loop that occurred when AdminCheckboxId was used as a marker.
+        // the self-hiding feedback loop caused by using a left-side checkbox as the page marker.
         private const int SaveSettingsButtonId = NativeBridge.SaveSettingsButtonId;
         private const int AddFileButtonId = 1402;
 
