@@ -22,10 +22,17 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void SettingsPageDetection_MustNotDependOnRussianHeadingText()
+        public void SettingsPageDetection_MustUseRightSideControlsThatBridgeNeverHides()
         {
             var launcher = ReadSource("LauncherContext.cs");
-            StringAssert.Contains(launcher, "NativeBridge.IsSettingsPageVisible(_mainWindow)");
+            var locator = ReadSource("SettingsPageLocator.cs");
+
+            StringAssert.Contains(launcher, "SettingsPageLocator.IsVisible(_mainWindow)");
+            StringAssert.Contains(locator, "SaveSettingsButtonId");
+            StringAssert.Contains(locator, "AddFileButtonId");
+            Assert.IsFalse(
+                locator.Contains("AdminCheckboxId"),
+                "The admin checkbox is hidden by the left Settings overlay and must never be used to decide whether Settings is still visible.");
             Assert.IsFalse(
                 launcher.Contains("FindChildByText(_mainWindow, \"Настройки\""),
                 "Changing the frozen core language changes 'Настройки' to 'Settings'; locale text must not decide whether the bridge stays visible.");
