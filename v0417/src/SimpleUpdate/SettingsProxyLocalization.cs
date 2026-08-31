@@ -51,30 +51,37 @@ namespace DPopCleaner.SimpleUpdate
             var settings = english ? EnglishSettingTexts : RussianSettingTexts;
 
             for (var i = 0; i < settings.Length; i++)
-                WriteIfDifferent(NativeBridge.FindChildById(parent, FirstSettingProxyId + i), settings[i]);
+                WriteIfDifferent(parent, FirstSettingProxyId + i, settings[i]);
 
             WriteIfDifferent(
-                NativeBridge.FindChildById(parent, NativeBridge.AutoUpdateCheckboxId),
+                parent,
+                NativeBridge.AutoUpdateCheckboxId,
                 english ? "Enable application auto-updates" : "Включить автообновление приложения");
             WriteIfDifferent(
-                NativeBridge.FindChildById(parent, NativeBridge.CheckNowButtonId),
+                parent,
+                NativeBridge.CheckNowButtonId,
                 english ? "Check for updates" : "Проверить обновления");
             WriteIfDifferent(
-                NativeBridge.FindChildById(parent, NativeBridge.LicenseHeadingProxyId),
+                parent,
+                NativeBridge.LicenseHeadingProxyId,
                 english ? "License" : "Лицензия");
             WriteIfDifferent(
-                NativeBridge.FindChildById(parent, LicenseInfoProxyId),
+                parent,
+                LicenseInfoProxyId,
                 english
                     ? "Free BETA. License server will be connected later."
                     : "Бесплатная BETA. Лицензионный сервер будет подключён позже.");
             WriteIfDifferent(
-                NativeBridge.FindChildById(parent, NativeBridge.LicenseSaveProxyId),
+                parent,
+                NativeBridge.LicenseSaveProxyId,
                 english ? "Save key" : "Сохранить ключ");
             WriteIfDifferent(
-                NativeBridge.FindChildById(parent, NativeBridge.LicenseBuyProxyId),
+                parent,
+                NativeBridge.LicenseBuyProxyId,
                 english ? "Buy license" : "Купить лицензию");
             WriteIfDifferent(
-                NativeBridge.FindChildById(parent, LicenseNoteProxyId),
+                parent,
+                LicenseNoteProxyId,
                 english
                     ? "Purchasing and online key validation will be connected later."
                     : "Покупка и проверка ключей будут подключены позже.");
@@ -105,11 +112,35 @@ namespace DPopCleaner.SimpleUpdate
             return value.ToString();
         }
 
-        private static void WriteIfDifferent(IntPtr handle, string text)
+        private static void WriteIfDifferent(IntPtr parent, int id, string text)
         {
-            if (handle == IntPtr.Zero) return;
-            if (string.Equals(NativeBridge.ReadWindowText(handle), text, StringComparison.Ordinal)) return;
-            NativeBridge.WriteWindowText(handle, text);
+            var handle = NativeBridge.FindChildById(parent, id);
+            if (handle == IntPtr.Zero)
+            {
+                TraceWrite(id, handle, "<missing>", text, "<missing>");
+                return;
+            }
+
+            var before = NativeBridge.ReadWindowText(handle);
+            if (!string.Equals(before, text, StringComparison.Ordinal))
+                NativeBridge.WriteWindowText(handle, text);
+            var after = NativeBridge.ReadWindowText(handle);
+            TraceWrite(id, handle, before, text, after);
+        }
+
+        private static void TraceWrite(int id, IntPtr handle, string before, string desired, string after)
+        {
+            if (id != FirstSettingProxyId + 5 &&
+                id != NativeBridge.AutoUpdateCheckboxId &&
+                id != NativeBridge.LicenseHeadingProxyId)
+                return;
+
+            BridgeDiagnostics.RecordState(
+                "settings-write id=" + id +
+                " hwnd=0x" + handle.ToInt64().ToString("X") +
+                " before='" + before +
+                "' desired='" + desired +
+                "' after='" + after + "'");
         }
     }
 }
