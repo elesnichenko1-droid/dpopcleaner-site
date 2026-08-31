@@ -181,6 +181,54 @@ namespace DPopCleaner.SimpleUpdate
             return IntPtr.Zero;
         }
 
+        internal static bool IsSettingsPageVisible(IntPtr parent)
+        {
+            var admin = FindChildById(parent, AdminCheckboxId);
+            var save = FindChildById(parent, SaveSettingsButtonId);
+            return admin != IntPtr.Zero && save != IntPtr.Zero && IsWindowVisible(admin) && IsWindowVisible(save);
+        }
+
+        internal static IntPtr[] FindSettingsCheckboxes(IntPtr parent, IntPtr adminAnchor)
+        {
+            if (parent == IntPtr.Zero) return new IntPtr[0];
+            if (adminAnchor == IntPtr.Zero) adminAnchor = FindChildById(parent, AdminCheckboxId);
+            var adminBounds = GetChildClientBounds(parent, adminAnchor);
+            if (adminBounds == null) return new IntPtr[0];
+
+            var candidates = new List<ChildInfo>();
+            foreach (var child in GetChildren(parent))
+            {
+                if (!string.Equals(child.ClassName, "Button", StringComparison.OrdinalIgnoreCase)) continue;
+                if (child.Id >= AutoUpdateCheckboxId) continue;
+                var bounds = GetChildClientBounds(parent, child.Handle);
+                if (bounds == null) continue;
+                if (bounds.Top > adminBounds.Top + 4) continue;
+                if (bounds.Bottom < adminBounds.Top - 220) continue;
+                if (Math.Abs(bounds.Left - adminBounds.Left) > 24) continue;
+                if (bounds.Height < 14 || bounds.Height > 36) continue;
+                candidates.Add(new ChildInfo
+                {
+                    Handle = child.Handle,
+                    Id = child.Id,
+                    Text = child.Text,
+                    ClassName = child.ClassName,
+                    Visible = child.Visible,
+                    Left = bounds.Left,
+                    Top = bounds.Top,
+                    Right = bounds.Right,
+                    Bottom = bounds.Bottom
+                });
+            }
+
+            candidates.Sort(delegate(ChildInfo a, ChildInfo b) { return a.Top.CompareTo(b.Top); });
+            var adminIndex = candidates.FindIndex(delegate(ChildInfo item) { return item.Handle == adminAnchor; });
+            if (adminIndex < 5) return new IntPtr[0];
+
+            var result = new IntPtr[6];
+            for (var i = 0; i < result.Length; i++) result[i] = candidates[adminIndex - 5 + i].Handle;
+            return result;
+        }
+
         internal static ClientBounds GetChildClientBounds(IntPtr parent, IntPtr child)
         {
             if (parent == IntPtr.Zero || child == IntPtr.Zero) return null;
@@ -200,15 +248,28 @@ namespace DPopCleaner.SimpleUpdate
 
         internal static ClientBounds GetSettingsScrollBounds(IntPtr parent)
         {
-            var first = FindChildByText(parent, "Фоновый контроль мусора каждые 30 минут", "Button", true);
-            var firstBounds = GetChildClientBounds(parent, first);
+            var admin = FindChildById(parent, AdminCheckboxId);
+            var checkboxes = FindSettingsCheckboxes(parent, admin);
+            if (checkboxes.Length != 6) return null;
+            var firstBounds = GetChildClientBounds(parent, checkboxes[0]);
             if (firstBounds == null) return null;
 
-            var status = FindChildByText(parent, "Готово.", "Static", true);
-            var statusBounds = GetChildClientBounds(parent, status);
             var saveBounds = GetChildClientBounds(parent, FindChildById(parent, SaveSettingsButtonId));
-            var bottom = statusBounds != null
-                ? statusBounds.Top - 8
+            var statusTop = int.MaxValue;
+            if (saveBounds != null)
+            {
+                foreach (var child in GetChildren(parent))
+                {
+                    if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
+                    var bounds = GetChildClientBounds(parent, child.Handle);
+                    if (bounds == null || bounds.Top <= saveBounds.Bottom) continue;
+                    if (bounds.Left > firstBounds.Left + 500) continue;
+                    if (bounds.Top < statusTop) statusTop = bounds.Top;
+                }
+            }
+
+            var bottom = statusTop != int.MaxValue
+                ? statusTop - 8
                 : (saveBounds != null ? saveBounds.Bottom + 28 : firstBounds.Top + 305);
             var x = Math.Max(22, firstBounds.Left - 10);
             var y = Math.Max(0, firstBounds.Top - 5);
