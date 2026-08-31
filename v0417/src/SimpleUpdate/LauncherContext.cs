@@ -113,11 +113,9 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateTrayRamBadge()
         {
-            var traySetting = NativeBridge.FindChildByText(
-                _mainWindow,
-                "Работать в трее и отслеживать новые установки",
-                "Button",
-                false);
+            var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
+            var settings = NativeBridge.FindSettingsCheckboxes(_mainWindow, admin);
+            var traySetting = settings.Length == 6 ? settings[3] : IntPtr.Zero;
             if (traySetting != IntPtr.Zero)
             {
                 _trayEnabled = NativeBridge.IsChecked(traySetting);
@@ -133,10 +131,10 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateZapretEnhancements()
         {
-            // The bridge-owned updater hides the frozen core's update buttons.
-            // Detect the Zapret page using a stable native heading instead of one of those buttons.
-            var marker = NativeBridge.FindChildByText(_mainWindow, "Дополнительно", "Static", true);
-            var zapretVisible = marker != IntPtr.Zero;
+            // Use the stable frozen control id instead of a localized caption. Language changes must
+            // never make the bridge conclude that the user left the Zapret page.
+            var marker = NativeBridge.FindChildById(_mainWindow, NativeBridge.ZapretApplyButtonId);
+            var zapretVisible = marker != IntPtr.Zero && NativeBridge.IsWindowVisible(marker);
             if (!zapretVisible)
             {
                 if (_zapretHost != null) _zapretHost.Hide();
@@ -157,8 +155,7 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateSettingsEnhancements()
         {
-            var settingsMarker = NativeBridge.FindChildByText(_mainWindow, "Настройки", "Static", true);
-            var settingsVisible = settingsMarker != IntPtr.Zero;
+            var settingsVisible = NativeBridge.IsSettingsPageVisible(_mainWindow);
             if (!settingsVisible)
             {
                 if (_settingsHost != null) _settingsHost.Hide();
