@@ -10,6 +10,7 @@ namespace DPopCleaner.SimpleUpdate
         internal const int SettingsGearId = 906;
         internal const int RamTabButtonId = 910;
         internal const int ZapretTabButtonId = 905;
+        internal const int StartupCheckboxId = 1409;
         internal const int AdminCheckboxId = 1410;
         internal const int LicenseBuyButtonId = 1407;
         internal const int LicenseSaveButtonId = 1408;
@@ -192,40 +193,45 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (parent == IntPtr.Zero) return new IntPtr[0];
             if (adminAnchor == IntPtr.Zero) adminAnchor = FindChildById(parent, AdminCheckboxId);
+            var startupAnchor = FindChildById(parent, StartupCheckboxId);
             var adminBounds = GetChildClientBounds(parent, adminAnchor);
-            if (adminBounds == null) return new IntPtr[0];
+            var startupBounds = GetChildClientBounds(parent, startupAnchor);
+            if (adminBounds == null || startupBounds == null) return new IntPtr[0];
 
-            var candidates = new List<ChildInfo>();
-            foreach (var child in GetChildren(parent))
-            {
-                if (!string.Equals(child.ClassName, "Button", StringComparison.OrdinalIgnoreCase)) continue;
-                if (child.Id >= AutoUpdateCheckboxId) continue;
-                var bounds = GetChildClientBounds(parent, child.Handle);
-                if (bounds == null) continue;
-                if (bounds.Top > adminBounds.Top + 4) continue;
-                if (bounds.Bottom < adminBounds.Top - 220) continue;
-                if (Math.Abs(bounds.Left - adminBounds.Left) > 24) continue;
-                if (bounds.Height < 14 || bounds.Height > 36) continue;
-                candidates.Add(new ChildInfo
-                {
-                    Handle = child.Handle,
-                    Id = child.Id,
-                    Text = child.Text,
-                    ClassName = child.ClassName,
-                    Visible = child.Visible,
-                    Left = bounds.Left,
-                    Top = bounds.Top,
-                    Right = bounds.Right,
-                    Bottom = bounds.Bottom
-                });
-            }
-
-            candidates.Sort(delegate(ChildInfo a, ChildInfo b) { return a.Top.CompareTo(b.Top); });
-            var adminIndex = candidates.FindIndex(delegate(ChildInfo item) { return item.Handle == adminAnchor; });
-            if (adminIndex < 5) return new IntPtr[0];
+            var rowStep = adminBounds.Top - startupBounds.Top;
+            if (rowStep < 10 || rowStep > 80) return new IntPtr[0];
 
             var result = new IntPtr[6];
-            for (var i = 0; i < result.Length; i++) result[i] = candidates[adminIndex - 5 + i].Handle;
+            result[4] = startupAnchor;
+            result[5] = adminAnchor;
+            var requireVisible = IsWindowVisible(adminAnchor);
+            var tolerance = Math.Max(4, rowStep / 3);
+            var children = GetChildren(parent);
+
+            for (var index = 0; index < 4; index++)
+            {
+                var targetTop = startupBounds.Top - (4 - index) * rowStep;
+                ChildInfo best = null;
+                var bestScore = int.MaxValue;
+                foreach (var child in children)
+                {
+                    if (child.Id != 0 || !string.Equals(child.ClassName, "Button", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (requireVisible && !child.Visible) continue;
+                    var bounds = GetChildClientBounds(parent, child.Handle);
+                    if (bounds == null) continue;
+                    var topDelta = Math.Abs(bounds.Top - targetTop);
+                    var leftDelta = Math.Abs(bounds.Left - startupBounds.Left);
+                    if (topDelta > tolerance || leftDelta > Math.Max(16, rowStep)) continue;
+                    if (bounds.Height < 14 || bounds.Height > Math.Max(40, startupBounds.Height + 12)) continue;
+                    var score = topDelta * 10 + leftDelta;
+                    if (score >= bestScore) continue;
+                    best = child;
+                    bestScore = score;
+                }
+                if (best == null) return new IntPtr[0];
+                result[index] = best.Handle;
+            }
+
             return result;
         }
 
