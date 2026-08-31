@@ -228,6 +228,7 @@ namespace DPopCleaner.SimpleUpdate
                 _settingsHost.Show(_settingsHostBounds);
             }
 
+            SettingsProxyLocalization.Apply(_mainWindow);
             NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds);
         }
 
