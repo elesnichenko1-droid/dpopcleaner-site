@@ -16,6 +16,9 @@ Copy-Item -LiteralPath $helper -Destination (Join-Path $work 'SimpleUpdate.exe')
 Copy-Item -LiteralPath $coreSource -Destination (Join-Path $work 'DPopCleaner.Core.exe') -Force
 $corePath = Join-Path $work 'DPopCleaner.Core.exe'
 $settings = Join-Path $work 'SimpleUpdate.ini'
+$diagnosticMarker = Join-Path $work 'DPopCleaner-bridge-diagnostics.enabled'
+$diagnosticLog = Join-Path $work 'DPopCleaner-bridge-diagnostics.log'
+Set-Content -LiteralPath $diagnosticMarker -Value 'enabled' -Encoding ascii
 
 $native = @'
 using System;
@@ -198,6 +201,16 @@ try {
 
     Write-Host 'SIMPLEUPDATE_SCROLLABLE_SETTINGS_UI_SMOKE_OK'
     Write-Host 'SIMPLEUPDATE_SETTINGS_LANGUAGE_SWITCH_SMOKE_OK'
+}
+catch {
+    if (Test-Path -LiteralPath $diagnosticLog -PathType Leaf) {
+        Write-Host '===== DPOP_BRIDGE_DIAGNOSTICS_FROM_SMOKE ====='
+        Get-Content -Raw -LiteralPath $diagnosticLog | Write-Host
+    }
+    else {
+        Write-Host "Bridge diagnostics were not produced in launcher directory: $diagnosticLog"
+    }
+    throw
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
