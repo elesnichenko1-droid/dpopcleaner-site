@@ -93,7 +93,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('rev.${revision}', script)
 
         notes_text = notes.read_text(encoding='utf-8').lower()
-        for token in ('revision 13', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'модуль обновления zapret не найден', 'проверить версию', 'скачать и установить', 'utils\\dpop_version.txt', 'перерис', 'owner-draw', 'code 740', 'uac', 'одна', 'озу'):
+        for token in ('revision 13', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'frozen-updater', 'utils\\dpop_version.txt', 'перерис', 'code 740', 'uac', 'shell_notifyicon', 'ghost-записи explorer', 'озу'):
             self.assertIn(token, notes_text)
         self.assertTrue('прежний интерфейс' in notes_text or 'интерфейс' in notes_text)
         self.assertIn('ghost-записи explorer', notes_text)
