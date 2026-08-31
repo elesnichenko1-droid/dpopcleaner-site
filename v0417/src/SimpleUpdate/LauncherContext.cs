@@ -105,9 +105,10 @@ namespace DPopCleaner.SimpleUpdate
                 UpdateZapretEnhancements();
                 UpdateSettingsEnhancements();
             }
-            catch
+            catch (Exception ex)
             {
                 // UI bridge failures must never terminate the immutable authentic core.
+                BridgeDiagnostics.Record(ex);
             }
         }
 
