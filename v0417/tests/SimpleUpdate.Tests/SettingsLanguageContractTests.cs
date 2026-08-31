@@ -52,12 +52,19 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void SettingsProxyCaptions_MustFollowFrozenCoreLanguage()
+        public void SettingsProxyCaptions_MustFollowNativeLanguageComboSelection()
         {
-            var host = ReadSource("AdditionalSettingsHost.cs");
-            StringAssert.Contains(host, "NativeBridge.FindSettingsCheckboxes");
-            StringAssert.Contains(host, "NativeBridge.ReadWindowText(setting.LegacyHandle)");
-            StringAssert.Contains(host, "NativeBridge.WriteWindowText(setting.ProxyHandle");
+            var launcher = ReadSource("LauncherContext.cs");
+            var localization = ReadSource("SettingsProxyLocalization.cs");
+
+            StringAssert.Contains(launcher, "SettingsProxyLocalization.Apply(_mainWindow)");
+            StringAssert.Contains(localization, "CB_GETCURSEL");
+            StringAssert.Contains(localization, "English");
+            StringAssert.Contains(localization, "Always run application as administrator");
+            StringAssert.Contains(localization, "Enable application auto-updates");
+            Assert.IsFalse(
+                localization.Contains("AdminCheckboxId"),
+                "Language detection must read the native Language ComboBox, not a hidden left-side checkbox caption.");
         }
     }
 }
