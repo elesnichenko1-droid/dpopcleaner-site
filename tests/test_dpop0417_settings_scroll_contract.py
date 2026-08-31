@@ -36,12 +36,21 @@ class DPop0417SettingsScrollContractTests(unittest.TestCase):
         self.assertIn("hidelegacyversionbadge", native)
         self.assertNotIn("makeroomforautoupdate(_mainwindow)", launcher)
 
-    def test_simpleupdate_runs_at_admin_integrity_for_admin_core_ui_bridge(self):
+    def test_simpleupdate_self_elevates_to_admin_integrity_for_admin_core_ui_bridge(self):
         project = (ROOT / "v0417" / "src" / "SimpleUpdate" / "SimpleUpdate.csproj").read_text(encoding="utf-8").lower()
         manifest = ROOT / "v0417" / "src" / "SimpleUpdate" / "app.manifest"
+        program = (ROOT / "v0417" / "src" / "SimpleUpdate" / "Program.cs").read_text(encoding="utf-8").lower()
+        elevation = (ROOT / "v0417" / "src" / "SimpleUpdate" / "ElevationBootstrap.cs").read_text(encoding="utf-8").lower()
         self.assertTrue(manifest.is_file())
         self.assertIn("<applicationmanifest>app.manifest</applicationmanifest>", project)
-        self.assertIn('requestedexecutionlevel level="requireadministrator"', manifest.read_text(encoding="utf-8").lower())
+        manifest_text = manifest.read_text(encoding="utf-8").lower()
+        self.assertIn('requestedexecutionlevel level="asinvoker"', manifest_text)
+        self.assertNotIn('requireadministrator', manifest_text)
+        self.assertIn('elevationbootstrap.ensureadministrator(args)', program)
+        self.assertIn('windowsprincipal', elevation)
+        self.assertIn('windowsbuiltinrole.administrator', elevation)
+        self.assertIn('verb = "runas"', elevation)
+        self.assertIn('useshellexecute = true', elevation)
 
     def test_authentic_ui_smoke_proves_wheel_scroll_and_hidden_version(self):
         smoke = (ROOT / "tools" / "dpop0417_simpleupdate_smoke.ps1").read_text(encoding="utf-8").lower()

@@ -24,6 +24,7 @@ $zapretEvidence = Join-Path $OutputDir 'zapret-installed'
 $settingsEvidence = Join-Path $OutputDir 'settings-installed'
 $rev7Evidence = Join-Path $OutputDir 'rev7-ui-installed'
 $rev12Evidence = Join-Path $OutputDir 'rev12-native-version'
+$rev13Evidence = Join-Path $OutputDir 'rev13-uac-tray'
 $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
 $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
@@ -32,6 +33,7 @@ $documentationAclModify = $false
 $installedSettingsBridgeSmoke = $false
 $rev7FunctionalSmoke = $false
 $rev12NativeVersionSmoke = $false
+$rev13UacTraySmoke = $false
 $zapretScreenFixPresent = $false
 $zapretRuntimePresent = $false
 $zapretUiSmoke = $false
@@ -117,13 +119,16 @@ try {
     $zapretUiSmoke = Test-Path -LiteralPath (Join-Path $zapretEvidence 'zapret-ui-smoke-report.json') -PathType Leaf
     if (-not $zapretUiSmoke) { throw 'Installed authentic Zapret UI smoke report was not produced.' }
 
-    # Independent clean install: prove the immutable core receives 1.10.2 through
-    # its own native utils\dpop_version.txt source and save an actual rendered PNG.
     & (Join-Path $PSScriptRoot 'dpop0417_rev12_native_version_smoke.ps1') -InstallerPath $InstallerPath -OutputDir $rev12Evidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $rev12NativeVersionSmoke = Test-Path -LiteralPath (Join-Path $rev12Evidence 'rev12-native-version-smoke-report.json') -PathType Leaf
     if (-not $rev12NativeVersionSmoke) { throw 'rev.12 native Zapret version smoke report was not produced.' }
     if (-not (Test-Path -LiteralPath (Join-Path $rev12Evidence 'rev12-zapret-native-version.png') -PathType Leaf)) { throw 'rev.12 native Zapret screenshot evidence was not produced.' }
+
+    & (Join-Path $PSScriptRoot 'dpop0417_rev13_uac_tray_smoke.ps1') -RootPath $installRoot -OutputDir $rev13Evidence
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $rev13UacTraySmoke = Test-Path -LiteralPath (Join-Path $rev13Evidence 'rev13-uac-tray-smoke-report.json') -PathType Leaf
+    if (-not $rev13UacTraySmoke) { throw 'rev.13 UAC/tray smoke report was not produced.' }
 
     & (Join-Path $PSScriptRoot 'dpop0417_disk_smoke.ps1') -ExePath $diskExe -OutputDir $diskEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -150,6 +155,7 @@ try {
         installed_settings_bridge_smoke = [bool]$installedSettingsBridgeSmoke
         rev7_functional_ui_smoke = [bool]$rev7FunctionalSmoke
         rev12_native_version_smoke = [bool]$rev12NativeVersionSmoke
+        rev13_uac_tray_smoke = [bool]$rev13UacTraySmoke
         zapret_runtime_present = [bool]$zapretRuntimePresent
         zapret_version = $zapretVersion
         zapret_native_version_source = $nativeZapretVersion
@@ -167,6 +173,7 @@ try {
     Write-Host 'Installed Settings scroll/auto-update/legacy-version smoke: PASS'
     Write-Host 'Installed rev.7 hide/restore + RAM + Zapret + Settings functional smoke: PASS'
     Write-Host 'Installed rev.12 native Zapret version source + screenshot smoke: PASS'
+    Write-Host 'Installed rev.13 UAC + single RAM tray icon smoke: PASS'
     Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; native_source=$nativeZapretVersion; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'

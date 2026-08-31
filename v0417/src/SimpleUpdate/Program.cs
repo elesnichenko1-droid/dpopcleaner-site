@@ -7,7 +7,7 @@ namespace DPopCleaner.SimpleUpdate
     internal static class Program
     {
         internal const int CurrentVersionCode = 417;
-        internal const int CurrentRevision = 12;
+        internal const int CurrentRevision = 13;
         internal const string StableManifestUrl = LauncherOptions.DefaultManifestUrl;
 
         [STAThread]
@@ -18,6 +18,8 @@ namespace DPopCleaner.SimpleUpdate
 
             try
             {
+                if (!ElevationBootstrap.EnsureAdministrator(args)) return;
+
                 var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
                 if (string.Equals(Path.GetFileName(Application.ExecutablePath), "DPopUpdate.exe", StringComparison.OrdinalIgnoreCase))

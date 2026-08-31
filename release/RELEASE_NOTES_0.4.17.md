@@ -1,40 +1,37 @@
-# DPopCleaner 0.4.17 rev.12
+# DPopCleaner 0.4.17 rev.13
 
-DPopCleaner 0.4.17 rev.12 исправляет оставшуюся ошибку отображения версии Zapret **без нового интерфейса и без подмены родной строки через HWND**. Оригинальное ядро 0.2.14 остаётся byte-identical как `{app}\DPopCleaner.Core.exe` с Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`.
+DPopCleaner 0.4.17 rev.13 исправляет два оставшихся runtime-дефекта вокруг запуска и трея, не меняя основной интерфейс и frozen core. Оригинальное ядро 0.2.14 остаётся byte-identical как `{app}\DPopCleaner.Core.exe` с Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`.
 
-## Revision 12
+## Revision 13
 
-- Найдена фактическая причина `Zapret 1.9.9d`: frozen-core 0.2.14 **не использует** `{app}\Zapret\.service\version.txt` для родной строки версии Zapret Center.
-- Анализ неизменного ядра подтвердил штатный путь **`{app}\Zapret\utils\dpop_version.txt`**. Ядро читает этот файл как UTF-8; если файл отсутствует или пуст, оно само собирает fallback **`1.9.9d`** непосредственно машинными инструкциями.
-- Поэтому rev.12 кладёт проверенную версию **`1.10.2`** именно в `Zapret\utils\dpop_version.txt`. Файл byte-identical проверенному `.service\version.txt` из того же pinned Flowseal 1.10.2 metadata.
-- Родная строка версии теперь формируется **самим неизменным ядром 0.2.14**. Bridge больше не ищет верхний `Edit`, не вызывает `WM_SETTEXT`, не создаёт version proxy и не накладывает новую строку поверх интерфейса.
-- Proxy ID `1726` по-прежнему отсутствует.
-- Тёмный owner-draw формат шести существующих bridge-кнопок сохранён. Подписи `Игровой фильтр 1.10.2` и `Менеджер 1.10.2` продолжают получать версию из установленного metadata.
-- Полный **Flowseal Zapret 1.10.2** и все **22 стратегии** сохранены.
+- Исправлен post-install сценарий `CreateProcessAsUser` / **code 740**: `SimpleUpdate.exe` теперь имеет `requestedExecutionLevel=asInvoker`, а launcher сам проверяет административный token и при необходимости перезапускает себя через Shell `runas` с сохранением аргументов.
+- В Inno Setup post-install запуск сохранён через `runascurrentuser`, чтобы первый запуск шёл в контексте исходного пользователя и уже затем выполнял контролируемое UAC-повышение.
+- RAM-индикатор в трее переведён на стабильную native identity `Shell_NotifyIcon` с одним постоянным callback HWND/uID. Значок показывает текущий процент использования ОЗУ и обновляется без пересоздания tray identity.
+- Legacy tray-иконка frozen core подавляется. Дополнительно bridge очищает ghost-записи Explorer своего launcher PID, сохраняя только живой `DPopCleaner.TrayRamBadgeHost` с `uID=1`, поэтому после пересоздания старого HWND не должна оставаться вторая иконка.
+- Двойной клик по RAM-иконке восстанавливает главное окно; контекстное меню сохраняет действие открытия DPopCleaner.
+- Основное окно, вкладки, Settings, Zapret Center и дизайн не переделывались.
 
-## Настройки
+## Сохранено из rev.12 и предыдущих revision
 
-Сохраняется исправление rev.11 против слияния и «улетания» элементов Настроек: дочерние элементы scroll-host перемещаются атомарно через `BeginDeferWindowPos/DeferWindowPos/EndDeferWindowPos`, а после реального изменения scroll выполняется одна полная перерисовка host-а и детей. Координаты Settings-host остаются фиксированными и не пересчитываются по прокрученным proxy-чекбоксам.
-
-## Сохранено из предыдущих revision
-
-- Существующие bridge-кнопки **«Проверить версию»** и **«Скачать и установить»** продолжают обходить сломанный frozen-updater; окно **«Модуль обновления Zapret не найден»** не должно открываться.
-- `{app}\DPopUpdate.exe` остаётся legacy-совместимостью.
-- Сохраняются **«Починка трансляции»**, **«Починка подключения»**, **«Игровой фильтр 1.10.2»** и **«Менеджер 1.10.2»**.
+- Родная строка версии Zapret формируется неизменным ядром через `{app}\Zapret\utils\dpop_version.txt`; bundled версия остаётся **Flowseal Zapret 1.10.2**.
+- Полный Flowseal Zapret 1.10.2 и все **22 стратегии** сохранены.
+- Bridge не переписывает родную строку версии Zapret через HWND и не создаёт version proxy; proxy ID `1726` отсутствует.
+- Сохраняются тёмные bridge-кнопки, «Починка трансляции», «Починка подключения», «Игровой фильтр 1.10.2», «Менеджер 1.10.2», рабочая замена frozen-updater и `DPopUpdate.exe` compatibility.
+- Сохраняется исправление Settings против слияния/«улетания» элементов: фиксированные bounds, атомарный `DeferWindowPos` и одна перерисовка после реального scroll.
 - Во вкладке ОЗУ используется существующий ComboBox 5–95%.
-- В Настройках сохраняются существующие опции, автообновление приложения, ручная проверка обновлений и лицензия; правая колонка «Исключения очистки» не переделывается.
-- `ZapretScreenFix.exe` и исправление **демонстрации экрана Zapret**, а также Disk Analyzer и Restore Center сохранены.
+- `ZapretScreenFix.exe` и исправление демонстрации экрана Zapret сохранены; Disk Analyzer и Restore Center также остаются в комплекте.
+- Автообновление приложения и ручная проверка обновлений в Настройках сохранены.
 
-## Проверка rev.12
+## Проверка rev.13
 
-Windows CI собирает настоящий Inno Setup installer и устанавливает его на чистом runner. `dpop0417_rev12_native_version_smoke.ps1` требует одновременно `.service\version.txt = 1.10.2` и `utils\dpop_version.txt = 1.10.2`, проверяет их byte-identical SHA-256, отсутствие proxy ID `1726`, owner-draw шести bridge-кнопок и сохраняет **реальный PNG установленной вкладки Zapret** (`rev12-zapret-native-version.png`). Этот PNG дополнительно просматривается перед merge, чтобы подтверждать именно нарисованную родную строку, а не только `GetWindowText`.
+Windows CI собирает настоящий Inno Setup installer и проверяет установленный пакет. `dpop0417_rev13_uac_tray_smoke.ps1` извлекает manifest установленного launcher и требует `asInvoker` без `requireAdministrator`, затем проверяет живые tray identities Explorer: у bridge должен остаться ровно один `(HWND,uID)`, а у frozen core — ни одной legacy tray-записи. Диагностика записывает class/title/thread callback HWND, чтобы ghost-запись с уничтоженным окном не маскировалась под живую иконку.
 
-Сохраняется rev.9 click-smoke для рабочей кнопки «Скачать и установить», а frozen core повторно проверяется по неизменному Git blob.
+Одновременно сохраняются installed-smoke rev.12 для native Zapret version/screenshot, rev.9 updater click-smoke, проверки Settings, RAM, Zapret 1.10.2/22 стратегий, Disk Analyzer, Restore Center и byte-identical frozen core.
 
 ## Публикация
 
-Stable manifest для **revision 12** публикуется только после зелёных installed-проверок. Production publisher создаёт GitHub Release `v0.4.17-rev12`, публикует Pages и затем повторно скачивает живой installer для проверки SHA-256 и размера.
+Stable manifest для **revision 13** публикуется только после зелёных installed-проверок. Production publisher создаёт GitHub Release `v0.4.17-rev13`, публикует Pages и повторно скачивает живой installer для проверки SHA-256 и размера.
 
 ## Установка
 
-Запустите `DPopCleaner_Setup_0.4.17.exe` поверх rev.11. После установки запускайте обычный `DPopCleaner.exe`.
+Запустите `DPopCleaner_Setup_0.4.17.exe` поверх rev.12. После установки запускайте обычный `DPopCleaner.exe`.

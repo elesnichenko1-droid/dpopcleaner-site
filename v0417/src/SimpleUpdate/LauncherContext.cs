@@ -23,6 +23,9 @@ namespace DPopCleaner.SimpleUpdate
         private NativeBridge.ClientBounds _settingsHostBounds;
         private ZapretEnhancementHost _zapretHost;
         private ZapretVisualPolishHost _zapretVisualHost;
+        private TrayRamBadgeHost _trayRamHost;
+        private bool _traySettingKnown;
+        private bool _trayEnabled;
         private bool _lastSetting;
         private bool _iconApplied;
         private bool _automaticCheckStarted;
@@ -38,7 +41,7 @@ namespace DPopCleaner.SimpleUpdate
             _lastSetting = _settings.LoadAutoUpdateEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev12");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev13");
             _updateClient = new UpdateClient(_http);
 
             _core = Process.Start(new ProcessStartInfo(corePath)
@@ -71,11 +74,14 @@ namespace DPopCleaner.SimpleUpdate
                     _mainWindow = _core.MainWindowHandle;
                 if (_mainWindow == IntPtr.Zero) return;
 
+                UpdateTrayRamBadge();
+
                 if (!NativeBridge.IsWindowVisible(_mainWindow))
                 {
                     // Temporary visibility changes are not exit signals. The frozen application can
                     // hide itself while minimizing/restoring or working in the tray; only HasExited
-                    // above is allowed to terminate the launcher.
+                    // above is allowed to terminate the launcher. The RAM tray host intentionally
+                    // continues updating before this branch so the one visible tray icon remains live.
                     if (_settingsHost != null) _settingsHost.Hide();
                     if (_zapretHost != null) _zapretHost.Hide();
                     if (_zapretVisualHost != null) _zapretVisualHost.Hide();
@@ -103,6 +109,26 @@ namespace DPopCleaner.SimpleUpdate
             {
                 // UI bridge failures must never terminate the immutable authentic core.
             }
+        }
+
+        private void UpdateTrayRamBadge()
+        {
+            var traySetting = NativeBridge.FindChildByText(
+                _mainWindow,
+                "Работать в трее и отслеживать новые установки",
+                "Button",
+                false);
+            if (traySetting != IntPtr.Zero)
+            {
+                _trayEnabled = NativeBridge.IsChecked(traySetting);
+                _traySettingKnown = true;
+            }
+            if (!_traySettingKnown) return;
+
+            if (_trayRamHost == null)
+                _trayRamHost = new TrayRamBadgeHost(_mainWindow);
+            _trayRamHost.Update(_core.Id, _mainWindow, _trayEnabled);
+            if (_trayEnabled) BridgeTrayGhostSuppressor.CleanupCurrentProcess();
         }
 
         private void UpdateZapretEnhancements()
@@ -322,6 +348,7 @@ namespace DPopCleaner.SimpleUpdate
         protected override void ExitThreadCore()
         {
             try { _updateCancellation.Cancel(); } catch { }
+            if (_trayRamHost != null) _trayRamHost.Dispose();
             if (_settingsHost != null) _settingsHost.Dispose();
             if (_zapretVisualHost != null) _zapretVisualHost.Dispose();
             if (_zapretHost != null) _zapretHost.Dispose();
