@@ -44,6 +44,7 @@ public static class SmokeNative {
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] private static extern IntPtr SendMessageBuffer(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp);
     public static SmokeChild[] Children(IntPtr parent) {
         var list = new List<SmokeChild>();
         EnumProc cb = delegate(IntPtr h, IntPtr _) {
@@ -53,6 +54,19 @@ public static class SmokeNative {
             return true;
         };
         EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
+    }
+    public static string[] ComboItems(IntPtr combo) {
+        const uint CB_GETCOUNT = 0x0146, CB_GETLBTEXT = 0x0148, CB_GETLBTEXTLEN = 0x0149;
+        var count = SendMessage(combo, CB_GETCOUNT, IntPtr.Zero, IntPtr.Zero).ToInt32();
+        var items = new List<string>();
+        for (var i = 0; i < count; i++) {
+            var length = SendMessage(combo, CB_GETLBTEXTLEN, new IntPtr(i), IntPtr.Zero).ToInt32();
+            if (length < 0) continue;
+            var value = new StringBuilder(length + 1);
+            SendMessageBuffer(combo, CB_GETLBTEXT, new IntPtr(i), value);
+            items.Add(value.ToString());
+        }
+        return items.ToArray();
     }
 }
 '@
@@ -131,11 +145,59 @@ try {
     $saved = Get-Content -Raw -LiteralPath $settings
     if ($saved -notmatch 'auto_update=0') { throw "Expected auto_update=0, got: $saved" }
 
+    # Regression: changing the authentic frozen Settings language used to hide bridge id=1492
+    # because LauncherContext searched for the Russian heading 'Настройки'. Exercise the real
+    # Language ComboBox and require the enhanced Settings host to survive the live locale switch.
+    $beforeLanguage = [SmokeNative]::Children($coreProcess.MainWindowHandle)
+    $languageCombo = $null
+    $englishIndex = -1
+    foreach ($combo in @($beforeLanguage | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' })) {
+        $items = @([SmokeNative]::ComboItems($combo.Handle))
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            if ($items[$i] -eq 'English') {
+                $languageCombo = $combo
+                $englishIndex = $i
+                break
+            }
+        }
+        if ($languageCombo) { break }
+    }
+    if (-not $languageCombo -or $englishIndex -lt 0) { throw 'Authentic Settings Language ComboBox with English option was not found.' }
+
+    $CB_SETCURSEL = 0x014E
+    $WM_COMMAND = 0x0111
+    $CBN_SELCHANGE = 1
+    [void][SmokeNative]::SendMessage($languageCombo.Handle, $CB_SETCURSEL, [IntPtr]::new($englishIndex), [IntPtr]::Zero)
+    $languageNotification = [IntPtr]::new([long](($CBN_SELCHANGE -shl 16) -bor ($languageCombo.Id -band 0xffff)))
+    [void][SmokeNative]::SendMessage($coreProcess.MainWindowHandle, $WM_COMMAND, $languageNotification, $languageCombo.Handle)
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(7)
+    $englishChildren = @()
+    $englishHost = $null
+    $englishAdminProxy = $null
+    $englishAutoUpdate = $null
+    $englishLicense = $null
+    do {
+        Start-Sleep -Milliseconds 150
+        $englishChildren = @([SmokeNative]::Children($coreProcess.MainWindowHandle))
+        $englishHost = $englishChildren | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
+        $englishAdminProxy = $englishChildren | Where-Object { $_.Id -eq 1505 -and $_.Visible -and $_.Text -match '(?i)administrator' } | Select-Object -First 1
+        $englishAutoUpdate = $englishChildren | Where-Object { $_.Id -eq 1490 -and $_.Visible -and $_.Text -eq 'Enable application auto-updates' } | Select-Object -First 1
+        $englishLicense = $englishChildren | Where-Object { $_.Id -eq 1493 -and $_.Visible -and $_.Text -eq 'License' } | Select-Object -First 1
+    } while ((-not $englishHost -or -not $englishAdminProxy -or -not $englishAutoUpdate -or -not $englishLicense) -and [DateTime]::UtcNow -lt $deadline)
+
+    if (-not $englishHost) { throw 'Settings bridge disappeared after switching Language to English; old frozen interface resurfaced.' }
+    if (-not $englishAdminProxy) { throw 'Settings checkbox proxies did not follow the authentic English locale.' }
+    if (-not $englishAutoUpdate) { throw 'Bridge-owned auto-update control did not switch to English.' }
+    if (-not $englishLicense) { throw 'Bridge-owned License section did not switch to English.' }
+    if ($englishChildren | Where-Object { $_.Text -eq 'v0.2.11 BETA' -and $_.Visible } | Select-Object -First 1) { throw 'Legacy version badge resurfaced after Language change.' }
+
     Stop-Process -Id $coreProcess.Id -Force
     $coreProcess.WaitForExit(5000) | Out-Null
     if (-not $launcher.WaitForExit(6000)) { throw 'DPopCleaner.exe bridge did not exit after DPopCleaner.Core.exe closed.' }
 
     Write-Host 'SIMPLEUPDATE_SCROLLABLE_SETTINGS_UI_SMOKE_OK'
+    Write-Host 'SIMPLEUPDATE_SETTINGS_LANGUAGE_SWITCH_SMOKE_OK'
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
