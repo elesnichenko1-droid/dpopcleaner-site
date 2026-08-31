@@ -156,7 +156,18 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateSettingsEnhancements()
         {
+            var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
+            var save = NativeBridge.FindChildById(_mainWindow, NativeBridge.SaveSettingsButtonId);
+            var adminVisible = admin != IntPtr.Zero && NativeBridge.IsWindowVisible(admin);
+            var saveVisible = save != IntPtr.Zero && NativeBridge.IsWindowVisible(save);
             var settingsVisible = NativeBridge.IsSettingsPageVisible(_mainWindow);
+
+            BridgeDiagnostics.RecordState(
+                "settings-probe visible=" + settingsVisible +
+                " admin=0x" + admin.ToInt64().ToString("X") + "/" + adminVisible +
+                " save=0x" + save.ToInt64().ToString("X") + "/" + saveVisible +
+                " host=" + (_settingsHost != null));
+
             if (!settingsVisible)
             {
                 if (_settingsHost != null) _settingsHost.Hide();
@@ -165,15 +176,36 @@ namespace DPopCleaner.SimpleUpdate
 
             if (_settingsHost == null)
             {
-                var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
-                if (admin == IntPtr.Zero) return;
+                if (admin == IntPtr.Zero)
+                {
+                    BridgeDiagnostics.RecordState("settings-return admin-zero");
+                    return;
+                }
+
+                var checkboxes = NativeBridge.FindSettingsCheckboxes(_mainWindow, admin);
+                BridgeDiagnostics.RecordState(
+                    "settings-checkboxes count=" + checkboxes.Length +
+                    " startup=0x" + NativeBridge.FindChildById(_mainWindow, NativeBridge.StartupCheckboxId).ToInt64().ToString("X"));
 
                 _settingsHostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);
-                if (_settingsHostBounds == null) return;
+                if (_settingsHostBounds == null)
+                {
+                    BridgeDiagnostics.RecordState("settings-return bounds-null checkboxes=" + checkboxes.Length);
+                    return;
+                }
+
+                BridgeDiagnostics.RecordState(
+                    "settings-bounds " + _settingsHostBounds.Left + "," + _settingsHostBounds.Top +
+                    "-" + _settingsHostBounds.Right + "," + _settingsHostBounds.Bottom);
 
                 var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, _settingsHostBounds);
                 var legacySave = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseSaveButtonId);
                 var legacyBuy = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseBuyButtonId);
+                BridgeDiagnostics.RecordState(
+                    "settings-construct key=0x" + legacyKey.ToInt64().ToString("X") +
+                    " save=0x" + legacySave.ToInt64().ToString("X") +
+                    " buy=0x" + legacyBuy.ToInt64().ToString("X"));
+
                 _settingsHost = new AdditionalSettingsHost(
                     _mainWindow,
                     _settingsHostBounds,
@@ -184,6 +216,9 @@ namespace DPopCleaner.SimpleUpdate
                     legacyKey,
                     legacySave,
                     legacyBuy);
+
+                BridgeDiagnostics.RecordState(
+                    "settings-created host=0x" + _settingsHost.Handle.ToInt64().ToString("X"));
             }
             else
             {
