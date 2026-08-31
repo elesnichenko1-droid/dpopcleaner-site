@@ -9,11 +9,16 @@ namespace SimpleUpdate.Tests
     {
         private static string ReadSource(string fileName)
         {
-            var path = Path.GetFullPath(Path.Combine(
-                Environment.CurrentDirectory,
-                "v0417", "src", "SimpleUpdate", fileName));
-            Assert.IsTrue(File.Exists(path), "Required source file was not found: " + path);
-            return File.ReadAllText(path);
+            var directory = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            while (directory != null)
+            {
+                var candidate = Path.Combine(directory.FullName, "v0417", "src", "SimpleUpdate", fileName);
+                if (File.Exists(candidate)) return File.ReadAllText(candidate);
+                directory = directory.Parent;
+            }
+
+            Assert.Fail("Could not locate repository source file: " + fileName);
+            return string.Empty;
         }
 
         [TestMethod]
