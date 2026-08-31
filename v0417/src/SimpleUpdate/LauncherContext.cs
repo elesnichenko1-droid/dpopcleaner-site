@@ -160,7 +160,7 @@ namespace DPopCleaner.SimpleUpdate
             var save = NativeBridge.FindChildById(_mainWindow, NativeBridge.SaveSettingsButtonId);
             var adminVisible = admin != IntPtr.Zero && NativeBridge.IsWindowVisible(admin);
             var saveVisible = save != IntPtr.Zero && NativeBridge.IsWindowVisible(save);
-            var settingsVisible = NativeBridge.IsSettingsPageVisible(_mainWindow);
+            var settingsVisible = SettingsPageLocator.IsVisible(_mainWindow);
 
             BridgeDiagnostics.RecordState(
                 "settings-probe visible=" + settingsVisible +
