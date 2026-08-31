@@ -40,7 +40,14 @@ namespace DPopCleaner.SimpleUpdate
         internal static void Apply(IntPtr parent)
         {
             if (parent == IntPtr.Zero) return;
-            var english = IsEnglish(parent);
+
+            var combo = FindLanguageCombo(parent);
+            var selectedLanguage = combo != IntPtr.Zero ? ReadSelectedItem(combo) : string.Empty;
+            BridgeDiagnostics.RecordState(
+                "settings-language combo=0x" + combo.ToInt64().ToString("X") +
+                " selected='" + selectedLanguage + "'");
+
+            var english = string.Equals(selectedLanguage, "English", StringComparison.OrdinalIgnoreCase);
             var settings = english ? EnglishSettingTexts : RussianSettingTexts;
 
             for (var i = 0; i < settings.Length; i++)
@@ -71,13 +78,6 @@ namespace DPopCleaner.SimpleUpdate
                 english
                     ? "Purchasing and online key validation will be connected later."
                     : "Покупка и проверка ключей будут подключены позже.");
-        }
-
-        private static bool IsEnglish(IntPtr parent)
-        {
-            var combo = FindLanguageCombo(parent);
-            if (combo == IntPtr.Zero) return false;
-            return string.Equals(ReadSelectedItem(combo), "English", StringComparison.OrdinalIgnoreCase);
         }
 
         private static IntPtr FindLanguageCombo(IntPtr parent)
