@@ -47,6 +47,7 @@ public static class InstalledSettingsNative {
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] private static extern IntPtr SendMessageBuffer(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp);
     public static InstalledSettingsChild[] Children(IntPtr parent) {
         var list = new List<InstalledSettingsChild>();
         EnumProc cb = delegate(IntPtr h, IntPtr _) {
@@ -56,6 +57,19 @@ public static class InstalledSettingsNative {
             return true;
         };
         EnumChildWindows(parent, cb, IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
+    }
+    public static string[] ComboItems(IntPtr combo) {
+        const uint CB_GETCOUNT = 0x0146, CB_GETLBTEXT = 0x0148, CB_GETLBTEXTLEN = 0x0149;
+        var count = SendMessage(combo, CB_GETCOUNT, IntPtr.Zero, IntPtr.Zero).ToInt32();
+        var items = new List<string>();
+        for (var i = 0; i < count; i++) {
+            var length = SendMessage(combo, CB_GETLBTEXTLEN, new IntPtr(i), IntPtr.Zero).ToInt32();
+            if (length < 0) continue;
+            var value = new StringBuilder(length + 1);
+            SendMessageBuffer(combo, CB_GETLBTEXT, new IntPtr(i), value);
+            items.Add(value.ToString());
+        }
+        return items.ToArray();
     }
 }
 '@
@@ -121,6 +135,52 @@ try {
     if (-not $licenseAfter) { throw 'Installed License heading disappeared after WM_MOUSEWHEEL.' }
     if ($licenseAfter.Top -ge $beforeTop) { throw "Installed Settings did not scroll: before=$beforeTop after=$($licenseAfter.Top)" }
 
+    # Installed regression: switching the authentic native Language ComboBox must keep the bridge
+    # host visible and update bridge-owned Settings controls instead of resurfacing the old UI.
+    $beforeLanguage = [InstalledSettingsNative]::Children($coreProcess.MainWindowHandle)
+    $languageCombo = $null
+    $englishIndex = -1
+    foreach ($combo in @($beforeLanguage | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' })) {
+        $items = @([InstalledSettingsNative]::ComboItems($combo.Handle))
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            if ($items[$i] -eq 'English') {
+                $languageCombo = $combo
+                $englishIndex = $i
+                break
+            }
+        }
+        if ($languageCombo) { break }
+    }
+    if (-not $languageCombo -or $englishIndex -lt 0) { throw 'Installed authentic Settings Language ComboBox with English option was not found.' }
+
+    $CB_SETCURSEL = 0x014E
+    $WM_COMMAND = 0x0111
+    $CBN_SELCHANGE = 1
+    [void][InstalledSettingsNative]::SendMessage($languageCombo.Handle, $CB_SETCURSEL, [IntPtr]::new($englishIndex), [IntPtr]::Zero)
+    $languageNotification = [IntPtr]::new([long](($CBN_SELCHANGE -shl 16) -bor ($languageCombo.Id -band 0xffff)))
+    [void][InstalledSettingsNative]::SendMessage($coreProcess.MainWindowHandle, $WM_COMMAND, $languageNotification, $languageCombo.Handle)
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(7)
+    $englishChildren = @()
+    $englishHost = $null
+    $englishAdminProxy = $null
+    $englishAutoUpdate = $null
+    $englishLicense = $null
+    do {
+        Start-Sleep -Milliseconds 150
+        $englishChildren = @([InstalledSettingsNative]::Children($coreProcess.MainWindowHandle))
+        $englishHost = $englishChildren | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
+        $englishAdminProxy = $englishChildren | Where-Object { $_.Id -eq 1505 -and $_.Visible -and $_.Text -match '(?i)administrator' } | Select-Object -First 1
+        $englishAutoUpdate = $englishChildren | Where-Object { $_.Id -eq 1490 -and $_.Visible -and $_.Text -eq 'Enable application auto-updates' } | Select-Object -First 1
+        $englishLicense = $englishChildren | Where-Object { $_.Id -eq 1493 -and $_.Visible -and $_.Text -eq 'License' } | Select-Object -First 1
+    } while ((-not $englishHost -or -not $englishAdminProxy -or -not $englishAutoUpdate -or -not $englishLicense) -and [DateTime]::UtcNow -lt $deadline)
+
+    if (-not $englishHost) { throw 'Installed Settings bridge disappeared after switching Language to English.' }
+    if (-not $englishAdminProxy) { throw 'Installed Settings checkbox proxies did not switch to English.' }
+    if (-not $englishAutoUpdate) { throw 'Installed bridge-owned auto-update control did not switch to English.' }
+    if (-not $englishLicense) { throw 'Installed bridge-owned License section did not switch to English.' }
+    if ($englishChildren | Where-Object { $_.Visible -and $_.Text -eq 'v0.2.11 BETA' } | Select-Object -First 1) { throw 'Installed legacy version badge resurfaced after Language change.' }
+
     [pscustomobject]@{
         launcher = $launcherPath
         core = $corePath
@@ -130,6 +190,9 @@ try {
         license_in_scroll = $true
         legacy_version_hidden = $true
         mouse_wheel_scroll = $true
+        language_switch_english = $true
+        bridge_survives_language_switch = $true
+        english_proxy_controls = $true
     } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $OutputDir 'installed-settings-smoke-report.json') -Encoding utf8
 
     Stop-Process -Id $coreProcess.Id -Force
@@ -139,6 +202,7 @@ try {
     $launcherProcess = $null
 
     Write-Host 'INSTALLED_SETTINGS_BRIDGE_SMOKE_OK'
+    Write-Host 'INSTALLED_SETTINGS_LANGUAGE_SWITCH_SMOKE_OK'
 }
 finally {
     if ($coreProcess -and -not $coreProcess.HasExited) { Stop-Process -Id $coreProcess.Id -Force -ErrorAction SilentlyContinue }
