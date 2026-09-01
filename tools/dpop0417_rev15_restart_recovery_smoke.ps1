@@ -114,8 +114,8 @@ function Open-SettingsAndWaitBridge([Diagnostics.Process]$Core, [int]$Seconds = 
     do {
         Start-Sleep -Milliseconds 120
         $children = @([Rev15Native]::Children($Core.MainWindowHandle))
-        $host = $children | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
-        if ($host) { return $children }
+        $settingsHost = $children | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
+        if ($settingsHost) { return $children }
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Enhanced Settings host id=1492 did not appear for core pid=$($Core.Id)."
 }
@@ -139,8 +139,8 @@ function Wait-TrayHost([Diagnostics.Process]$Launcher, [int]$Seconds = 6) {
         Start-Sleep -Milliseconds 120
         $Launcher.Refresh()
         if ($Launcher.HasExited) { return [IntPtr]::Zero }
-        $host = [Rev15Native]::FindTopWindowForProcess($Launcher.Id, 'DPopCleaner.TrayRamBadgeHost')
-        if ($host -ne [IntPtr]::Zero) { return $host }
+        $trayHostWindow = [Rev15Native]::FindTopWindowForProcess($Launcher.Id, 'DPopCleaner.TrayRamBadgeHost')
+        if ($trayHostWindow -ne [IntPtr]::Zero) { return $trayHostWindow }
     } while ([DateTime]::UtcNow -lt $deadline)
     return [IntPtr]::Zero
 }
