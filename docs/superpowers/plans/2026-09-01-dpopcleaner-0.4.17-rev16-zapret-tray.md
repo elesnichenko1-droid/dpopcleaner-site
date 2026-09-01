@@ -2,52 +2,53 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Выпустить DPopCleaner 0.4.17 rev.16 с одной рабочей tray-иконкой с RAM badge, реально проверяемым Zapret lifecycle, единым light/dark оформлением Zapret-кнопок и журналом, скрытым только на вкладке Zapret.
+**Goal:** Выпустить DPopCleaner 0.4.17 rev.16 с одной рабочей tray-иконкой с RAM badge, реальным проверяемым Zapret lifecycle, единым light/dark оформлением Zapret-кнопок и журналом, скрытым только на вкладке Zapret.
 
-**Architecture:** Frozen `DPopCleaner.Core.exe` 0.2.14 остаётся byte-identical. Все изменения выполняются в `SimpleUpdate`: tray-host сохраняет одну стабильную `(HWND,uID)` identity между core restart; Zapret получает отдельные presentation/journal helpers и installed functional smoke, который управляет теми же UI-действиями и проверяет фактические Windows process/service states. Release rev.16 блокируется, если любой из runtime/installed/UI gates не проходит.
+**Architecture:** Frozen `DPopCleaner.Core.exe` 0.2.14 остаётся byte-identical. Все изменения живут в `SimpleUpdate`: tray-host сохраняет одну стабильную `(HWND,uID)` identity на весь launcher lifetime; Zapret presentation отделяется от команд, а installed functional smoke управляет теми же UI-действиями, что пользователь, и сравнивает UI со фактическими Windows service/process states. Rev.16 не публикуется, пока runtime, installed, theme/layout и lifecycle gates не зелёные на одном exact head.
 
-**Tech Stack:** C# .NET Framework 4.8 WinForms/Win32 P/Invoke, PowerShell 7 smoke tests on Windows Server 2022 GitHub Actions, Python contract tests, Inno Setup 6, Flowseal Zapret 1.10.2.
+**Tech Stack:** C# .NET Framework 4.8 WinForms/Win32 P/Invoke, PowerShell 7, Python contracts, Windows Server 2022 GitHub Actions, Inno Setup 6, Flowseal Zapret 1.10.2.
 
 **Spec:** `docs/superpowers/specs/2026-09-01-dpopcleaner-0.4.17-rev16-zapret-tray-design.md`
 
 ## Global Constraints
 
-- `DPopCleaner.Core.exe` / frozen core 0.2.14 не изменяется; Git blob остаётся `efd0eff1f4962319282363fa85595c25e0cebe11`.
-- Общий дизайн DPopCleaner 0.2.14 сохраняется; другие вкладки не переделываются.
+- Frozen core 0.2.14 не изменяется; Git blob обязан оставаться `efd0eff1f4962319282363fa85595c25e0cebe11`.
+- Общий UI 0.2.14 и остальные вкладки не переделываются.
 - Flowseal Zapret остаётся строго 1.10.2; bundled strategy count остаётся 22.
-- Сохраняются исправления rev.13–rev.15: UAC/code 740, language restart recovery, Settings bridge, tray restart recovery, native Zapret version, ZapretScreenFix, Disk Analyzer, Restore Center и updater.
-- На Zapret журнал скрывается только визуально; оригинальные HWND не уничтожаются.
-- Никакой публикации rev.16 до GREEN unit/contracts + runtime smokes + installed smokes + production candidate + live manifest/SHA verification.
-- Любой functional smoke, создающий/запускающий Zapret service, `winws.exe` или WinDivert, обязан выполнять cleanup в `finally`.
+- Сохраняются rev.13–rev.15: UAC/code 740, Settings language bridge, core self-restart recovery, native Zapret version, ZapretScreenFix, Disk Analyzer, Restore Center, updater.
+- Journal на Zapret только скрывается; его native HWND не уничтожаются, не reparent-ятся и не переписываются.
+- Functional smoke, который создаёт/запускает `zapret`, `winws.exe` или WinDivert, всегда делает cleanup в `finally`.
+- Revision identity меняется с 15 на 16 только после GREEN feature gates.
 
 ---
 
-## File Structure
+## File Map
 
-**New files**
-- `v0417/src/SimpleUpdate/ZapretPresentationHost.cs` — единая light/dark theme + geometry + journal visibility policy для Zapret.
-- `v0417/src/SimpleUpdate/ZapretRuntimeState.cs` — маленькая модель наблюдаемого Zapret runtime состояния для диагностики bridge.
-- `v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs` — source/behavior contracts для single tray identity, presentation host и restart ownership.
-- `tools/dpop0417_rev16_single_tray_smoke.ps1` — installed tray identity/restart/Explorer smoke.
-- `tools/dpop0417_rev16_zapret_functional_smoke.ps1` — installed UI-driven install/start/status/stop/change-strategy/remove lifecycle.
-- `tools/dpop0417_rev16_zapret_presentation_smoke.ps1` — light/dark layout + journal visibility smoke.
-- `tests/test_dpop0417_rev16_release_contract.py` — revision/publisher/release gate contract.
+**Create**
+- `v0417/src/SimpleUpdate/ZapretRuntimeState.cs` — фактическое состояние bundled winws/service.
+- `v0417/src/SimpleUpdate/ZapretPresentationHost.cs` — theme/layout + journal policy.
+- `v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs` — source/behavior contracts.
+- `tools/dpop0417_rev16_single_tray_smoke.ps1` — staged/installed single-tray smoke.
+- `tools/dpop0417_rev16_zapret_functional_smoke.ps1` — installed Zapret lifecycle smoke.
+- `tools/dpop0417_rev16_zapret_presentation_smoke.ps1` — theme/layout/journal smoke.
+- `tests/test_dpop0417_rev16_release_contract.py` — rev.16 publication contract.
 
-**Modified files**
-- `v0417/src/SimpleUpdate/LauncherContext.cs` — сохраняет tray-host через core restart; управляет `ZapretPresentationHost`; вызывает presentation refresh только на Zapret.
-- `v0417/src/SimpleUpdate/TrayRamBadgeHost.cs` — стабильная identity не пересоздаётся при core restart; suppression выполняется до publish; exposes diagnostic identity.
-- `v0417/src/SimpleUpdate/BridgeTrayGhostSuppressor.cs` — reconciliation только лишних launcher identities; canonical `(HWND,uID)` никогда не удаляется.
-- `v0417/src/SimpleUpdate/ZapretEnhancementHost.cs` — больше не навязывает тему; action buttons отдают presentation host-у layout/theme; bridge actions возвращают точную диагностику ошибки.
-- `v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs` — удалить hard-coded dark owner-draw path после переноса ответственности в `ZapretPresentationHost` либо оставить как thin version-label helper без самостоятельного theme policy.
-- `v0417/src/SimpleUpdate/Program.cs` — `CurrentRevision = 16` только после GREEN feature gates.
-- `.github/workflows/DPopCleaner_0.4.17_SIMPLEUPDATE.yml` — новые runtime rev.16 smokes.
-- `.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml` — новые installed rev.16 smokes.
-- `.github/workflows/publish-dpopcleaner-0.4.17.yml` — обязательные rev.16 release gates и publication identity.
-- `version.json`, `update/stable.json`, `release-manifest.js`, `index.html`, `release/RELEASE_NOTES_0.4.17.md` — rev.16 identity/release notes после полного GREEN.
+**Modify**
+- `v0417/src/SimpleUpdate/LauncherContext.cs`
+- `v0417/src/SimpleUpdate/TrayRamBadgeHost.cs`
+- `v0417/src/SimpleUpdate/BridgeTrayGhostSuppressor.cs`
+- `v0417/src/SimpleUpdate/NativeBridge.cs`
+- `v0417/src/SimpleUpdate/ZapretEnhancementHost.cs`
+- `v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs`
+- `v0417/src/SimpleUpdate/Program.cs`
+- `.github/workflows/DPopCleaner_0.4.17_SIMPLEUPDATE.yml`
+- `.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml`
+- `.github/workflows/publish-dpopcleaner-0.4.17.yml`
+- `version.json`, `update/stable.json`, `release-manifest.js`, `index.html`, `release/RELEASE_NOTES_0.4.17.md`
 
 ---
 
-### Task 1: Preserve one tray HWND/uID across core restart
+### Task 1: Keep exactly one tray identity across core restart
 
 **Files:**
 - Modify: `v0417/src/SimpleUpdate/LauncherContext.cs`
@@ -56,17 +57,16 @@
 - Create: `v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs`
 
 **Interfaces:**
-- Produces: `TrayRamBadgeHost.MessageWindowHandle : IntPtr`, `TrayRamBadgeHost.IconId : uint`, `TrayRamBadgeHost.ReattachMainWindow(IntPtr mainWindow)`.
-- `LauncherContext.ResetBridgeForRestartedCore()` must NOT dispose `_trayRamHost`.
-- `TrayRamBadgeHost.Update(int coreProcessId, IntPtr mainWindow, bool enabled)` remains the external update entry point.
+- `TrayRamBadgeHost.MessageWindowHandle : IntPtr`
+- `TrayRamBadgeHost.IconId : uint`
+- `TrayRamBadgeHost.ReattachMainWindow(IntPtr mainWindow)`
+- `BridgeTrayGhostSuppressor.CleanupCurrentProcess(IntPtr keepWindow, uint keepIconId)`
 
-- [ ] **Step 1: Write failing tray ownership contracts**
-
-Add MSTests that read production source and require the lifetime invariant:
+- [ ] **Step 1: Write RED contracts**
 
 ```csharp
 [TestMethod]
-public void Core_restart_keeps_the_same_tray_host_identity()
+public void Core_restart_keeps_same_tray_host()
 {
     var source = ReadSource("LauncherContext.cs");
     var reset = SliceMethod(source, "private void ResetBridgeForRestartedCore()");
@@ -75,7 +75,7 @@ public void Core_restart_keeps_the_same_tray_host_identity()
 }
 
 [TestMethod]
-public void Tray_host_exposes_one_constant_icon_id()
+public void Tray_identity_is_explicit_and_constant()
 {
     var source = ReadSource("TrayRamBadgeHost.cs");
     StringAssert.Contains(source, "private const uint TrayIconId = 1;");
@@ -84,21 +84,19 @@ public void Tray_host_exposes_one_constant_icon_id()
 }
 ```
 
-Implement `ReadSource` by walking upward from `AppDomain.CurrentDomain.BaseDirectory` until `v0417/src/SimpleUpdate` exists, matching the existing `SettingsLanguageContractTests` pattern. `SliceMethod` scans from the method signature to the next same-indent method declaration so the negative assertion is scoped to restart reset only.
+`ReadSource` walks upward from `AppDomain.CurrentDomain.BaseDirectory` until `v0417/src/SimpleUpdate` exists. `SliceMethod` extracts only the named method body.
 
-- [ ] **Step 2: Run RED**
-
-Run:
+- [ ] **Step 2: Verify RED**
 
 ```powershell
 dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo --filter Rev16TrayAndZapretContractTests
 ```
 
-Expected: FAIL because `ResetBridgeForRestartedCore()` currently disposes `_trayRamHost` and the diagnostic properties/Reattach method do not exist.
+Expected: FAIL because rev.15 disposes `_trayRamHost` during core restart.
 
-- [ ] **Step 3: Keep tray host alive during core restart**
+- [ ] **Step 3: Preserve tray-host in restart reset**
 
-Change `ResetBridgeForRestartedCore()` so it disposes Settings/Zapret bridge objects, resets `_mainWindow`, but intentionally preserves `_trayRamHost`:
+Use this shape:
 
 ```csharp
 private void ResetBridgeForRestartedCore()
@@ -121,7 +119,7 @@ private void ResetBridgeForRestartedCore()
 }
 ```
 
-In `TrayRamBadgeHost` add:
+Add:
 
 ```csharp
 internal IntPtr MessageWindowHandle { get { return _messageWindow.Handle; } }
@@ -134,11 +132,9 @@ internal void ReattachMainWindow(IntPtr mainWindow)
 }
 ```
 
-The next normal `Update()` receives the successor main HWND without recreating `_messageWindow` or `uID`.
+- [ ] **Step 4: Reconcile before publishing the canonical icon**
 
-- [ ] **Step 4: Reconcile before publish, never after recreating identity**
-
-In `Update()` keep this order:
+Inside `TrayRamBadgeHost.Update`, when enabled, use this order:
 
 ```csharp
 LegacyTrayIconSuppressor.RemoveIconsForProcess(coreProcessId);
@@ -146,25 +142,15 @@ BridgeTrayGhostSuppressor.CleanupCurrentProcess(_messageWindow.Handle, TrayIconI
 PublishTrayIcon();
 ```
 
-Change `BridgeTrayGhostSuppressor.CleanupCurrentProcess` signature to:
+Change `BridgeTrayGhostSuppressor` to receive the canonical tuple directly. Delete all other tray entries owned by the current launcher PID; never delete `(keepWindow,keepIconId)`. Remove `LauncherContext`'s second cleanup call so one component owns tray reconciliation.
 
-```csharp
-internal static void CleanupCurrentProcess(IntPtr keepWindow, uint keepIconId)
-```
-
-and remove its title lookup. It must compare every current-launcher tray entry against the exact supplied canonical tuple and delete every other current-launcher entry. `keepWindow == IntPtr.Zero` returns without deleting anything.
-
-Remove the second `BridgeTrayGhostSuppressor.CleanupCurrentProcess()` call from `LauncherContext.UpdateTrayRamBadge()` so reconciliation lives in one place and cannot run with a different canonical identity.
-
-- [ ] **Step 5: Run GREEN unit/contracts**
-
-Run:
+- [ ] **Step 5: Run GREEN**
 
 ```powershell
 dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
 ```
 
-Expected: all SimpleUpdate tests PASS.
+Expected: all tests PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -175,7 +161,7 @@ git commit -m "fix(rev16): preserve single tray identity across core restart"
 
 ---
 
-### Task 2: Prove single tray identity on a real installed package
+### Task 2: Prove the tray invariant on staged and installed builds
 
 **Files:**
 - Create: `tools/dpop0417_rev16_single_tray_smoke.ps1`
@@ -183,65 +169,70 @@ git commit -m "fix(rev16): preserve single tray identity across core restart"
 - Modify: `.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml`
 
 **Interfaces:**
-- Smoke output markers: `REV16_SINGLE_TRAY_INITIAL_OK`, `REV16_SINGLE_TRAY_LANGUAGE_RESTART_OK`, `REV16_SINGLE_TRAY_EXPLORER_RESTART_OK`.
-- Evidence JSON: `_release/0.4.17/evidence/rev16-tray/rev16-tray-report.json`.
 
-- [ ] **Step 1: Write the failing smoke**
+The script has two explicit parameter sets:
 
-Reuse the Explorer toolbar introspection structs from `dpop0417_rev13_uac_tray_smoke.ps1`, but capture `(hwnd,uID,ownerPid)` before and after each event. Required assertions:
+```powershell
+param(
+  [string]$RootPath,
+  [string]$InstallerPath,
+  [string]$OutputDir = '_release/0.4.17/evidence/rev16-tray'
+)
+if ([bool]$RootPath -eq [bool]$InstallerPath) { throw 'Pass exactly one of RootPath or InstallerPath.' }
+```
+
+Markers: `REV16_SINGLE_TRAY_INITIAL_OK`, `REV16_SINGLE_TRAY_LANGUAGE_RESTART_OK`, `REV16_SINGLE_TRAY_EXPLORER_RESTART_OK`.
+
+- [ ] **Step 1: Write the installed/staged smoke**
+
+Reuse Explorer toolbar introspection from `dpop0417_rev13_uac_tray_smoke.ps1`. Capture canonical bridge `(HWND,uID,ownerPid,hIcon)` and core entries.
 
 ```powershell
 Assert-TrayState -ExpectedBridge 1 -ExpectedCore 0
 $initial = Get-CanonicalBridgeTrayIdentity
+if ($initial.WindowTitle -ne 'DPopCleaner.TrayRamBadgeHost' -or $initial.hIcon -eq [IntPtr]::Zero) { throw 'Canonical RAM tray icon is invalid.' }
 
 Invoke-LanguageRestart -Language 'English'
 Assert-TrayState -ExpectedBridge 1 -ExpectedCore 0
-$afterLanguage = Get-CanonicalBridgeTrayIdentity
-if ($afterLanguage.Hwnd -ne $initial.Hwnd -or $afterLanguage.uID -ne $initial.uID) {
-    throw "Tray identity changed across core restart: initial=$($initial.Hwnd)/$($initial.uID) after=$($afterLanguage.Hwnd)/$($afterLanguage.uID)"
-}
-
-Stop-Process -Name explorer -Force
-Start-Process explorer.exe
-Wait-ForTrayIdentity
-Assert-TrayState -ExpectedBridge 1 -ExpectedCore 0
+$after = Get-CanonicalBridgeTrayIdentity
+if ($after.Hwnd -ne $initial.Hwnd -or $after.uID -ne $initial.uID) { throw 'Tray identity changed across core restart.' }
 ```
 
-The smoke must also verify the canonical HWND window title equals `DPopCleaner.TrayRamBadgeHost` and `hIcon != 0` in Explorer tray data.
+For installed mode, install to an isolated temp directory first. For staged mode, launch the staged `SimpleUpdate.exe` with `--no-update-check` and an isolated settings file.
 
-- [ ] **Step 2: Run against rev.15 to verify RED**
-
-Build current installer and run:
+- [ ] **Step 2: Verify RED against rev.15 behavior**
 
 ```powershell
-./tools/dpop0417_rev16_single_tray_smoke.ps1 -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' -OutputDir '_release/0.4.17/evidence/rev16-tray'
+./tools/dpop0417_rev16_single_tray_smoke.ps1 -RootPath '_release/0.4.17/stage' -OutputDir '_release/0.4.17/evidence/rev16-tray-stage'
 ```
 
-Expected on unfixed rev.15 behavior: FAIL when the core restart recreates the bridge tray HWND or leaves a duplicate/ghost identity.
+Expected before Task 1 fix: FAIL when core restart changes bridge HWND or leaves a duplicate/ghost.
 
-- [ ] **Step 3: Add runtime and installed CI gates**
+- [ ] **Step 3: Add CI gates**
 
-In `DPopCleaner_0.4.17_SIMPLEUPDATE.yml`, run the smoke against the authentic build payload if the script supports `-RootPath`; otherwise add a non-installed companion check that verifies stable HWND during artificial successor PID replacement.
-
-In `DPopCleaner_0.4.17_FOUNDATION.yml`, after `Run installed package smoke`, add:
+SimpleUpdate workflow:
 
 ```yaml
-- name: Run rev.16 single tray identity smoke
+- name: Run rev.16 staged single tray smoke
   shell: pwsh
-  run: ./tools/dpop0417_rev16_single_tray_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev16-tray'
+  run: ./tools/dpop0417_rev16_single_tray_smoke.ps1 -RootPath '_release/0.4.17/stage' -OutputDir '_release/0.4.17/evidence/rev16-tray-stage'
 ```
 
-- [ ] **Step 4: Run GREEN**
+Foundation workflow after installer build:
 
-Expected markers:
-
-```text
-REV16_SINGLE_TRAY_INITIAL_OK
-REV16_SINGLE_TRAY_LANGUAGE_RESTART_OK
-REV16_SINGLE_TRAY_EXPLORER_RESTART_OK
+```yaml
+- name: Run rev.16 installed single tray smoke
+  shell: pwsh
+  run: ./tools/dpop0417_rev16_single_tray_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev16-tray-installed'
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Add Explorer restart assertion**
+
+Restart Explorer only in the installed smoke, wait for `TaskbarCreated`, then require exactly one bridge identity and zero core identities. The canonical `(HWND,uID)` must be unchanged.
+
+- [ ] **Step 5: Run GREEN and commit**
+
+Expected all three markers. Commit:
 
 ```bash
 git add tools/dpop0417_rev16_single_tray_smoke.ps1 .github/workflows/DPopCleaner_0.4.17_SIMPLEUPDATE.yml .github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml
@@ -250,19 +241,19 @@ git commit -m "test(rev16): enforce one tray identity"
 
 ---
 
-### Task 3: Add a real Zapret installed lifecycle test before changing Zapret behavior
+### Task 3: Create a real Zapret lifecycle RED test
 
 **Files:**
 - Create: `tools/dpop0417_rev16_zapret_functional_smoke.ps1`
 - Modify: `.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml`
 
 **Interfaces:**
-- Smoke markers: `REV16_ZAPRET_INSTALL_OK`, `REV16_ZAPRET_START_OK`, `REV16_ZAPRET_STOP_OK`, `REV16_ZAPRET_STRATEGY_CHANGE_OK`, `REV16_ZAPRET_REMOVE_OK`.
-- Evidence: `rev16-zapret-functional-report.json` containing selected strategy, second strategy, UI status text, `winws.exe` command line, service states and cleanup result.
+- Markers: `REV16_ZAPRET_INSTALL_OK`, `REV16_ZAPRET_START_OK`, `REV16_ZAPRET_STOP_OK`, `REV16_ZAPRET_STRATEGY_CHANGE_OK`, `REV16_ZAPRET_REMOVE_OK`.
+- Evidence JSON stores selected strategies, upper status text, bundled `winws.exe` command lines, `zapret`/WinDivert service state, failing stage and cleanup state.
 
-- [ ] **Step 1: Build UI automation around the installed DPopCleaner window**
+- [ ] **Step 1: Automate the same installed UI path the user uses**
 
-Copy the Win32 child enumeration/ComboBox helpers from `dpop0417_zapret_ui_smoke.ps1`. Start the installed `SimpleUpdate.exe`, find `DPopCleaner.Core.exe` by exact installed path, click the native `Zapret` navigation button, then locate lifecycle buttons by visible Russian captions for this test run:
+Start installed `SimpleUpdate.exe`, resolve exact installed `DPopCleaner.Core.exe`, open `Zapret`, then locate visible buttons:
 
 ```powershell
 $installButton = Find-VisibleButton 'Установить сервис'
@@ -272,55 +263,54 @@ $statusButton  = Find-VisibleButton 'Статус'
 $removeButton  = Find-VisibleButton 'Удалить сервисы'
 ```
 
-Do not invoke `service.bat` directly for the primary test; the point is to verify the same UI path the user uses.
+Use the same child enumeration and ComboBox helpers already proven in `dpop0417_zapret_ui_smoke.ps1`.
 
-- [ ] **Step 2: Define observable Windows state helpers**
-
-Implement:
+- [ ] **Step 2: Observe real Windows state**
 
 ```powershell
-function Get-ZapretServiceState {
-    $zapret = Get-CimInstance Win32_Service -Filter "Name='zapret'" -ErrorAction SilentlyContinue
-    $divert = @(Get-CimInstance Win32_SystemDriver -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^WinDivert' })
-    [pscustomobject]@{ Zapret=$zapret; WinDivert=$divert }
-}
-
 function Get-BundledWinws {
-    @(Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue |
-      Where-Object { $_.ExecutablePath -and ([IO.Path]::GetFullPath($_.ExecutablePath) -eq [IO.Path]::GetFullPath($script:WinwsPath)) })
+  @(Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.ExecutablePath -and ([IO.Path]::GetFullPath($_.ExecutablePath) -eq [IO.Path]::GetFullPath($script:WinwsPath)) })
+}
+
+function Get-ZapretService {
+  Get-CimInstance Win32_Service -Filter "Name='zapret'" -ErrorAction SilentlyContinue
+}
+
+function Get-WinDivertDrivers {
+  @(Get-CimInstance Win32_SystemDriver -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^WinDivert' })
 }
 ```
 
-Read `CommandLine` from `Win32_Process` so strategy changes are observable.
+- [ ] **Step 3: Execute exact lifecycle**
 
-- [ ] **Step 3: Implement lifecycle assertions**
+1. Select `general.bat`.
+2. Click Install; wait for service `zapret` to exist and be `Running`, or record failure.
+3. Click Status; verify upper status agrees with Windows state.
+4. Click Remove; verify service removed before standalone test.
+5. Click Start; wait for bundled `winws.exe`; capture `CommandLine`; upper status must be ON.
+6. Click Stop; wait for bundled `winws.exe` to disappear; upper status must be OFF.
+7. Select a second `general*.bat`; Start; second `CommandLine` must differ from first; Stop.
+8. Click Remove; no `zapret` service and no bundled `winws.exe` may remain.
 
-Run in this exact order:
-
-1. Select `general.bat` in the ComboBox.
-2. Click install service; wait until service `zapret` exists and is `Running` or until UI explicitly reports failure.
-3. Click Status; assert upper status block contains service/run state consistent with Windows service state.
-4. Remove service so standalone strategy can be tested cleanly.
-5. Click Start; wait for bundled `winws.exe`; capture command line; assert upper status block reports `ON`.
-6. Click Stop; wait until bundled `winws.exe` disappears; assert upper status block reports `OFF`.
-7. Select a second real `general*.bat` entry; Start again; assert `winws.exe` command line differs from the first strategy command line.
-8. Stop; click Remove Services; assert no `zapret` service and no bundled `winws.exe` remain.
-
-Always execute cleanup in `finally`:
+- [ ] **Step 4: Implement unconditional cleanup**
 
 ```powershell
-try { Click-IfVisible $removeButton } catch { }
-Get-BundledWinws | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-sc.exe stop zapret | Out-Null
-sc.exe delete zapret | Out-Null
-foreach ($name in @('WinDivert','WinDivert14')) { sc.exe stop $name | Out-Null; sc.exe delete $name | Out-Null }
+finally {
+  try { Click-IfVisible $removeButton } catch { }
+  Get-BundledWinws | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+    & sc.exe stop $name | Out-Null
+    & sc.exe delete $name | Out-Null
+  }
+}
 ```
 
-- [ ] **Step 4: Run RED on current rev.15**
+- [ ] **Step 5: Run and preserve RED evidence**
 
-Run installed smoke locally/CI candidate. Expected: at least one lifecycle assertion reproduces the user's Zapret failure. Preserve the evidence JSON and exact failing step; do not modify production behavior until this RED evidence exists.
+Run against rev.15 installed candidate. This task is complete only when the smoke produces an actual failing lifecycle stage or proves the native path works. In either case write `rev16-zapret-functional-report.json`; Task 4 uses its `failing_stage` field through the explicit repair table below.
 
-- [ ] **Step 5: Add Foundation gate**
+- [ ] **Step 6: Add Foundation gate and commit**
 
 ```yaml
 - name: Run rev.16 real Zapret lifecycle smoke
@@ -328,16 +318,14 @@ Run installed smoke locally/CI candidate. Expected: at least one lifecycle asser
   run: ./tools/dpop0417_rev16_zapret_functional_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev16-zapret-functional'
 ```
 
-- [ ] **Step 6: Commit the RED harness**
-
 ```bash
 git add tools/dpop0417_rev16_zapret_functional_smoke.ps1 .github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml
-git commit -m "test(rev16): reproduce real Zapret lifecycle failure"
+git commit -m "test(rev16): exercise real Zapret lifecycle"
 ```
 
 ---
 
-### Task 4: Repair the Zapret lifecycle path exposed by Task 3
+### Task 4: Repair exactly the Zapret lifecycle stage proven broken
 
 **Files:**
 - Create: `v0417/src/SimpleUpdate/ZapretRuntimeState.cs`
@@ -348,85 +336,78 @@ git commit -m "test(rev16): reproduce real Zapret lifecycle failure"
 
 **Interfaces:**
 - `ZapretRuntimeState.Read(string applicationRoot) : ZapretRuntimeState`
-- Properties: `bool BundledWinwsRunning`, `bool ZapretServiceExists`, `bool ZapretServiceRunning`, `string BundledWinwsCommandLine`.
-- `ZapretEnhancementHost.RefreshRuntimeStatus()` writes the upper existing status control only; it does not create a second log/status panel.
+- Properties: `BundledWinwsRunning`, `ZapretServiceExists`, `ZapretServiceRunning`, `BundledWinwsCommandLine`.
+- `ZapretEnhancementHost.RefreshRuntimeStatus()` updates only the existing upper Zapret status control.
 
-- [ ] **Step 1: Write RED unit contract for runtime state and status refresh**
+- [ ] **Step 1: Write RED runtime-state contract**
 
 ```csharp
 [TestMethod]
-public void Zapret_bridge_has_runtime_state_reader_and_status_refresh()
+public void Zapret_bridge_reads_factual_runtime_state()
 {
-    var enhancement = ReadSource("ZapretEnhancementHost.cs");
     var runtime = ReadSource("ZapretRuntimeState.cs");
-    StringAssert.Contains(runtime, "internal sealed class ZapretRuntimeState");
     StringAssert.Contains(runtime, "internal static ZapretRuntimeState Read(string applicationRoot)");
-    StringAssert.Contains(enhancement, "RefreshRuntimeStatus");
+    StringAssert.Contains(ReadSource("ZapretEnhancementHost.cs"), "RefreshRuntimeStatus");
 }
 ```
 
-Run and expect FAIL because the runtime state file/method do not exist.
+- [ ] **Step 2: Implement `ZapretRuntimeState`**
 
-- [ ] **Step 2: Implement `ZapretRuntimeState` using exact bundled path**
+Compare `Process.GetProcessesByName("winws")` `MainModule.FileName` with exact `<root>\Zapret\bin\winws.exe`. Query `sc.exe query zapret`, `WinDivert`, `WinDivert14` with redirected output and a 5 second timeout. Do not infer running state from UI strings.
 
-Use `System.Diagnostics.Process.GetProcessesByName("winws")` and compare `MainModule.FileName` to `<applicationRoot>\Zapret\bin\winws.exe`. Query services without adding a new dependency by launching `sc.exe query zapret` and `sc.exe query WinDivert` through a small private helper with `UseShellExecute=false`, redirected stdout/stderr and a 5 second timeout. Map only observable states; do not infer success from UI text.
+- [ ] **Step 3: Refresh upper status after every bridge action**
 
-- [ ] **Step 3: Make bridge actions refresh factual status**
+`RefreshRuntimeStatus()` structurally finds the existing upper status area between version header and Strategy row and writes exactly one factual `ON/OFF` line. No second journal/status control is created.
 
-After each bridge-owned action in `WindowProc`, call:
+- [ ] **Step 4: Apply the explicit repair table from Task 3 evidence**
 
-```csharp
-RefreshRuntimeStatus();
-```
+Use exactly one row whose `failing_stage` matches the evidence; working stages remain native.
 
-`RefreshRuntimeStatus()` finds the existing upper Zapret status Static by structure: visible Static below the version/status header and above the Strategy row. Write one concise line derived from `ZapretRuntimeState`, e.g. `winws.exe (DPopCleaner Zapret): ON` or `OFF`; preserve the frozen status/header controls and do not create another text area.
+| `failing_stage` | Repair |
+|---|---|
+| `start` | Hide native Start button and create same-bounds bridge proxy; launch selected bundled `general*.bat` with `UseShellExecute=true` and Zapret root as working directory. |
+| `stop` | Hide native Stop button and create same-bounds bridge proxy; terminate only `winws.exe` whose `MainModule.FileName` equals bundled `Zapret\bin\winws.exe`. |
+| `status` | Hide native Status button and create same-bounds bridge proxy; call `ZapretRuntimeState.Read` and refresh existing upper status. |
+| `install` | Keep upstream Flowseal 1.10.2 as authority; proxy the button to launch bundled `service.bat` visibly in Zapret root, then poll factual service state and refresh status. Do not duplicate Flowseal's service-install parser. |
+| `remove` | Proxy Remove to bundled `service.bat` visible manager if native path is wrong; after manager exits, poll `zapret`/WinDivert/bundled winws and refresh status. |
+| `none` | Do not replace lifecycle buttons; retain only factual status refresh and the installed regression gate. |
 
-For `RepairConnection`, keep `load_user_lists`, TCP timestamps and DNS flush, but include exact command/exit-code in thrown errors by changing `RunHidden` to return a small result or to throw:
+The proxy uses the original native button bounds/font and is owned by `ZapretEnhancementHost`. It is hidden/restored together with other Zapret bridge controls.
+
+- [ ] **Step 5: Improve error diagnostics**
+
+For bridge commands, errors must include executable/arguments and exit code. `RepairConnection` keeps user-list load, TCP timestamps and DNS flush, but `RunHidden` throws messages shaped as:
 
 ```text
 Команда: ipconfig.exe /flushdns
-Код выхода: <n>
+Код выхода: 1
 ```
 
-- [ ] **Step 4: If Task 3 proves a frozen lifecycle button is broken, proxy only that lifecycle action**
-
-The allowed repair boundary is explicit: hide the broken native lifecycle button and create a same-bounds bridge proxy in `ZapretEnhancementHost`; route it through the bundled Flowseal 1.10.2 files from `_applicationRoot\Zapret`. Do not modify `DPopCleaner.Core.exe` and do not replace working native lifecycle buttons.
-
-For standalone Start/Stop, the bridge implementation must use the selected `general*.bat` path for Start and terminate only `winws.exe` whose executable path equals the bundled `Zapret\bin\winws.exe` for Stop. For install/remove, continue using the upstream 1.10.2 `service.bat` UI path unless RED evidence specifically proves that frozen wiring calls the wrong path; then the proxy launches that same bundled `service.bat` visibly so the upstream `Install Service` / `Remove Services` menu remains authoritative.
-
-- [ ] **Step 5: Run functional GREEN**
-
-Run:
+- [ ] **Step 6: Run GREEN + legacy regressions**
 
 ```powershell
+dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
 ./tools/dpop0417_rev16_zapret_functional_smoke.ps1 -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' -OutputDir '_release/0.4.17/evidence/rev16-zapret-functional'
-```
-
-Expected all five markers and cleanup with no remaining bundled `winws.exe`/`zapret` service.
-
-- [ ] **Step 6: Run existing Zapret regression suite**
-
-```powershell
 python tests/test_dpop0417_zapret_bundle_contract.py -v
 python tests/test_dpop0417_zapret_screen_fix_contract.py -v
-./tools/dpop0417_zapret_ui_smoke.ps1 -RootPath '_release/0.4.17/stage' -OutputDir '_release/0.4.17/evidence/zapret-ui'
 ```
 
-Expected PASS, version 1.10.2, 22 strategies, frozen core hash unchanged.
+Expected: five lifecycle markers, cleanup clean, version 1.10.2/22 strategies unchanged.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add v0417/src/SimpleUpdate/ZapretRuntimeState.cs v0417/src/SimpleUpdate/ZapretEnhancementHost.cs v0417/src/SimpleUpdate/LauncherContext.cs v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs
-git commit -m "fix(rev16): make Zapret lifecycle observable and reliable"
+git commit -m "fix(rev16): repair proven Zapret lifecycle path"
 ```
 
 ---
 
-### Task 5: Unify Zapret light/dark button styling and fit all bridge actions inside the panel
+### Task 5: Create one Zapret presentation owner for theme and layout
 
 **Files:**
 - Create: `v0417/src/SimpleUpdate/ZapretPresentationHost.cs`
+- Modify: `v0417/src/SimpleUpdate/NativeBridge.cs`
 - Modify: `v0417/src/SimpleUpdate/ZapretEnhancementHost.cs`
 - Modify: `v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs`
 - Modify: `v0417/src/SimpleUpdate/LauncherContext.cs`
@@ -435,14 +416,15 @@ git commit -m "fix(rev16): make Zapret lifecycle observable and reliable"
 
 **Interfaces:**
 - `ZapretPresentationHost(IntPtr parent, ZapretEnhancementHost enhancement)`
-- `void Show()` / `void Hide()` / `void Refresh()` / `void Dispose()`.
-- `ZapretEnhancementHost.ActionToolbarHandle : IntPtr`, `UpdateToolbarHandle : IntPtr` expose only handles required for layout.
+- `Show()`, `Hide()`, `Refresh()`, `Dispose()`.
+- `ZapretEnhancementHost.ActionToolbarHandle`, `UpdateToolbarHandle`.
+- `NativeBridge.FindSettingsComboBoxes(IntPtr parent)` returns language combo then theme combo using geometry/item content, regardless current visibility.
 
-- [ ] **Step 1: Write RED contracts against forced dark styling**
+- [ ] **Step 1: Write RED contract against forced dark**
 
 ```csharp
 [TestMethod]
-public void Zapret_buttons_use_one_presentation_host_not_forced_dark_theme()
+public void Zapret_theme_has_one_owner()
 {
     var enhancement = ReadSource("ZapretEnhancementHost.cs");
     var polish = ReadSource("ZapretVisualPolishHost.cs");
@@ -452,85 +434,65 @@ public void Zapret_buttons_use_one_presentation_host_not_forced_dark_theme()
 }
 ```
 
-Expected RED on rev.15 because both hard-coded dark paths exist.
+- [ ] **Step 2: Add structural Settings combo lookup**
 
-- [ ] **Step 2: Move theme decision into `ZapretPresentationHost`**
+`NativeBridge.FindSettingsComboBoxes` enumerates ComboBoxes even when Settings is hidden. Identify language combo by list containing `English`; theme combo is the nearest ComboBox below it in Settings geometry. Return exactly two handles or empty array. This avoids localized Static labels.
 
-Determine current theme from the frozen Theme ComboBox rather than guessing from OS global theme. Reuse `NativeBridge.GetChildren(_parent)`; select the visible Settings theme ComboBox only when present, otherwise cache the last observed theme and default to the current native Zapret button appearance. Represent state as:
+- [ ] **Step 3: Detect theme from the actual theme ComboBox**
 
-```csharp
-private enum ZapretTheme { Light, Dark }
-```
+Read selected theme item from the second combo. Treat `Midnight`/dark-named selection as Dark and the light-named selection as Light. The presentation smoke first dumps actual item names and the C# test pins the exact bundled values discovered from frozen core; do not guess from OS theme.
 
-Apply one theme consistently to all bridge-owned Zapret buttons. For light use `SetWindowTheme(button, "Explorer", null)`; for dark use `SetWindowTheme(button, "DarkMode_Explorer", null)`. Remove `BS_OWNERDRAW` forcing from `ZapretVisualPolishHost`; it may remain only for installed Zapret version label refresh if needed.
+- [ ] **Step 4: Remove independent theme ownership from old hosts**
 
-- [ ] **Step 3: Replace fixed 709 px toolbar math with measured layout**
+Delete unconditional `SetWindowTheme(button, "DarkMode_Explorer", null)` in `ZapretEnhancementHost`. Remove owner-draw theme code from `ZapretVisualPolishHost`; keep that class only for installed Zapret version-dependent button captions (`Игровой фильтр 1.10.2`, `Менеджер 1.10.2`). `ZapretPresentationHost` becomes the only component that calls `SetWindowTheme` for bridge Zapret buttons.
 
-Expose the action toolbar from `ZapretEnhancementHost` and let presentation calculate width from the actual Zapret page right edge (`Тесты` native button right edge / parent client width) and left edge after the `Дополнительно` heading.
+- [ ] **Step 5: Replace fixed 709px action row with measured layout**
 
-Measure each caption with `TextRenderer.MeasureText(text, font)` and allocate:
+Measure captions using `TextRenderer.MeasureText`. Available row is from `Дополнительно` right edge + gap to parent/right native `Тесты` boundary. Use minimum 120px per bridge action, preferred measured text + 24px, gap 8px, fallback gap 4px. Proportionally shrink preferred widths but never below minimum. Apply child positions with `BeginDeferWindowPos/DeferWindowPos/EndDeferWindowPos`, then redraw once.
 
-```csharp
-var widths = captions.Select(c => Math.Max(140, TextRenderer.MeasureText(c, font).Width + 24)).ToArray();
-var available = right - left;
-var gaps = ButtonGap * (widths.Length - 1);
-ScaleWidthsToFit(widths, available - gaps, minimumWidth: 120);
-```
+- [ ] **Step 6: Create light/dark layout smoke**
 
-`ScaleWidthsToFit` proportionally shrinks only if needed, never below 120 px; if even four minimum widths do not fit, reduce gap from 8 to 4 before failing. Apply all child bounds with `DeferWindowPos` and then one redraw to avoid mixed intermediate states.
-
-- [ ] **Step 4: Apply layout/theme atomically on every Zapret tick when state changed**
-
-Cache `(theme,parentClientWidth,languageVersion)` in `ZapretPresentationHost`; `Refresh()` returns immediately when unchanged. On change, update all bridge buttons and toolbar bounds in one pass. `LauncherContext.UpdateZapretEnhancements()` calls presentation `Show/Refresh` after enhancement host exists.
-
-- [ ] **Step 5: Create presentation smoke**
-
-The PowerShell smoke opens Zapret, captures every visible Button `text,id,bounds`, switches Light → Dark → Light through the native Theme ComboBox, and asserts:
+The script opens Zapret, captures visible button ids/text/bounds, switches Light → Dark → Light through native Theme ComboBox and asserts:
 
 ```powershell
-if ($button.Left -lt $pageLeft -or $button.Right -gt $pageRight) { throw 'Zapret button outside panel' }
-if ($button.Width -lt 120) { throw 'Zapret button clipped below minimum width' }
-if (Test-AnyOverlap $buttons) { throw 'Zapret buttons overlap' }
+if ($button.Right -gt $pageRight -or $button.Left -lt $pageLeft) { throw 'Button outside Zapret panel.' }
+if ($button.Width -lt 120) { throw 'Bridge button clipped.' }
+if (Test-AnyOverlap $bridgeButtons) { throw 'Bridge buttons overlap.' }
 ```
 
-For bridge IDs `1720..1725`, inspect `GetWindowTheme`/theme class where possible; otherwise verify style flags and capture screenshot evidence for both themes. Emit `REV16_ZAPRET_LIGHT_LAYOUT_OK`, `REV16_ZAPRET_DARK_LAYOUT_OK`, `REV16_ZAPRET_THEME_ROUNDTRIP_OK`.
+Emit `REV16_ZAPRET_LIGHT_LAYOUT_OK`, `REV16_ZAPRET_DARK_LAYOUT_OK`, `REV16_ZAPRET_THEME_ROUNDTRIP_OK`. Save screenshots for both themes as CI artifacts.
 
-- [ ] **Step 6: Run GREEN**
+- [ ] **Step 7: Run GREEN and commit**
 
 ```powershell
 dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
 ./tools/dpop0417_rev16_zapret_presentation_smoke.ps1 -RootPath '_release/0.4.17/stage' -OutputDir '_release/0.4.17/evidence/rev16-zapret-presentation'
 ```
 
-Expected PASS and no mixed dark/light bridge buttons.
-
-- [ ] **Step 7: Commit**
-
 ```bash
-git add v0417/src/SimpleUpdate/ZapretPresentationHost.cs v0417/src/SimpleUpdate/ZapretEnhancementHost.cs v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs v0417/src/SimpleUpdate/LauncherContext.cs v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs tools/dpop0417_rev16_zapret_presentation_smoke.ps1
+git add v0417/src/SimpleUpdate/ZapretPresentationHost.cs v0417/src/SimpleUpdate/NativeBridge.cs v0417/src/SimpleUpdate/ZapretEnhancementHost.cs v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs v0417/src/SimpleUpdate/LauncherContext.cs v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs tools/dpop0417_rev16_zapret_presentation_smoke.ps1
 git commit -m "fix(rev16): unify Zapret theme and layout"
 ```
 
 ---
 
-### Task 6: Hide Journal only while Zapret is active and restore it byte-for-byte at HWND level
+### Task 6: Hide Journal only on Zapret and restore original controls elsewhere
 
 **Files:**
 - Modify: `v0417/src/SimpleUpdate/ZapretPresentationHost.cs`
-- Modify: `v0417/src/SimpleUpdate/LauncherContext.cs`
 - Test: `v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs`
 - Test: `tools/dpop0417_rev16_zapret_presentation_smoke.ps1`
 
 **Interfaces:**
-- `ZapretPresentationHost.Show()` hides journal controls.
-- `ZapretPresentationHost.Hide()` restores exactly captured native visibility and bounds.
-- No localized `"Журнал"` lookup is allowed for the primary journal discovery path.
+- `CaptureJournalControls()`
+- `HideJournalControls()`
+- `RestoreJournalControls()`
 
-- [ ] **Step 1: Write RED source contract for structural journal discovery**
+- [ ] **Step 1: Write RED reversible-policy contract**
 
 ```csharp
 [TestMethod]
-public void Zapret_journal_policy_is_structural_and_reversible()
+public void Journal_policy_is_structural_and_reversible()
 {
     var source = ReadSource("ZapretPresentationHost.cs");
     StringAssert.Contains(source, "CaptureJournalControls");
@@ -539,9 +501,9 @@ public void Zapret_journal_policy_is_structural_and_reversible()
 }
 ```
 
-- [ ] **Step 2: Capture journal controls structurally**
+- [ ] **Step 2: Capture native journal structurally**
 
-On first visible Zapret frame, enumerate visible children below the row containing `NativeBridge.ZapretApplyButtonId`. Choose the largest visible multiline `Edit`/list-like control in the lower half of the client area as the journal body. Choose the nearest visible `Static` whose bottom is above the body top and horizontal ranges overlap as the journal heading. Capture for each:
+Below the row containing `NativeBridge.ZapretApplyButtonId`, select the largest visible multiline `Edit`/list-like child in the lower half of the client area as journal body. Select the nearest visible `Static` directly above it with overlapping horizontal range as heading. Capture handle, bounds and original visibility:
 
 ```csharp
 private sealed class NativeControlSnapshot
@@ -552,104 +514,79 @@ private sealed class NativeControlSnapshot
 }
 ```
 
-Do not destroy, reparent or rewrite text.
+- [ ] **Step 3: Hide/restore without recreating HWND**
 
-- [ ] **Step 3: Hide and restore**
+`Show()` hides captured heading/body. `Hide()` restores captured bounds and original visibility. `Dispose()` restores before clearing references. A successor core creates a fresh presentation host and fresh snapshots.
 
-`Show()` calls `SW_HIDE` on captured heading/body after capture. `Hide()` restores captured bounds with `PositionChildWindow` and original visibility state. `Dispose()` calls restore before releasing references. On core restart a new presentation host captures the successor HWNDs from scratch.
+- [ ] **Step 4: Extend smoke**
 
-- [ ] **Step 4: Extend presentation smoke**
+On Zapret: journal heading/body hidden, upper status still visible. Navigate to RAM/Settings: the same captured native HWNDs are restored to original bounds and visibility. Return to Zapret: hidden again, no coordinate drift.
 
-On Zapret page assert the large lower journal body and its heading are hidden while the upper status block remains visible. Navigate to RAM or Settings and assert the same captured HWNDs return to their original bounds/visibility. Navigate back to Zapret and assert they hide again without cumulative coordinate drift.
+Emit `REV16_ZAPRET_JOURNAL_HIDDEN_OK`, `REV16_OTHER_PAGE_JOURNAL_RESTORED_OK`, `REV16_ZAPRET_JOURNAL_ROUNDTRIP_OK`.
 
-Emit:
-
-```text
-REV16_ZAPRET_JOURNAL_HIDDEN_OK
-REV16_OTHER_PAGE_JOURNAL_RESTORED_OK
-REV16_ZAPRET_JOURNAL_ROUNDTRIP_OK
-```
-
-- [ ] **Step 5: Run GREEN**
-
-Run the presentation smoke across Light and Dark themes and once after language/core restart. Expected all journal markers PASS and no changes to other page controls.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Run GREEN and commit**
 
 ```bash
-git add v0417/src/SimpleUpdate/ZapretPresentationHost.cs v0417/src/SimpleUpdate/LauncherContext.cs v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs tools/dpop0417_rev16_zapret_presentation_smoke.ps1
-git commit -m "feat(rev16): hide Zapret journal only on Zapret page"
+git add v0417/src/SimpleUpdate/ZapretPresentationHost.cs v0417/tests/SimpleUpdate.Tests/Rev16TrayAndZapretContractTests.cs tools/dpop0417_rev16_zapret_presentation_smoke.ps1
+git commit -m "feat(rev16): hide journal only on Zapret"
 ```
 
 ---
 
-### Task 7: Add the integrated restart/theme/Zapret regression gate
+### Task 7: Integrate presentation lifecycle in `LauncherContext` and repeat restart twice
 
 **Files:**
+- Modify: `v0417/src/SimpleUpdate/LauncherContext.cs`
 - Modify: `tools/dpop0417_rev15_restart_recovery_smoke.ps1`
 - Modify: `.github/workflows/DPopCleaner_0.4.17_SIMPLEUPDATE.yml`
-- Modify: `.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml`
 
 **Interfaces:**
-- New marker: `REV16_RESTART_TRAY_ZAPRET_REATTACH_OK`.
+- New field: `_zapretPresentationHost`.
+- Marker: `REV16_RESTART_TRAY_ZAPRET_REATTACH_OK`.
 
-- [ ] **Step 1: Extend the existing restart smoke rather than creating another launcher model**
+- [ ] **Step 1: Wire host lifecycle**
 
-After the successor core PID is attached, navigate to Zapret and assert:
+When Zapret is visible: ensure `ZapretEnhancementHost`, then ensure `ZapretPresentationHost`, call `Show/Refresh`. When Zapret is not visible: call presentation `Hide()` before hiding enhancement controls. On core restart and launcher exit: dispose presentation host; tray host remains alive across core restart.
 
-```powershell
-Assert-SingleTrayIdentity
-Assert-ZapretBridgeButtonsVisible -Ids @(1720,1721,1722,1723)
-Assert-ZapretButtonsInsidePanel
-Assert-ZapretJournalHidden
-```
+- [ ] **Step 2: Extend restart smoke**
 
-Then leave Zapret and assert journal restoration.
+Execute Russian → English → Russian, requiring a new core PID each time but same launcher PID and same tray `(HWND,uID)`. After each successor attach, open Zapret and assert one set of bridge IDs, buttons inside panel, journal hidden; leave Zapret and assert journal restored.
 
-- [ ] **Step 2: Execute two consecutive language restarts**
-
-Run Russian → English → Russian. After each new core PID, require the same launcher PID and the same tray `(HWND,uID)`. Require newly attached Zapret native HWNDs but only one set of bridge button IDs.
-
-- [ ] **Step 3: Run full SimpleUpdate workflow locally/CI**
+- [ ] **Step 3: Run full SimpleUpdate suite**
 
 ```powershell
 dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
 ./tools/dpop0417_rev15_restart_recovery_smoke.ps1 -RootPath '_release/0.4.17/stage'
 ```
 
-Expected: existing rev.15 markers plus `REV16_RESTART_TRAY_ZAPRET_REATTACH_OK`.
+Expected existing rev.15 markers plus `REV16_RESTART_TRAY_ZAPRET_REATTACH_OK`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tools/dpop0417_rev15_restart_recovery_smoke.ps1 .github/workflows/DPopCleaner_0.4.17_SIMPLEUPDATE.yml .github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml
-git commit -m "test(rev16): cover repeated restart tray and Zapret reattach"
+git add v0417/src/SimpleUpdate/LauncherContext.cs tools/dpop0417_rev15_restart_recovery_smoke.ps1 .github/workflows/DPopCleaner_0.4.17_SIMPLEUPDATE.yml
+git commit -m "test(rev16): cover repeated restart and Zapret reattach"
 ```
 
 ---
 
-### Task 8: Promote release identity to rev.16 only after all feature gates are GREEN
+### Task 8: Promote all release-facing identity to rev.16 after feature GREEN
 
 **Files:**
 - Create: `tests/test_dpop0417_rev16_release_contract.py`
 - Modify: `v0417/src/SimpleUpdate/Program.cs`
 - Modify: `v0417/src/SimpleUpdate/LauncherContext.cs`
-- Modify: `version.json`
-- Modify: `update/stable.json`
-- Modify: `release-manifest.js`
-- Modify: `index.html`
+- Modify: `version.json`, `update/stable.json`, `release-manifest.js`, `index.html`
 - Modify: `release/RELEASE_NOTES_0.4.17.md`
-- Modify: `.github/workflows/publish-dpopcleaner-0.4.17.yml`
 - Modify: `.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml`
+- Modify: `.github/workflows/publish-dpopcleaner-0.4.17.yml`
 
 **Interfaces:**
-- `Program.CurrentRevision == 16`.
-- Release tag `v0.4.17-rev16`.
-- Candidate artifact `dpopcleaner-0.4.17-rev16-release-candidate`.
+- `Program.CurrentRevision == 16`
+- tag `v0.4.17-rev16`
+- candidate `dpopcleaner-0.4.17-rev16-release-candidate`
 
 - [ ] **Step 1: Write RED release contract**
-
-The Python test must assert all release-facing surfaces agree on 16 and the publisher contains all three rev.16 installed gates:
 
 ```python
 self.assertEqual(version['revision'], 16)
@@ -661,107 +598,84 @@ self.assertIn('dpop0417_rev16_zapret_presentation_smoke.ps1', workflow)
 self.assertIn('revision=16', workflow)
 ```
 
-Run and expect FAIL while production identity is still 15.
+Run and expect FAIL while identity remains 15.
 
-- [ ] **Step 2: Bump runtime/manifests/site/publisher atomically**
+- [ ] **Step 2: Bump identity atomically**
 
-Set:
+Set `CurrentRevision = 16`, User-Agent `DPopCleaner-SimpleUpdate/0.4.17-rev16`, manifests/site/release notes revision 16, publisher tag/title/concurrency/artifact names rev16.
 
-```csharp
-internal const int CurrentRevision = 16;
-```
+- [ ] **Step 3: Put all installed rev.16 gates before publication payload**
 
-Change User-Agent to `DPopCleaner-SimpleUpdate/0.4.17-rev16`, `version.json` and `update/stable.json` revision to 16, website/release manifest to rev.16, workflow `RELEASE_TAG` to `v0.4.17-rev16`, concurrency group and artifact names to rev16.
+Publisher order after installer build:
 
-- [ ] **Step 3: Add production installed gates before publication payload**
+1. Existing installed package smoke.
+2. Existing rev.15 language-restart smoke.
+3. `dpop0417_rev16_single_tray_smoke.ps1`.
+4. `dpop0417_rev16_zapret_functional_smoke.ps1`.
+5. `dpop0417_rev16_zapret_presentation_smoke.ps1`.
+6. Existing Zapret version/update regressions.
+7. Build publication payload.
 
-After the normal installed package smoke and retained rev.15 regression smoke, add:
+- [ ] **Step 4: Update release notes**
 
-```yaml
-- name: Run rev.16 single tray identity smoke
-  shell: pwsh
-  run: ./tools/dpop0417_rev16_single_tray_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev16-tray'
-
-- name: Run rev.16 real Zapret lifecycle smoke
-  shell: pwsh
-  run: ./tools/dpop0417_rev16_zapret_functional_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev16-zapret-functional'
-
-- name: Run rev.16 Zapret presentation smoke
-  shell: pwsh
-  run: ./tools/dpop0417_rev16_zapret_presentation_smoke.ps1 -InstallerPath $env:DPOP0417_INSTALLER -OutputDir '_release/0.4.17/evidence/rev16-zapret-presentation'
-```
-
-The Zapret functional smoke must finish cleanup before publication can proceed.
-
-- [ ] **Step 4: Update release notes with exact user-facing fixes**
-
-Release notes must state: one tray icon with RAM badge; bridge tray HWND persists across language restart; Zapret lifecycle is now functionally installed-tested; buttons share one theme/layout policy; Journal hidden only on Zapret; frozen core remains byte-identical; Flowseal remains 1.10.2/22 strategies.
+State exactly: one tray icon with RAM badge; tray HWND persists across core restart; real Zapret start/stop/install/remove verification; unified light/dark bridge buttons; Journal hidden only on Zapret; frozen core hash unchanged; Flowseal 1.10.2/22 strategies retained.
 
 - [ ] **Step 5: Run complete candidate verification**
 
-Run:
-
 ```powershell
 python tests/test_dpop0417_rev16_release_contract.py -v
-Get-ChildItem tests -Filter 'test_dpop0417_*.py' | Sort-Object Name | ForEach-Object { python $_.FullName -v; if ($LASTEXITCODE -ne 0) { throw $_.Name } }
+Get-ChildItem tests -Filter 'test_dpop0417_*.py' -File | Sort-Object Name | ForEach-Object { python $_.FullName -v; if ($LASTEXITCODE -ne 0) { throw $_.Name } }
 dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
 ```
 
-Then run the full PR workflows. Required exact-head GREEN:
+Then require exact-head success for SimpleUpdate, Foundation, UI diagnostic and rev.16 production-candidate build-package; PR publish remains skipped.
 
-- `DPopCleaner 0.4.17 SimpleUpdate`
-- `DPopCleaner 0.4.17 Foundation`
-- `DPopCleaner 0.4.17 rev.7 UI diagnostic`
-- `Build, release and deploy DPopCleaner 0.4.17 rev.16` build-package job; publish skipped on PR.
+- [ ] **Step 6: Verify frozen core evidence**
 
-- [ ] **Step 6: Review diff and frozen core evidence**
-
-Require staged hash output exactly:
-
-```text
-efd0eff1f4962319282363fa85595c25e0cebe11
-```
-
-Verify no `v0417/original/DPopCleaner.exe` or frozen binary content change is present in the diff.
+Staged `git hash-object DPopCleaner.exe` must equal exactly `efd0eff1f4962319282363fa85595c25e0cebe11`. No frozen binary file appears modified in diff.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add tests/test_dpop0417_rev16_release_contract.py v0417/src/SimpleUpdate/Program.cs v0417/src/SimpleUpdate/LauncherContext.cs version.json update/stable.json release-manifest.js index.html release/RELEASE_NOTES_0.4.17.md .github/workflows/publish-dpopcleaner-0.4.17.yml .github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml
+git add tests/test_dpop0417_rev16_release_contract.py v0417/src/SimpleUpdate/Program.cs v0417/src/SimpleUpdate/LauncherContext.cs version.json update/stable.json release-manifest.js index.html release/RELEASE_NOTES_0.4.17.md .github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml .github/workflows/publish-dpopcleaner-0.4.17.yml
 git commit -m "release: prepare DPopCleaner 0.4.17 rev.16"
 ```
 
 ---
 
-### Task 9: Merge and verify the published rev.16 asset
+### Task 9: Integrate and verify the published asset
 
-**Files:**
-- No production code changes expected.
+**Files:** no expected production edits.
 
-**Interfaces:**
-- Main SHA must equal the exact verified PR head or a GitHub merge commit containing that exact head.
-- Published tag: `v0.4.17-rev16`.
+- [ ] **Step 1: Fresh pre-merge verification**
 
-- [ ] **Step 1: Fresh verification immediately before integration**
+Fetch PR exact head and its workflow runs immediately before integration. Require all four workflows success and mergeability. Do not rely on earlier green SHA.
 
-Fetch PR info and workflow runs for exact head. Do not rely on older green runs. Require all four workflows `success` and PR mergeable.
+- [ ] **Step 2: Integrate exact GREEN head safely**
 
-- [ ] **Step 2: Merge using `expected_head_sha`**
+Use normal PR merge with `expected_head_sha`. If the known connector ready-for-review GraphQL bug recurs, never force `main`: first require `behind_by=0` and merge-base=current `main`, then only non-force fast-forward exact GREEN head is acceptable.
 
-Use normal PR merge when possible. If connector draft/GraphQL bug recurs, do not force-update `main`; first prove `behind_by=0` and merge-base equals current `main`, then only a non-force fast-forward of the exact GREEN head is acceptable.
+- [ ] **Step 3: Watch production push**
 
-- [ ] **Step 3: Watch production push run**
+Require build-package success including all installed rev.16 gates; then publish success including GitHub Release, Pages deploy and live installer SHA verification.
 
-Require production build-package to pass all installed rev.16 gates, then publish job to pass GitHub Release, Pages and `Verify live manifest, installer SHA256 and current screenshot`.
+- [ ] **Step 4: Verify `v0.4.17-rev16`**
 
-- [ ] **Step 4: Verify release asset from GitHub Release**
-
-Fetch `v0.4.17-rev16`; record exact asset size and `sha256:` digest from the Release API. Confirm `draft=false`, `prerelease=false`, and `target_commitish` equals the integrated production SHA.
+Fetch Release API and record exact installer size/digest. Require `draft=false`, `prerelease=false`, target SHA equals integrated SHA.
 
 - [ ] **Step 5: Verify live stable manifest**
 
-Confirm live `update/stable.json` has `version=0.4.17`, `revision=16`, `channel=stable`, and the same SHA-256/size as the published installer.
+Live `update/stable.json` must report `version=0.4.17`, `revision=16`, `channel=stable`, and same SHA-256/size as Release asset.
 
-- [ ] **Step 6: Close implementation PR and leave the old experimental 0.4.18 branches untouched**
+- [ ] **Step 6: Close implementation PR**
 
-Do not merge or revive `feat/dpopcleaner-0.4.18-core-update`; rev.16 remains on the proven 0.2.14 frozen-core + SimpleUpdate architecture.
+Leave old experimental `feat/dpopcleaner-0.4.18-core-update` and related 0.4.18 branches untouched.
+
+---
+
+## Self-Review Result
+
+- **Spec coverage:** single tray ownership → Tasks 1–2/7; real Zapret lifecycle → Tasks 3–4/8; unified theme/layout → Task 5/7; journal-only-on-Zapret → Task 6/7; restart integration → Task 7; release gate → Tasks 8–9.
+- **Placeholder scan:** no `TODO`, `TBD`, “implement later”, or unspecified error-handling steps. Task 4 uses a closed decision table keyed by the actual RED evidence rather than an open-ended repair instruction.
+- **Type consistency:** tray diagnostic properties and cleanup signature are defined in Task 1 and consumed in Task 2; presentation host interface is defined in Task 5 and consumed in Tasks 6–7; runtime-state interface is defined in Task 4 and consumed by functional status refresh.
+- **Scope:** no C++/0.4.18 migration, no frozen-core edit, no site redesign, no Flowseal version upgrade.
