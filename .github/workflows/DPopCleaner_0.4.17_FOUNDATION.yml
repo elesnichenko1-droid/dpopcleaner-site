@@ -204,6 +204,13 @@ jobs:
             -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' `
             -OutputDir '_release/0.4.17/evidence/rev16-tray'
 
+      - name: Run rev.16 installed Zapret functional smoke
+        shell: pwsh
+        run: |
+          ./tools/dpop0417_rev16_zapret_functional_smoke.ps1 `
+            -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' `
+            -OutputDir '_release/0.4.17/evidence/rev16-zapret-functional'
+
       - name: Upload 0.4.17 candidate evidence
         uses: actions/upload-artifact@v4
         with:
