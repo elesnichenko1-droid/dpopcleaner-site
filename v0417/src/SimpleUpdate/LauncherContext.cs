@@ -47,7 +47,7 @@ namespace DPopCleaner.SimpleUpdate
             _lastSetting = _settings.LoadAutoUpdateEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev14");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev15");
             _updateClient = new UpdateClient(_http);
 
             _core = StartCoreProcess();
