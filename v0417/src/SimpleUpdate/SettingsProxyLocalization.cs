@@ -47,40 +47,43 @@ namespace DPopCleaner.SimpleUpdate
                 "settings-language combo=0x" + combo.ToInt64().ToString("X") +
                 " selected='" + selectedLanguage + "'");
 
+            var host = NativeBridge.FindChildById(parent, NativeBridge.SettingsScrollHostId);
+            if (host == IntPtr.Zero) return;
+
             var english = string.Equals(selectedLanguage, "English", StringComparison.OrdinalIgnoreCase);
             var settings = english ? EnglishSettingTexts : RussianSettingTexts;
 
             for (var i = 0; i < settings.Length; i++)
-                WriteIfDifferent(parent, FirstSettingProxyId + i, settings[i]);
+                WriteIfDifferent(host, FirstSettingProxyId + i, settings[i]);
 
             WriteIfDifferent(
-                parent,
+                host,
                 NativeBridge.AutoUpdateCheckboxId,
                 english ? "Enable application auto-updates" : "Включить автообновление приложения");
             WriteIfDifferent(
-                parent,
+                host,
                 NativeBridge.CheckNowButtonId,
                 english ? "Check for updates" : "Проверить обновления");
             WriteIfDifferent(
-                parent,
+                host,
                 NativeBridge.LicenseHeadingProxyId,
                 english ? "License" : "Лицензия");
             WriteIfDifferent(
-                parent,
+                host,
                 LicenseInfoProxyId,
                 english
                     ? "Free BETA. License server will be connected later."
                     : "Бесплатная BETA. Лицензионный сервер будет подключён позже.");
             WriteIfDifferent(
-                parent,
+                host,
                 NativeBridge.LicenseSaveProxyId,
                 english ? "Save key" : "Сохранить ключ");
             WriteIfDifferent(
-                parent,
+                host,
                 NativeBridge.LicenseBuyProxyId,
                 english ? "Buy license" : "Купить лицензию");
             WriteIfDifferent(
-                parent,
+                host,
                 LicenseNoteProxyId,
                 english
                     ? "Purchasing and online key validation will be connected later."
@@ -112,9 +115,9 @@ namespace DPopCleaner.SimpleUpdate
             return value.ToString();
         }
 
-        private static void WriteIfDifferent(IntPtr parent, int id, string text)
+        private static void WriteIfDifferent(IntPtr host, int id, string text)
         {
-            var handle = NativeBridge.FindChildById(parent, id);
+            var handle = NativeBridge.FindChildById(host, id);
             if (handle == IntPtr.Zero)
             {
                 TraceWrite(id, handle, "<missing>", text, "<missing>");
