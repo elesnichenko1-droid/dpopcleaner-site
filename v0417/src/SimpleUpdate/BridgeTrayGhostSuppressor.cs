@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -11,6 +10,7 @@ namespace DPopCleaner.SimpleUpdate
         private const uint NIM_DELETE = 0x00000002;
         private const int TB_BUTTONCOUNT = 0x0418;
         private const int TB_GETBUTTON = 0x0417;
+        private const int TB_GETBUTTONTEXTW = 0x044B;
         private const uint PROCESS_VM_OPERATION = 0x0008;
         private const uint PROCESS_VM_READ = 0x0010;
         private const uint PROCESS_VM_WRITE = 0x0020;
@@ -29,9 +29,8 @@ namespace DPopCleaner.SimpleUpdate
             if (now < _nextCleanupUtc) return;
             _nextCleanupUtc = now.AddMilliseconds(250);
 
-            var processId = Process.GetCurrentProcess().Id;
             foreach (var toolbar in FindTrayToolbars())
-                RemoveFromToolbar(toolbar, processId, keepWindow, keepIconId);
+                RemoveFromToolbar(toolbar, keepWindow, keepIconId);
         }
 
         private static IEnumerable<IntPtr> FindTrayToolbars()
@@ -56,7 +55,7 @@ namespace DPopCleaner.SimpleUpdate
             GC.KeepAlive(callback);
         }
 
-        private static void RemoveFromToolbar(IntPtr toolbar, int ownerProcessId, IntPtr keepWindow, uint keepIconId)
+        private static void RemoveFromToolbar(IntPtr toolbar, IntPtr keepWindow, uint keepIconId)
         {
             uint explorerPid;
             GetWindowThreadProcessId(toolbar, out explorerPid);
@@ -64,25 +63,39 @@ namespace DPopCleaner.SimpleUpdate
 
             var process = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION, false, explorerPid);
             if (process == IntPtr.Zero) return;
+
             var buttonSize = Marshal.SizeOf(typeof(TBBUTTON64));
-            var remote = VirtualAllocEx(process, IntPtr.Zero, new UIntPtr((uint)buttonSize), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-            if (remote == IntPtr.Zero) { CloseHandle(process); return; }
+            var remoteButton = VirtualAllocEx(process, IntPtr.Zero, new UIntPtr((uint)buttonSize), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            var remoteText = VirtualAllocEx(process, IntPtr.Zero, new UIntPtr(2048), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            if (remoteButton == IntPtr.Zero || remoteText == IntPtr.Zero)
+            {
+                if (remoteButton != IntPtr.Zero) VirtualFreeEx(process, remoteButton, UIntPtr.Zero, MEM_RELEASE);
+                if (remoteText != IntPtr.Zero) VirtualFreeEx(process, remoteText, UIntPtr.Zero, MEM_RELEASE);
+                CloseHandle(process);
+                return;
+            }
 
             try
             {
                 var count = SendMessage(toolbar, TB_BUTTONCOUNT, IntPtr.Zero, IntPtr.Zero).ToInt32();
-                for (var i = 0; i < count; i++)
+                for (var i = count - 1; i >= 0; i--)
                 {
-                    if (SendMessage(toolbar, TB_GETBUTTON, new IntPtr(i), remote) == IntPtr.Zero) continue;
+                    if (SendMessage(toolbar, TB_GETBUTTON, new IntPtr(i), remoteButton) == IntPtr.Zero) continue;
                     TBBUTTON64 button;
-                    if (!ReadRemote(process, remote, out button) || button.dwData == UIntPtr.Zero) continue;
+                    if (!ReadRemote(process, remoteButton, out button) || button.dwData == UIntPtr.Zero) continue;
                     TRAYDATA64 tray;
                     if (!ReadRemote(process, new IntPtr(unchecked((long)button.dwData.ToUInt64())), out tray) || tray.hwnd == IntPtr.Zero) continue;
 
-                    uint trayOwner;
-                    GetWindowThreadProcessId(tray.hwnd, out trayOwner);
-                    if (trayOwner != (uint)ownerProcessId) continue;
                     if (tray.hwnd == keepWindow && tray.uID == keepIconId) continue;
+
+                    var buttonText = string.Empty;
+                    var textLength = SendMessage(toolbar, TB_GETBUTTONTEXTW, new IntPtr(button.idCommand), remoteText).ToInt32();
+                    if (textLength > 0)
+                        buttonText = ReadRemoteUnicode(process, remoteText, Math.Min(1023, textLength + 1));
+
+                    var windowTitle = new StringBuilder(256);
+                    GetWindowText(tray.hwnd, windowTitle, windowTitle.Capacity);
+                    if (!IsDPopCleanerTrayText(buttonText) && !IsDPopCleanerTrayText(windowTitle.ToString())) continue;
 
                     var data = new NOTIFYICONDATA
                     {
@@ -95,9 +108,31 @@ namespace DPopCleaner.SimpleUpdate
             }
             finally
             {
-                VirtualFreeEx(process, remote, UIntPtr.Zero, MEM_RELEASE);
+                VirtualFreeEx(process, remoteButton, UIntPtr.Zero, MEM_RELEASE);
+                VirtualFreeEx(process, remoteText, UIntPtr.Zero, MEM_RELEASE);
                 CloseHandle(process);
             }
+        }
+
+        private static bool IsDPopCleanerTrayText(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) && value.StartsWith("DPopCleaner", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ReadRemoteUnicode(IntPtr process, IntPtr remote, int characters)
+        {
+            var bytes = Math.Max(2, characters * 2);
+            var local = Marshal.AllocHGlobal(bytes);
+            try
+            {
+                UIntPtr read;
+                if (!ReadProcessMemory(process, remote, local, new UIntPtr((uint)bytes), out read)) return string.Empty;
+                var usable = (int)Math.Min((ulong)bytes, read.ToUInt64());
+                if (usable <= 1) return string.Empty;
+                var value = Marshal.PtrToStringUni(local, usable / 2);
+                return (value ?? string.Empty).TrimEnd('\0');
+            }
+            finally { Marshal.FreeHGlobal(local); }
         }
 
         private static bool ReadRemote<T>(IntPtr process, IntPtr remote, out T value) where T : struct
@@ -161,7 +196,6 @@ namespace DPopCleaner.SimpleUpdate
             public IntPtr hBalloonIcon;
         }
 
-        [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowProc callback, IntPtr lParam);
         [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumWindowProc callback, IntPtr lParam);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string windowName);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
