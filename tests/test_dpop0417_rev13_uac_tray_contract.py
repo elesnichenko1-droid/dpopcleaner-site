@@ -42,11 +42,18 @@ class DPop0417Rev13UacTrayContractTests(unittest.TestCase):
         self.assertIn('legacytrayiconsuppressor', tray)
         self.assertIn('tb_getbutton', tray)
         self.assertIn('getwindowthreadprocessid', tray)
+
+        # Rev.16 keeps the launcher-owned notification identity alive across frozen-core
+        # self-restarts. Cleanup is now scoped by the exact canonical HWND/uID instead of
+        # rediscovering a window by title, while all rev.13 UAC/tray guarantees remain.
         self.assertIn('_trayramhost', launcher)
         self.assertIn('update(_core.id', launcher)
-        self.assertIn('bridgetrayghostsuppressor.cleanupcurrentprocess()', launcher)
-        self.assertIn('dpopcleaner.trayrambadgehost', ghost)
-        self.assertIn('keepiconid = 1', ghost)
+        self.assertIn('_trayramhost.reattachmainwindow', launcher)
+        self.assertIn('bridgetrayghostsuppressor.cleanupcurrentprocess(_messagewindow.handle, trayiconid)', tray)
+        self.assertIn('legacytrayiconsuppressor.removeiconsforprocess(coreprocessid)', tray)
+        self.assertIn('cleanupcurrentprocess(intptr keepwindow, uint keepiconid)', ghost)
+        self.assertIn('tray.hwnd == keepwindow && tray.uid == keepiconid', ghost)
+        self.assertNotIn('findkeepwindow', ghost)
         self.assertIn('shell_notifyicon', ghost)
         self.assertIn('nim_delete', ghost)
         self.assertIn('tb_getbutton', ghost)
