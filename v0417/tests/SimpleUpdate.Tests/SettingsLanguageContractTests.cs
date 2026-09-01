@@ -96,17 +96,26 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void RestartRecovery_MustRecreateRamBadgeAndDiscardOldWindowHosts()
+        public void RestartRecovery_MustPreserveRamBadgeIdentityAndDiscardOldWindowHosts()
         {
             var launcher = ReadSource("LauncherContext.cs");
 
-            StringAssert.Contains(launcher, "if (_trayRamHost != null) _trayRamHost.Dispose();");
-            StringAssert.Contains(launcher, "_trayRamHost = null;");
-            StringAssert.Contains(launcher, "_traySettingKnown = false;");
-            StringAssert.Contains(launcher, "_mainWindow = IntPtr.Zero;");
-            StringAssert.Contains(launcher, "_settingsHost = null;");
-            StringAssert.Contains(launcher, "_zapretHost = null;");
-            StringAssert.Contains(launcher, "_zapretVisualHost = null;");
+            var resetStart = launcher.IndexOf("private void ResetBridgeForRestartedCore()", StringComparison.Ordinal);
+            Assert.IsTrue(resetStart >= 0, "ResetBridgeForRestartedCore was not found.");
+            var resetEnd = launcher.IndexOf("private void UpdateTrayRamBadge()", resetStart, StringComparison.Ordinal);
+            Assert.IsTrue(resetEnd > resetStart, "Could not isolate ResetBridgeForRestartedCore.");
+            var reset = launcher.Substring(resetStart, resetEnd - resetStart);
+
+            Assert.IsFalse(reset.Contains("_trayRamHost.Dispose()"),
+                "rev.16 keeps the same tray message HWND/uID across frozen-core restarts.");
+            Assert.IsFalse(reset.Contains("_trayRamHost = null"),
+                "rev.16 must not create a second bridge tray identity after a language restart.");
+            StringAssert.Contains(reset, "_trayRamHost.ReattachMainWindow");
+            StringAssert.Contains(reset, "_traySettingKnown = false;");
+            StringAssert.Contains(reset, "_mainWindow = IntPtr.Zero;");
+            StringAssert.Contains(reset, "_settingsHost = null;");
+            StringAssert.Contains(reset, "_zapretHost = null;");
+            StringAssert.Contains(reset, "_zapretVisualHost = null;");
         }
     }
 }
