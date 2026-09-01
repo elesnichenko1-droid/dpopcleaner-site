@@ -45,6 +45,10 @@ jobs:
         shell: pwsh
         run: ./tools/dpop0417_simpleupdate_smoke.ps1
 
+      - name: Run rev.15 language-restart bridge and RAM tray smoke
+        shell: pwsh
+        run: ./tools/dpop0417_rev15_restart_recovery_smoke.ps1
+
       - name: Dump bridge diagnostics on failure
         if: failure()
         shell: pwsh
