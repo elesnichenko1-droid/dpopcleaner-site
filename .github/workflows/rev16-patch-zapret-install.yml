@@ -1,0 +1,295 @@
+name: Rev16 patch proven Zapret install repair
+
+on:
+  push:
+    branches:
+      - feat/0.4.17-rev16-single-tray-zapret
+    paths:
+      - '.github/workflows/rev16-patch-zapret-install.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/0.4.17-rev16-single-tray-zapret
+          fetch-depth: 0
+      - name: Patch ZapretEnhancementHost install path
+        shell: pwsh
+        run: |
+          $path = 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs'
+          $text = (Get-Content -Raw -LiteralPath $path).Replace("`r`n","`n")
+          function Replace-Once([string]$old,[string]$new) {
+            if (-not $script:text.Contains($old)) { throw "Patch anchor missing: $($old.Substring(0,[Math]::Min(90,$old.Length)))" }
+            $first = $script:text.IndexOf($old,[StringComparison]::Ordinal)
+            if ($script:text.IndexOf($old,$first+$old.Length,[StringComparison]::Ordinal) -ge 0) { throw 'Patch anchor is not unique.' }
+            $script:text = $script:text.Replace($old,$new)
+          }
+
+          Replace-Once @'
+          using System.Runtime.InteropServices;
+          using System.Windows.Forms;
+          '@ @'
+          using System.Runtime.InteropServices;
+          using System.Text;
+          using System.Threading;
+          using System.Windows.Forms;
+          '@
+
+          Replace-Once @'
+                  internal const int LegacyDownloadButtonId = 1725;
+          '@ @'
+                  internal const int LegacyDownloadButtonId = 1725;
+                  internal const int InstallServiceProxyButtonId = 1701;
+          '@
+
+          Replace-Once @'
+                  private const uint WM_SETFONT = 0x0030;
+          '@ @'
+                  private const uint WM_SETFONT = 0x0030;
+                  private const uint CB_GETCURSEL = 0x0147;
+                  private const uint CB_GETLBTEXT = 0x0148;
+                  private const uint CB_GETLBTEXTLEN = 0x0149;
+          '@
+
+          Replace-Once @'
+                  private IntPtr _actionToolbar;
+                  private IntPtr _updateToolbar;
+                  private IntPtr _legacyCheckVersionButton;
+                  private IntPtr _legacyDownloadButton;
+          '@ @'
+                  private IntPtr _actionToolbar;
+                  private IntPtr _updateToolbar;
+                  private IntPtr _installServiceToolbar;
+                  private IntPtr _legacyCheckVersionButton;
+                  private IntPtr _legacyDownloadButton;
+                  private IntPtr _legacyInstallServiceButton;
+          '@
+
+          Replace-Once @'
+                  [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+                  private static extern int SetWindowTheme(IntPtr hwnd, string subAppName, string subIdList);
+          '@ @'
+                  [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+                  private static extern int SetWindowTheme(IntPtr hwnd, string subAppName, string subIdList);
+
+                  [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")]
+                  private static extern IntPtr SendMessageBuffer(IntPtr hwnd, uint msg, IntPtr wParam, StringBuilder lParam);
+
+                  [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+                  private static extern int StrCmpLogicalW(string left, string right);
+          '@
+
+          Replace-Once @'
+                  CreateToolbar();
+                  CreateLegacyUpdateProxy();
+                  RefreshDisplayedZapretVersion();
+          '@ @'
+                  CreateToolbar();
+                  CreateLegacyUpdateProxy();
+                  CreateInstallServiceProxy();
+                  RefreshDisplayedZapretVersion();
+                  RefreshRuntimeStatus();
+          '@
+
+          Replace-Once @'
+                  PositionActionToolbar();
+                  PositionUpdateToolbar();
+                  RefreshDisplayedZapretVersion();
+          '@ @'
+                  PositionActionToolbar();
+                  PositionUpdateToolbar();
+                  PositionInstallServiceProxy();
+                  RefreshDisplayedZapretVersion();
+                  RefreshRuntimeStatus();
+          '@
+
+          Replace-Once @'
+                  if (_legacyDownloadButton != IntPtr.Zero)
+                      NativeBridge.ShowWindow(_legacyDownloadButton, NativeBridge.SW_HIDE);
+                  if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_SHOW);
+                  if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_SHOW);
+          '@ @'
+                  if (_legacyDownloadButton != IntPtr.Zero)
+                      NativeBridge.ShowWindow(_legacyDownloadButton, NativeBridge.SW_HIDE);
+                  if (_legacyInstallServiceButton != IntPtr.Zero)
+                      NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_HIDE);
+                  if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_SHOW);
+                  if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_SHOW);
+                  if (_installServiceToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_installServiceToolbar, NativeBridge.SW_SHOW);
+          '@
+
+          Replace-Once @'
+                  if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_HIDE);
+                  if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_HIDE);
+          '@ @'
+                  if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_HIDE);
+                  if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_HIDE);
+                  if (_installServiceToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_installServiceToolbar, NativeBridge.SW_HIDE);
+          '@
+
+          $installMethods = @'
+                  private void CreateInstallServiceProxy()
+                  {
+                      _legacyInstallServiceButton = NativeBridge.FindChildById(_parent, InstallServiceProxyButtonId);
+                      if (_legacyInstallServiceButton == IntPtr.Zero) return;
+                      var bounds = NativeBridge.GetChildClientBounds(_parent, _legacyInstallServiceButton);
+                      if (bounds == null) return;
+                      var font = NativeBridge.SendMessage(_legacyInstallServiceButton, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
+                      var text = NativeBridge.ReadWindowText(_legacyInstallServiceButton);
+                      _installServiceToolbar = CreateHost(bounds.Width, bounds.Height);
+                      CreateButton(_installServiceToolbar, text, InstallServiceProxyButtonId, 0, 0, bounds.Width, bounds.Height, font);
+                      NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_HIDE);
+                      PositionInstallServiceProxy();
+                  }
+
+                  private void PositionInstallServiceProxy()
+                  {
+                      if (_installServiceToolbar == IntPtr.Zero || _legacyInstallServiceButton == IntPtr.Zero) return;
+                      var bounds = NativeBridge.GetChildClientBounds(_parent, _legacyInstallServiceButton);
+                      if (bounds != null) NativeBridge.PositionChildWindow(_installServiceToolbar, bounds);
+                  }
+
+                  private string ReadSelectedStrategy()
+                  {
+                      NativeBridge.ChildInfo best = null;
+                      foreach (var child in NativeBridge.GetChildren(_parent))
+                      {
+                          if (!child.Visible || !string.Equals(child.ClassName, "ComboBox", StringComparison.OrdinalIgnoreCase)) continue;
+                          if (best == null || child.Top < best.Top) best = child;
+                      }
+                      if (best == null) return string.Empty;
+                      var index = NativeBridge.SendMessage(best.Handle, CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero).ToInt32();
+                      if (index < 0) return string.Empty;
+                      var length = NativeBridge.SendMessage(best.Handle, CB_GETLBTEXTLEN, new IntPtr(index), IntPtr.Zero).ToInt32();
+                      if (length < 0) return string.Empty;
+                      var value = new StringBuilder(length + 1);
+                      SendMessageBuffer(best.Handle, CB_GETLBTEXT, new IntPtr(index), value);
+                      return value.ToString().Trim();
+                  }
+
+                  private void InstallSelectedStrategyUsingUpstreamManager()
+                  {
+                      var selected = ReadSelectedStrategy();
+                      if (string.IsNullOrWhiteSpace(selected)) throw new InvalidOperationException("Сначала выберите стратегию Zapret.");
+                      var zapretRoot = GetZapretRoot();
+                      var service = Path.Combine(zapretRoot, "service.bat");
+                      if (!File.Exists(service)) throw new FileNotFoundException("service.bat Zapret 1.10.2 не найден.", service);
+                      var menuIndex = FindStrategyMenuIndex(zapretRoot, selected);
+                      if (menuIndex <= 0) throw new InvalidOperationException("Выбранная стратегия отсутствует в upstream manager: " + selected);
+
+                      var info = new ProcessStartInfo("cmd.exe")
+                      {
+                          UseShellExecute = false,
+                          CreateNoWindow = true,
+                          RedirectStandardInput = true,
+                          Arguments = "/d /c \"\"" + service + "\" admin\"",
+                          WorkingDirectory = zapretRoot
+                      };
+
+                      using (var process = Process.Start(info))
+                      {
+                          if (process == null) throw new InvalidOperationException("Не удалось запустить upstream service.bat.");
+                          try
+                          {
+                              process.StandardInput.WriteLine("1");
+                              process.StandardInput.WriteLine(menuIndex.ToString());
+                              process.StandardInput.Flush();
+                              var deadline = DateTime.UtcNow.AddSeconds(15);
+                              while (DateTime.UtcNow < deadline)
+                              {
+                                  var state = ZapretRuntimeState.Read(_applicationRoot);
+                                  if (state.ZapretServiceRunning)
+                                  {
+                                      RefreshRuntimeStatus();
+                                      return;
+                                  }
+                                  if (process.HasExited) throw new InvalidOperationException("Upstream service.bat завершился до запуска службы. Код выхода: " + process.ExitCode);
+                                  Thread.Sleep(200);
+                              }
+                              throw new TimeoutException("Upstream service.bat не запустил службу zapret для стратегии: " + selected);
+                          }
+                          finally
+                          {
+                              try { if (!process.HasExited) process.Kill(); } catch { }
+                          }
+                      }
+                  }
+
+                  private static int FindStrategyMenuIndex(string zapretRoot, string selected)
+                  {
+                      var desired = selected.EndsWith(".bat", StringComparison.OrdinalIgnoreCase) ? selected : selected + ".bat";
+                      var files = Directory.GetFiles(zapretRoot, "*.bat", SearchOption.TopDirectoryOnly);
+                      var strategies = new List<string>();
+                      foreach (var file in files)
+                      {
+                          var name = Path.GetFileName(file);
+                          if (name.StartsWith("service", StringComparison.OrdinalIgnoreCase)) continue;
+                          strategies.Add(name);
+                      }
+                      strategies.Sort(delegate(string left, string right) { return StrCmpLogicalW(left, right); });
+                      for (var i = 0; i < strategies.Count; i++)
+                          if (string.Equals(strategies[i], desired, StringComparison.OrdinalIgnoreCase)) return i + 1;
+                      return -1;
+                  }
+
+          '@
+          Replace-Once '        private IntPtr CreateHost(int width, int height)' ($installMethods + '        private IntPtr CreateHost(int width, int height)')
+
+          Replace-Once @'
+                          if (id == RepairBroadcastButtonId) RepairBroadcast();
+          '@ @'
+                          if (id == InstallServiceProxyButtonId) InstallSelectedStrategyUsingUpstreamManager();
+                          else if (id == RepairBroadcastButtonId) RepairBroadcast();
+          '@
+
+          $runtimeMethod = @'
+                  internal void RefreshRuntimeStatus()
+                  {
+                      if (_disposed) return;
+                      var state = ZapretRuntimeState.Read(_applicationRoot);
+                      NativeBridge.ChildInfo upper = null;
+                      foreach (var child in NativeBridge.GetChildren(_parent))
+                      {
+                          if (!child.Visible || !string.Equals(child.ClassName, "Edit", StringComparison.OrdinalIgnoreCase)) continue;
+                          if (upper == null || child.Top < upper.Top) upper = child;
+                      }
+                      if (upper == null) return;
+                      var on = state.ZapretServiceRunning || state.BundledWinwsRunning;
+                      var service = state.ZapretServiceRunning ? "RUNNING" : (state.ZapretServiceExists ? "STOPPED" : "OFF");
+                      var winws = state.BundledWinwsRunning ? "ON" : "OFF";
+                      NativeBridge.WriteWindowText(upper.Handle, "Zapret: " + (on ? "ON" : "OFF") + "  •  service: " + service + "  •  winws.exe: " + winws);
+                  }
+
+          '@
+          Replace-Once '        private void RepairBroadcast()' ($runtimeMethod + '        private void RepairBroadcast()')
+
+          Replace-Once @'
+                  foreach (var handle in new[] { _actionToolbar, _updateToolbar })
+          '@ @'
+                  if (_legacyInstallServiceButton != IntPtr.Zero)
+                  {
+                      try { NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_SHOW); } catch { }
+                  }
+                  foreach (var handle in new[] { _actionToolbar, _updateToolbar, _installServiceToolbar })
+          '@
+
+          Replace-Once @'
+                  _actionToolbar = IntPtr.Zero;
+                  _updateToolbar = IntPtr.Zero;
+          '@ @'
+                  _actionToolbar = IntPtr.Zero;
+                  _updateToolbar = IntPtr.Zero;
+                  _installServiceToolbar = IntPtr.Zero;
+          '@
+
+          Set-Content -LiteralPath $path -Value $text -Encoding utf8NoBOM
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- $path
+          git commit -m 'fix(rev16): proxy proven broken Zapret install action'
+          git push origin HEAD:feat/0.4.17-rev16-single-tray-zapret
