@@ -33,6 +33,8 @@ Windows CI собирает настоящий Inno Setup installer и пров�
 
 Одновременно `dpop0417_rev13_uac_tray_smoke.ps1` продолжает проверять `asInvoker` / UAC и живые tray identities Explorer: у bridge должен остаться ровно один `(HWND,uID)`, а у frozen core — ни одной legacy tray-записи. Сохраняются installed-smoke rev.14 для смены языка, rev.12 для native Zapret version/screenshot, rev.9 updater click-smoke, проверки RAM, Zapret 1.10.2/22 стратегий, Disk Analyzer, Restore Center и byte-identical frozen core.
 
+Production workflow перед публикацией повторно запускает `dpop0417_rev15_installed_restart_smoke.ps1`, поэтому релиз блокируется, если после перезапуска исчезнет enhanced Settings или цифровая RAM tray-иконка.
+
 ## Публикация
 
 Stable manifest для **revision 15** публикуется только после зелёных installed-проверок. Production publisher создаёт GitHub Release `v0.4.17-rev15`, публикует Pages и повторно скачивает живой installer для проверки SHA-256 и размера.
