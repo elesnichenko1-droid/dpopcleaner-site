@@ -51,6 +51,7 @@ public static class Rev16ZapretNative {
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
     [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] private static extern IntPtr SendMessageText(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder text);
 
     public static Rev16ZapretChild[] Children(IntPtr parent) {
@@ -113,7 +114,7 @@ function Get-Children([IntPtr]$Window) { @([Rev16ZapretNative]::Children($Window
 function Click-Id([IntPtr]$Window, [int]$Id) {
     $control = Get-Children $Window | Where-Object { $_.Visible -and $_.Id -eq $Id -and $_.ClassName -eq 'Button' } | Select-Object -First 1
     if (-not $control) { throw "Zapret control id=$Id is missing or hidden." }
-    [void][Rev16ZapretNative]::SendMessage($control.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
+    if (-not [Rev16ZapretNative]::PostMessage($control.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)) { throw "Could not queue Zapret click id=$Id." }
 }
 
 function Wait-ZapretPage([IntPtr]$Window) {
@@ -329,3 +330,4 @@ finally {
         Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
