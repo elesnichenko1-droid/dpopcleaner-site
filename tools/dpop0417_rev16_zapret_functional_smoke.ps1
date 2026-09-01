@@ -1,202 +1,149 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
     [string]$InstallerPath,
+    [string]$RootPath,
     [string]$OutputDir = '_release/0.4.17/evidence/rev16-zapret-functional'
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$InstallerPath = if ([IO.Path]::IsPathRooted($InstallerPath)) { $InstallerPath } else { Join-Path $repoRoot $InstallerPath }
-$InstallerPath = [IO.Path]::GetFullPath($InstallerPath)
-$OutputDir = if ([IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path $repoRoot $OutputDir }
-$OutputDir = [IO.Path]::GetFullPath($OutputDir)
-New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
-if (-not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) { throw "rev.16 Zapret installer missing: $InstallerPath" }
+if ([string]::IsNullOrWhiteSpace($InstallerPath) -eq [string]::IsNullOrWhiteSpace($RootPath)) {
+    throw 'Pass exactly one of -InstallerPath or -RootPath.'
+}
 
-$installRoot = Join-Path ([IO.Path]::GetTempPath()) ('dpop0417-rev16-zapret-' + [Guid]::NewGuid().ToString('N'))
-$launcherPath = Join-Path $installRoot 'DPopCleaner.exe'
-$corePath = Join-Path $installRoot 'DPopCleaner.Core.exe'
-$winwsPath = Join-Path $installRoot 'Zapret\bin\winws.exe'
-$serviceBat = Join-Path $installRoot 'Zapret\service.bat'
-$settingsPath = Join-Path $installRoot 'SimpleUpdate-rev16-zapret-smoke.ini'
-
-$native = @'
+$native=@'
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
 public sealed class Rev16ZapretChild {
-    public IntPtr Handle;
-    public int Id;
-    public string Text;
-    public string ClassName;
-    public bool Visible;
-    public int Left;
-    public int Top;
-    public int Right;
-    public int Bottom;
+    public IntPtr Handle; public int Id; public string Text; public string ClassName; public bool Visible; public int Left; public int Top; public int Right; public int Bottom;
 }
-
 public static class Rev16ZapretNative {
-    private delegate bool EnumProc(IntPtr hwnd, IntPtr p);
-    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
-    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr p);
-    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
-    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder text, int max);
+    private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
+    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left,Top,Right,Bottom; }
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd,StringBuilder text,int max);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd,StringBuilder text,int max);
     [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
-    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
-    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
-    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
-    [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] private static extern IntPtr SendMessageText(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder text);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd,out RECT rect);
+    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd,uint msg,IntPtr wp,IntPtr lp);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd,uint msg,IntPtr wp,IntPtr lp);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr hwnd,uint msg,IntPtr wp,StringBuilder lp);
+    [DllImport("user32.dll")] private static extern IntPtr GetParent(IntPtr hwnd);
 
     public static Rev16ZapretChild[] Children(IntPtr parent) {
-        var result = new List<Rev16ZapretChild>();
-        EnumProc cb = delegate(IntPtr h, IntPtr _) {
-            var text = new StringBuilder(1024); var cls = new StringBuilder(128); RECT rect;
-            GetWindowText(h,text,text.Capacity); GetClassName(h,cls,cls.Capacity); GetWindowRect(h,out rect);
-            result.Add(new Rev16ZapretChild { Handle=h, Id=GetDlgCtrlID(h), Text=text.ToString(), ClassName=cls.ToString(), Visible=IsWindowVisible(h), Left=rect.Left, Top=rect.Top, Right=rect.Right, Bottom=rect.Bottom });
+        var result=new List<Rev16ZapretChild>();
+        EnumProc cb=delegate(IntPtr h,IntPtr _) {
+            var t=new StringBuilder(1024); var c=new StringBuilder(128); RECT r;
+            GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity); GetWindowRect(h,out r);
+            result.Add(new Rev16ZapretChild{Handle=h,Id=GetDlgCtrlID(h),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(h),Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom});
             return true;
         };
         EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return result.ToArray();
     }
-
     public static string[] ComboItems(IntPtr combo) {
-        const uint CB_GETCOUNT=0x0146, CB_GETLBTEXT=0x0148, CB_GETLBTEXTLEN=0x0149;
-        int count=SendMessage(combo,CB_GETCOUNT,IntPtr.Zero,IntPtr.Zero).ToInt32();
-        var values=new List<string>();
-        for(int i=0;i<count;i++) {
-            int len=SendMessage(combo,CB_GETLBTEXTLEN,(IntPtr)i,IntPtr.Zero).ToInt32();
-            if(len<0) continue;
-            var text=new StringBuilder(len+1); SendMessageText(combo,CB_GETLBTEXT,(IntPtr)i,text); values.Add(text.ToString());
-        }
+        const uint GETCOUNT=0x0146,GETTEXT=0x0148,GETLEN=0x0149;
+        var values=new List<string>(); int count=SendMessage(combo,GETCOUNT,IntPtr.Zero,IntPtr.Zero).ToInt32();
+        for(int i=0;i<count;i++){int len=SendMessage(combo,GETLEN,(IntPtr)i,IntPtr.Zero).ToInt32(); var b=new StringBuilder(Math.Max(1,len+1)); SendMessage(combo,GETTEXT,(IntPtr)i,b); values.Add(b.ToString());}
         return values.ToArray();
     }
-
-    public static void SelectCombo(IntPtr parent, IntPtr combo, int index) {
-        const uint CB_SETCURSEL=0x014E, WM_COMMAND=0x0111; const int CBN_SELCHANGE=1;
-        if(SendMessage(combo,CB_SETCURSEL,(IntPtr)index,IntPtr.Zero).ToInt32()<0) throw new InvalidOperationException("CB_SETCURSEL failed");
-        int id=GetDlgCtrlID(combo); int wp=(CBN_SELCHANGE<<16)|(id&0xffff);
+    public static void SelectCombo(IntPtr main,IntPtr combo,int index) {
+        const uint CB_SETCURSEL=0x014E,WM_COMMAND=0x0111; const int CBN_SELCHANGE=1;
+        SendMessage(combo,CB_SETCURSEL,(IntPtr)index,IntPtr.Zero);
+        var parent=GetParent(combo); if(parent==IntPtr.Zero) parent=main;
+        long wp=((long)CBN_SELCHANGE<<16)|(uint)(ushort)GetDlgCtrlID(combo);
         SendMessage(parent,WM_COMMAND,(IntPtr)wp,combo);
     }
 }
 '@
 Add-Type -TypeDefinition $native -Language CSharp
 
-function Get-ExactProcess([string]$Name, [string]$ExactPath) {
-    foreach ($candidate in @(Get-Process -Name $Name -ErrorAction SilentlyContinue)) {
-        try {
-            if ($candidate.Path -and [IO.Path]::GetFullPath($candidate.Path) -eq [IO.Path]::GetFullPath($ExactPath)) { return $candidate }
-        } catch { }
-    }
-    return $null
-}
-
-function Wait-CoreWindow([int]$Seconds = 15) {
-    $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
-    do {
-        Start-Sleep -Milliseconds 150
-        $candidate = Get-ExactProcess -Name 'DPopCleaner.Core' -ExactPath $corePath
-        if ($candidate) {
-            $candidate.Refresh()
-            if (-not $candidate.HasExited -and $candidate.MainWindowHandle -ne [IntPtr]::Zero) { return $candidate }
-        }
-    } while ([DateTime]::UtcNow -lt $deadline)
-    return $null
-}
-
-function Get-Children([IntPtr]$Window) { @([Rev16ZapretNative]::Children($Window)) }
-
-function Click-Id([IntPtr]$Window, [int]$Id) {
-    $control = Get-Children $Window | Where-Object { $_.Visible -and $_.Id -eq $Id -and $_.ClassName -eq 'Button' } | Select-Object -First 1
-    if (-not $control) { throw "Zapret control id=$Id is missing or hidden." }
+function Get-Children([IntPtr]$Window){ @([Rev16ZapretNative]::Children($Window)) }
+function Click-Id([IntPtr]$Window,[int]$Id) {
+    $control=Get-Children $Window | Where-Object { $_.Visible -and $_.Id -eq $Id -and $_.ClassName -eq 'Button' } | Select-Object -First 1
+    if(-not $control){ throw "Visible button id=$Id not found." }
     if (-not [Rev16ZapretNative]::PostMessage($control.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)) { throw "Could not queue Zapret click id=$Id." }
+    Start-Sleep -Milliseconds 250
 }
-
-function Wait-ZapretPage([IntPtr]$Window) {
-    $deadline = [DateTime]::UtcNow.AddSeconds(8)
+function Wait-Until([int]$Seconds,[string]$Description,[scriptblock]$Condition) {
+    $deadline=[DateTime]::UtcNow.AddSeconds($Seconds)
+    do { if(& $Condition){ return }; Start-Sleep -Milliseconds 200 } while([DateTime]::UtcNow -lt $deadline)
+    throw "Timed out waiting for $Description."
+}
+function Wait-CoreWindow {
+    $deadline=[DateTime]::UtcNow.AddSeconds(15)
     do {
+        $candidate=Get-Process -Name 'DPopCleaner.Core' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+        if($candidate){ return $candidate }
         Start-Sleep -Milliseconds 150
-        $children = Get-Children $Window
-        $marker = $children | Where-Object { $_.Visible -and $_.Id -eq 1701 } | Select-Object -First 1
-    } while (-not $marker -and [DateTime]::UtcNow -lt $deadline)
-    if (-not $marker) { throw 'Zapret page did not expose lifecycle controls.' }
-    return $children
+    } while([DateTime]::UtcNow -lt $deadline)
+    return $null
 }
-
+function Wait-ZapretPage([IntPtr]$Window) {
+    $deadline=[DateTime]::UtcNow.AddSeconds(8)
+    do {
+        $children=Get-Children $Window
+        if($children | Where-Object { $_.Visible -and $_.Id -eq 1703 }){ return $children }
+        Start-Sleep -Milliseconds 120
+    } while([DateTime]::UtcNow -lt $deadline)
+    throw 'Zapret page did not become visible.'
+}
 function Get-StrategyCombo([IntPtr]$Window) {
-    @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' } | Sort-Object Top | Select-Object -First 1)[0]
+    @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' } | Sort-Object Top | Select-Object -First 1) | Select-Object -First 1
 }
-
 function Get-StatusSnapshot([IntPtr]$Window) {
-    $edits = @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 2)
-    [pscustomobject]@{
-        Upper = if ($edits.Count -ge 1) { $edits[0].Text } else { '<missing>' }
-        Runtime = if ($edits.Count -ge 2) { $edits[1].Text } else { '<missing>' }
-    }
+    $edits=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 2)
+    [pscustomobject]@{ Upper=if($edits.Count -gt 0){$edits[0].Text}else{''}; Runtime=if($edits.Count -gt 1){$edits[1].Text}else{''} }
 }
 
-function Get-ZapretService {
-    Get-CimInstance Win32_Service -Filter "Name='zapret'" -ErrorAction SilentlyContinue
-}
-
-function Get-WinDivertServices {
-    @(Get-CimInstance Win32_SystemDriver -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('WinDivert','WinDivert14') })
-}
-
+$script:WinwsPath=''
 function Get-BundledWinws {
-    $expected = [IO.Path]::GetFullPath($winwsPath)
+    if([string]::IsNullOrWhiteSpace($script:WinwsPath)){ return @() }
+    $expected=[IO.Path]::GetFullPath($script:WinwsPath)
     @(Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue | Where-Object {
-        $_.ExecutablePath -and ([IO.Path]::GetFullPath($_.ExecutablePath) -eq $expected)
+        $_.ExecutablePath -and [IO.Path]::GetFullPath([string]$_.ExecutablePath).Equals($expected,[StringComparison]::OrdinalIgnoreCase)
     })
 }
-
-function Wait-Until([scriptblock]$Condition, [int]$Seconds, [string]$Description) {
-    $deadline=[DateTime]::UtcNow.AddSeconds($Seconds)
-    do {
-        if (& $Condition) { return }
-        Start-Sleep -Milliseconds 250
-    } while ([DateTime]::UtcNow -lt $deadline)
-    throw "Timed out waiting for $Description"
-}
-
+function Get-ZapretService { Get-CimInstance Win32_Service -Filter "Name='zapret'" -ErrorAction SilentlyContinue }
+function Get-WinDivertServices { @(Get-CimInstance Win32_SystemDriver -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^WinDivert' }) }
 function Stop-ZapretResidue {
-    foreach ($process in @(Get-BundledWinws)) { Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue }
-    foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+    Get-BundledWinws | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    foreach($name in @('zapret','WinDivert','WinDivert14')) {
         & sc.exe stop $name *> $null
         & sc.exe delete $name *> $null
     }
-    foreach ($cmd in @(Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" -ErrorAction SilentlyContinue)) {
-        try {
-            if ($cmd.CommandLine -and ($cmd.CommandLine -like "*$installRoot*" -or $cmd.CommandLine -like '*service.bat*')) {
-                Stop-Process -Id $cmd.ProcessId -Force -ErrorAction SilentlyContinue
-            }
-        } catch { }
-    }
+    Start-Sleep -Milliseconds 500
 }
 
-$launcherStub=$null
-$core=$null
-$phase='install'
-$firstStrategy=''
-$secondStrategy=''
-$firstCommand=''
-$secondCommand=''
-$lastStatus=$null
-$failure=''
-$installed=$false
+New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+$installRoot=$null; $installed=$false; $launcherStub=$null; $core=$null
+$phase='setup'; $failure=$null; $firstStrategy=$null; $secondStrategy=$null; $firstCommand=$null; $secondCommand=$null; $lastStatus=$null
 try {
-    $install = Start-Process -FilePath $InstallerPath -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=$installRoot") -Wait -PassThru
-    if ($install.ExitCode -ne 0) { throw "rev.16 Zapret silent install failed: $($install.ExitCode)" }
-    $installed=$true
-    foreach ($required in @($launcherPath,$corePath,$winwsPath,$serviceBat)) {
-        if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Installed Zapret prerequisite missing: $required" }
+    if($InstallerPath) {
+        $installer=(Resolve-Path -LiteralPath $InstallerPath).Path
+        $installRoot=Join-Path ([IO.Path]::GetTempPath()) 'dpop0417-rev16-zapret-functional'
+        Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
+        $args=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$installRoot+'"'))
+        $setup=Start-Process -FilePath $installer -ArgumentList $args -PassThru -Wait
+        if($setup.ExitCode -ne 0){ throw "Installer exit code $($setup.ExitCode)." }
+        $installed=$true
+    } else {
+        $installRoot=(Resolve-Path -LiteralPath $RootPath).Path
     }
-    $version = (Get-Content -Raw -LiteralPath (Join-Path $installRoot 'Zapret\.service\version.txt')).Trim()
+
+    $launcherPath=Join-Path $installRoot 'SimpleUpdate.exe'
+    $corePath=Join-Path $installRoot 'DPopCleaner.Core.exe'
+    if(-not (Test-Path -LiteralPath $corePath -PathType Leaf)){ $corePath=Join-Path $installRoot 'DPopCleaner.exe' }
+    $script:WinwsPath=Join-Path $installRoot 'Zapret\bin\winws.exe'
+    foreach($required in @($launcherPath,$corePath,$script:WinwsPath,(Join-Path $installRoot 'Zapret\service.bat'))){ if(-not(Test-Path -LiteralPath $required -PathType Leaf)){ throw "Required file missing: $required" } }
+
+    $settingsPath=Join-Path $installRoot 'rev16-zapret-settings.json'
+    $version=(Get-Content -Raw -LiteralPath (Join-Path $installRoot 'Zapret\.service\version.txt')).Trim()
     if ($version -ne '1.10.2') { throw "Installed Zapret version mismatch: $version" }
     $strategies = @(Get-ChildItem -LiteralPath (Join-Path $installRoot 'Zapret') -Filter 'general*.bat' -File | Sort-Object Name)
     if ($strategies.Count -ne 22) { throw "Expected 22 bundled strategies, found $($strategies.Count)." }
@@ -235,7 +182,7 @@ try {
     Click-Id -Window $window -Id 1703
     Start-Sleep -Milliseconds 800
     $lastStatus=Get-StatusSnapshot -Window $window
-    if ($lastStatus.Runtime -notmatch '(?i)ON|RUNNING') { throw "Status UI does not reflect running service: upper='$($lastStatus.Upper)' runtime='$($lastStatus.Runtime)'" }
+    if ($lastStatus.Upper -notmatch '(?i)ON|RUNNING') { throw "Status UI does not reflect running service: upper='$($lastStatus.Upper)' runtime='$($lastStatus.Runtime)'" }
 
     $phase='remove-before-standalone'
     Click-Id -Window $window -Id 1702
@@ -250,7 +197,7 @@ try {
     Click-Id -Window $window -Id 1703
     Start-Sleep -Milliseconds 500
     $lastStatus=Get-StatusSnapshot -Window $window
-    if ($lastStatus.Runtime -notmatch '(?i)ON|RUNNING') { throw "Runtime status did not become ON after start: '$($lastStatus.Runtime)'" }
+    if ($lastStatus.Upper -notmatch '(?i)ON|RUNNING') { throw "Runtime status did not become ON after start: '$($lastStatus.Upper)'" }
     Write-Host "REV16_ZAPRET_START_OK strategy=$firstStrategy command=$firstCommand"
 
     $phase='standalone-stop'
@@ -259,7 +206,7 @@ try {
     Click-Id -Window $window -Id 1703
     Start-Sleep -Milliseconds 500
     $lastStatus=Get-StatusSnapshot -Window $window
-    if ($lastStatus.Runtime -notmatch '(?i)OFF|NOT running|STOP') { throw "Runtime status did not become OFF after stop: '$($lastStatus.Runtime)'" }
+    if ($lastStatus.Upper -notmatch '(?i)OFF|NOT running|STOP') { throw "Runtime status did not become OFF after stop: '$($lastStatus.Upper)'" }
     Write-Host 'REV16_ZAPRET_STOP_OK'
 
     $phase='strategy-change'
@@ -330,4 +277,3 @@ finally {
         Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-
