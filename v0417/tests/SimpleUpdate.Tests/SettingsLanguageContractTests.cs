@@ -94,5 +94,19 @@ namespace SimpleUpdate.Tests
                 launcher.Contains("if (!_updateInstallInProgress) ExitThread();\n                    return;"),
                 "The launcher must not immediately exit when the frozen core exits if that exit produced a successor process for a language restart.");
         }
+
+        [TestMethod]
+        public void RestartRecovery_MustRecreateRamBadgeAndDiscardOldWindowHosts()
+        {
+            var launcher = ReadSource("LauncherContext.cs");
+
+            StringAssert.Contains(launcher, "if (_trayRamHost != null) _trayRamHost.Dispose();");
+            StringAssert.Contains(launcher, "_trayRamHost = null;");
+            StringAssert.Contains(launcher, "_traySettingKnown = false;");
+            StringAssert.Contains(launcher, "_mainWindow = IntPtr.Zero;");
+            StringAssert.Contains(launcher, "_settingsHost = null;");
+            StringAssert.Contains(launcher, "_zapretHost = null;");
+            StringAssert.Contains(launcher, "_zapretVisualHost = null;");
+        }
     }
 }
