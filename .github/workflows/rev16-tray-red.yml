@@ -26,9 +26,13 @@ jobs:
       - name: Confirm published rev.15 fails rev.16 single-tray invariant
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
-          & ./tools/dpop0417_rev16_single_tray_smoke.ps1 -InstallerPath "$env:RUNNER_TEMP\DPopCleaner_Setup_0.4.17_rev15.exe" -OutputDir '_release/0.4.17/evidence/rev16-tray-red'
-          $redExit = $LASTEXITCODE
-          if ($redExit -eq 0) { throw 'Historical RED was not reproduced: published rev.15 unexpectedly satisfies rev.16 single-tray invariant.' }
-          Write-Host "REV16_TRAY_HISTORICAL_RED_CONFIRMED exit=$redExit"
-          exit 0
+          $ErrorActionPreference = 'Stop'
+          $redObserved = $false
+          try {
+            & ./tools/dpop0417_rev16_single_tray_smoke.ps1 -InstallerPath "$env:RUNNER_TEMP\DPopCleaner_Setup_0.4.17_rev15.exe" -OutputDir '_release/0.4.17/evidence/rev16-tray-red'
+          } catch {
+            $redObserved = $true
+            Write-Host "REV16_TRAY_HISTORICAL_RED_DETAIL $($_.Exception.Message)"
+          }
+          if (-not $redObserved) { throw 'Historical RED was not reproduced: published rev.15 unexpectedly satisfies rev.16 single-tray invariant.' }
+          Write-Host 'REV16_TRAY_HISTORICAL_RED_CONFIRMED'
