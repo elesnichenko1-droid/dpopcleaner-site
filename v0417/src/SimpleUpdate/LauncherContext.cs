@@ -225,12 +225,10 @@ namespace DPopCleaner.SimpleUpdate
 
         private void ResetBridgeForRestartedCore()
         {
-            if (_trayRamHost != null) _trayRamHost.Dispose();
             if (_settingsHost != null) _settingsHost.Dispose();
             if (_zapretVisualHost != null) _zapretVisualHost.Dispose();
             if (_zapretHost != null) _zapretHost.Dispose();
 
-            _trayRamHost = null;
             _settingsHost = null;
             _zapretVisualHost = null;
             _zapretHost = null;
@@ -239,6 +237,10 @@ namespace DPopCleaner.SimpleUpdate
             _traySettingKnown = false;
             _trayEnabled = false;
             _iconApplied = false;
+
+            // The notification identity belongs to the launcher, not to a frozen-core PID.
+            // Keep its stable HWND/uID alive while the successor core creates a new main HWND.
+            if (_trayRamHost != null) _trayRamHost.ReattachMainWindow(IntPtr.Zero);
         }
 
         private void UpdateTrayRamBadge()
@@ -256,7 +258,6 @@ namespace DPopCleaner.SimpleUpdate
             if (_trayRamHost == null)
                 _trayRamHost = new TrayRamBadgeHost(_mainWindow);
             _trayRamHost.Update(_core.Id, _mainWindow, _trayEnabled);
-            if (_trayEnabled) BridgeTrayGhostSuppressor.CleanupCurrentProcess();
         }
 
         private void UpdateZapretEnhancements()

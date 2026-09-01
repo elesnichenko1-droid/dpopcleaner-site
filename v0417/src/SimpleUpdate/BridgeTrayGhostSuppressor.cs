@@ -8,8 +8,6 @@ namespace DPopCleaner.SimpleUpdate
 {
     internal static class BridgeTrayGhostSuppressor
     {
-        private const string KeepWindowTitle = "DPopCleaner.TrayRamBadgeHost";
-        private const uint KeepIconId = 1;
         private const uint NIM_DELETE = 0x00000002;
         private const int TB_BUTTONCOUNT = 0x0418;
         private const int TB_GETBUTTON = 0x0417;
@@ -24,37 +22,16 @@ namespace DPopCleaner.SimpleUpdate
         private delegate bool EnumWindowProc(IntPtr hwnd, IntPtr lParam);
         private static DateTime _nextCleanupUtc = DateTime.MinValue;
 
-        internal static void CleanupCurrentProcess()
+        internal static void CleanupCurrentProcess(IntPtr keepWindow, uint keepIconId)
         {
+            if (keepWindow == IntPtr.Zero) return;
             var now = DateTime.UtcNow;
             if (now < _nextCleanupUtc) return;
             _nextCleanupUtc = now.AddMilliseconds(250);
 
             var processId = Process.GetCurrentProcess().Id;
-            var keepWindow = FindKeepWindow(processId);
-            if (keepWindow == IntPtr.Zero) return;
-
             foreach (var toolbar in FindTrayToolbars())
-                RemoveFromToolbar(toolbar, processId, keepWindow, KeepIconId);
-        }
-
-        private static IntPtr FindKeepWindow(int processId)
-        {
-            var found = IntPtr.Zero;
-            EnumWindowProc callback = delegate(IntPtr hwnd, IntPtr _)
-            {
-                uint owner;
-                GetWindowThreadProcessId(hwnd, out owner);
-                if (owner != (uint)processId) return true;
-                var title = new StringBuilder(256);
-                GetWindowText(hwnd, title, title.Capacity);
-                if (!string.Equals(title.ToString(), KeepWindowTitle, StringComparison.Ordinal)) return true;
-                found = hwnd;
-                return false;
-            };
-            EnumWindows(callback, IntPtr.Zero);
-            GC.KeepAlive(callback);
-            return found;
+                RemoveFromToolbar(toolbar, processId, keepWindow, keepIconId);
         }
 
         private static IEnumerable<IntPtr> FindTrayToolbars()

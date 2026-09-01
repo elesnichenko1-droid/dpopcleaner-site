@@ -48,6 +48,15 @@ namespace DPopCleaner.SimpleUpdate
             _messageWindow = new TrayMessageWindow(OnTrayMessage, OnTaskbarCreated);
         }
 
+        internal IntPtr MessageWindowHandle { get { return _messageWindow.Handle; } }
+        internal uint IconId { get { return TrayIconId; } }
+
+        internal void ReattachMainWindow(IntPtr mainWindow)
+        {
+            if (_disposed) return;
+            _mainWindow = mainWindow;
+        }
+
         internal void Update(int coreProcessId, IntPtr mainWindow, bool enabled)
         {
             if (_disposed) return;
@@ -64,6 +73,7 @@ namespace DPopCleaner.SimpleUpdate
             if (now >= _nextSuppressUtc)
             {
                 LegacyTrayIconSuppressor.RemoveIconsForProcess(coreProcessId);
+                BridgeTrayGhostSuppressor.CleanupCurrentProcess(_messageWindow.Handle, TrayIconId);
                 _nextSuppressUtc = now.AddMilliseconds(250);
             }
 
