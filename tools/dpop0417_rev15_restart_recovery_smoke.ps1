@@ -129,8 +129,6 @@ function Ensure-TraySetting([Diagnostics.Process]$Core, [object[]]$Children) {
         [void][Rev15Native]::SendMessage($trayProxy.Handle, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)
         Start-Sleep -Milliseconds 250
     }
-    $save = $Children | Where-Object { $_.Id -eq 1401 -and $_.Visible } | Select-Object -First 1
-    if ($save) { [void][Rev15Native]::SendMessage($save.Handle, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero); Start-Sleep -Milliseconds 250 }
 }
 
 function Wait-TrayHost([Diagnostics.Process]$Launcher, [int]$Seconds = 6) {
