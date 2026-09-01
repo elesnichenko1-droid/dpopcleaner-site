@@ -196,9 +196,9 @@ function Open-SettingsAndEnableTray([Diagnostics.Process]$Core) {
     do {
         Start-Sleep -Milliseconds 120
         $children=@([Rev16TrayNative]::Children($Core.MainWindowHandle))
-        $host=$children | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
-    } while (-not $host -and [DateTime]::UtcNow -lt $deadline)
-    if (-not $host) { throw "Enhanced Settings host id=1492 missing for core pid=$($Core.Id)." }
+        $settingsHost=$children | Where-Object { $_.Id -eq 1492 -and $_.Visible } | Select-Object -First 1
+    } while (-not $settingsHost -and [DateTime]::UtcNow -lt $deadline)
+    if (-not $settingsHost) { throw "Enhanced Settings host id=1492 missing for core pid=$($Core.Id)." }
     $trayProxy=$children | Where-Object { $_.Id -eq 1503 } | Select-Object -First 1
     if (-not $trayProxy) { throw 'Tray proxy id=1503 missing.' }
     if ([Rev16TrayNative]::SendMessage($trayProxy.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -ne 1) {
