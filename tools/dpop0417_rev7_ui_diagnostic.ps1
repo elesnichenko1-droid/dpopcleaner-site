@@ -85,6 +85,21 @@ function Write-ZapretEditSnapshot([string]$Prefix, [IntPtr]$Window) {
     $lower = if ($edits.Count -ge 2) { $edits[1].Text } else { '<missing>' }
     Write-Host "$Prefix upper=$upper lower=$lower"
 }
+function Dump-Rev14SettingsAnchors([IntPtr]$Window) {
+    Write-Host '===== REV14_SETTINGS_ANCHORS_ALL ====='
+    Get-Children $Window |
+        Where-Object { $_.Id -in @(1401,1409,1410) } |
+        Sort-Object Id,Top,Left |
+        Select-Object @{N='Handle';E={('0x{0:X}' -f $_.Handle.ToInt64())}},Id,Visible,ClassName,Text,Left,Top,Right,Bottom |
+        Format-Table -AutoSize | Out-String -Width 360 | Write-Host
+
+    Write-Host '===== REV14_SETTINGS_ID0_BUTTONS_ALL ====='
+    Get-Children $Window |
+        Where-Object { $_.Id -eq 0 -and $_.ClassName -eq 'Button' -and $_.Left -lt 550 } |
+        Sort-Object Top,Left |
+        Select-Object @{N='Handle';E={('0x{0:X}' -f $_.Handle.ToInt64())}},Id,Visible,Text,Left,Top,Right,Bottom |
+        Format-Table -AutoSize | Out-String -Width 360 | Write-Host
+}
 
 $exe = (Resolve-Path -LiteralPath $ExePath).Path
 $p = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru
@@ -117,6 +132,7 @@ try {
     [void][Rev7Native]::SendMessage($settings.Handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
     Start-Sleep -Milliseconds 500
     Dump-Page 'settings' $window
+    Dump-Rev14SettingsAnchors $window
 
     Write-Host 'REV7_UI_DIAGNOSTIC_OK'
 }

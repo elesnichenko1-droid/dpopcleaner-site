@@ -14,6 +14,8 @@ permissions:
 jobs:
   simpleupdate:
     runs-on: windows-2022
+    env:
+      DPOP_BRIDGE_DIAGNOSTICS: '1'
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v5
@@ -42,6 +44,18 @@ jobs:
       - name: Run authentic SimpleUpdate launcher and Settings bridge smoke
         shell: pwsh
         run: ./tools/dpop0417_simpleupdate_smoke.ps1
+
+      - name: Dump bridge diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $path = Join-Path ([IO.Path]::GetTempPath()) 'DPopCleaner-bridge-diagnostics.log'
+          if (Test-Path -LiteralPath $path -PathType Leaf) {
+            Write-Host '===== DPOP_BRIDGE_DIAGNOSTICS ====='
+            Get-Content -Raw -LiteralPath $path | Write-Host
+          } else {
+            Write-Host "Bridge diagnostics file was not created: $path"
+          }
 
       - name: Probe original DPopCleaner UI controls
         shell: pwsh

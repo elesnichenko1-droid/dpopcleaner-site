@@ -23,10 +23,16 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
     def test_settings_scroll_host_contains_existing_left_settings_and_application_updates(self):
         host = (ROOT / 'v0417/src/SimpleUpdate/AdditionalSettingsHost.cs').read_text(encoding='utf-8')
         bridge = (ROOT / 'v0417/src/SimpleUpdate/NativeBridge.cs').read_text(encoding='utf-8')
-        for label in ('Фоновый контроль мусора каждые 30 минут','Быстрый DPopGuard-скан при запуске','Проверять кэш Windows Update при запуске','Работать в трее и отслеживать новые установки','Автозапуск DPopCleaner вместе с Windows','Запускать приложение от имени администратора','Включить автообновление приложения','Проверить обновления','Лицензия'):
+        for label in ('Включить автообновление приложения','Проверить обновления','Лицензия',
+                      'Enable application auto-updates','Check for updates','License'):
             self.assertIn(label, host)
         self.assertIn('LegacySettingProxy', host)
-        self.assertIn('FindChildByText', bridge)
+        self.assertIn('FindSettingsCheckboxes', host)
+        self.assertIn('ReadWindowText(setting.LegacyHandle)', host)
+        self.assertIn('WriteWindowText(setting.ProxyHandle', host)
+        self.assertNotIn('LegacySettingTexts', host)
+        self.assertIn('FindSettingsCheckboxes', bridge)
+        self.assertIn('IsSettingsPageVisible', bridge)
         self.assertIn('GetSettingsScrollBounds', bridge)
 
     def test_existing_zapret_center_gets_repairs_and_1102_actions_without_new_ui(self):

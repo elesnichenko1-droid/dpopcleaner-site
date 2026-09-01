@@ -29,19 +29,19 @@ class DPop0417ZapretScreenFixContractTests(unittest.TestCase):
         self.assertIn('DPopUpdate.exe', installer)
         self.assertIn('ZapretScreenFix.exe', installer)
 
-    def test_rev13_builds_and_tests_the_preserved_companion(self):
+    def test_rev14_builds_and_tests_the_preserved_companion(self):
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         stable = json.loads((ROOT / 'update/stable.json').read_text(encoding='utf-8'))
-        self.assertEqual(version['revision'], 13)
-        self.assertEqual(stable['revision'], 13)
+        self.assertEqual(version['revision'], 14)
+        self.assertEqual(stable['revision'], 14)
         workflow = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
         self.assertIn('zapretscreenfix.tests.csproj', workflow)
         self.assertIn('zapretscreenfix.csproj', workflow)
         self.assertIn('simpleupdate.csproj', workflow)
-        self.assertIn('revision=13', workflow)
-        self.assertIn('v0.4.17-rev13', workflow)
+        self.assertIn('revision=14', workflow)
+        self.assertIn('v0.4.17-rev14', workflow)
 
-    def test_rev13_release_notes_and_site_disclose_preserved_screen_share_fix(self):
+    def test_rev14_release_notes_and_site_disclose_preserved_screen_share_fix(self):
         notes = (ROOT / 'release/RELEASE_NOTES_0.4.17.md').read_text(encoding='utf-8').lower()
         index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
         self.assertIn('zapret', notes)

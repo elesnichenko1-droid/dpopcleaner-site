@@ -10,6 +10,7 @@ namespace DPopCleaner.SimpleUpdate
         internal const int SettingsGearId = 906;
         internal const int RamTabButtonId = 910;
         internal const int ZapretTabButtonId = 905;
+        internal const int StartupCheckboxId = 1409;
         internal const int AdminCheckboxId = 1410;
         internal const int LicenseBuyButtonId = 1407;
         internal const int LicenseSaveButtonId = 1408;
@@ -181,6 +182,59 @@ namespace DPopCleaner.SimpleUpdate
             return IntPtr.Zero;
         }
 
+        internal static bool IsSettingsPageVisible(IntPtr parent)
+        {
+            var admin = FindChildById(parent, AdminCheckboxId);
+            var save = FindChildById(parent, SaveSettingsButtonId);
+            return admin != IntPtr.Zero && save != IntPtr.Zero && IsWindowVisible(admin) && IsWindowVisible(save);
+        }
+
+        internal static IntPtr[] FindSettingsCheckboxes(IntPtr parent, IntPtr adminAnchor)
+        {
+            if (parent == IntPtr.Zero) return new IntPtr[0];
+            if (adminAnchor == IntPtr.Zero) adminAnchor = FindChildById(parent, AdminCheckboxId);
+            var startupAnchor = FindChildById(parent, StartupCheckboxId);
+            var adminBounds = GetChildClientBounds(parent, adminAnchor);
+            var startupBounds = GetChildClientBounds(parent, startupAnchor);
+            if (adminBounds == null || startupBounds == null) return new IntPtr[0];
+
+            var rowStep = adminBounds.Top - startupBounds.Top;
+            if (rowStep < 10 || rowStep > 80) return new IntPtr[0];
+
+            var result = new IntPtr[6];
+            result[4] = startupAnchor;
+            result[5] = adminAnchor;
+            var requireVisible = IsWindowVisible(adminAnchor);
+            var tolerance = Math.Max(4, rowStep / 3);
+            var children = GetChildren(parent);
+
+            for (var index = 0; index < 4; index++)
+            {
+                var targetTop = startupBounds.Top - (4 - index) * rowStep;
+                ChildInfo best = null;
+                var bestScore = int.MaxValue;
+                foreach (var child in children)
+                {
+                    if (child.Id != 0 || !string.Equals(child.ClassName, "Button", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (requireVisible && !child.Visible) continue;
+                    var bounds = GetChildClientBounds(parent, child.Handle);
+                    if (bounds == null) continue;
+                    var topDelta = Math.Abs(bounds.Top - targetTop);
+                    var leftDelta = Math.Abs(bounds.Left - startupBounds.Left);
+                    if (topDelta > tolerance || leftDelta > Math.Max(16, rowStep)) continue;
+                    if (bounds.Height < 14 || bounds.Height > Math.Max(40, startupBounds.Height + 12)) continue;
+                    var score = topDelta * 10 + leftDelta;
+                    if (score >= bestScore) continue;
+                    best = child;
+                    bestScore = score;
+                }
+                if (best == null) return new IntPtr[0];
+                result[index] = best.Handle;
+            }
+
+            return result;
+        }
+
         internal static ClientBounds GetChildClientBounds(IntPtr parent, IntPtr child)
         {
             if (parent == IntPtr.Zero || child == IntPtr.Zero) return null;
@@ -200,15 +254,28 @@ namespace DPopCleaner.SimpleUpdate
 
         internal static ClientBounds GetSettingsScrollBounds(IntPtr parent)
         {
-            var first = FindChildByText(parent, "Фоновый контроль мусора каждые 30 минут", "Button", true);
-            var firstBounds = GetChildClientBounds(parent, first);
+            var admin = FindChildById(parent, AdminCheckboxId);
+            var checkboxes = FindSettingsCheckboxes(parent, admin);
+            if (checkboxes.Length != 6) return null;
+            var firstBounds = GetChildClientBounds(parent, checkboxes[0]);
             if (firstBounds == null) return null;
 
-            var status = FindChildByText(parent, "Готово.", "Static", true);
-            var statusBounds = GetChildClientBounds(parent, status);
             var saveBounds = GetChildClientBounds(parent, FindChildById(parent, SaveSettingsButtonId));
-            var bottom = statusBounds != null
-                ? statusBounds.Top - 8
+            var statusTop = int.MaxValue;
+            if (saveBounds != null)
+            {
+                foreach (var child in GetChildren(parent))
+                {
+                    if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
+                    var bounds = GetChildClientBounds(parent, child.Handle);
+                    if (bounds == null || bounds.Top <= saveBounds.Bottom) continue;
+                    if (bounds.Left > firstBounds.Left + 500) continue;
+                    if (bounds.Top < statusTop) statusTop = bounds.Top;
+                }
+            }
+
+            var bottom = statusTop != int.MaxValue
+                ? statusTop - 8
                 : (saveBounds != null ? saveBounds.Bottom + 28 : firstBounds.Top + 305);
             var x = Math.Max(22, firstBounds.Left - 10);
             var y = Math.Max(0, firstBounds.Top - 5);

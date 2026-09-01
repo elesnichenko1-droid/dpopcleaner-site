@@ -54,16 +54,6 @@ namespace DPopCleaner.SimpleUpdate
 
         private const string HostClassName = "DPopCleanerAdditionalSettingsHost";
 
-        private static readonly string[] LegacySettingTexts =
-        {
-            "Фоновый контроль мусора каждые 30 минут",
-            "Быстрый DPopGuard-скан при запуске",
-            "Проверять кэш Windows Update при запуске",
-            "Работать в трее и отслеживать новые установки",
-            "Автозапуск DPopCleaner вместе с Windows",
-            "Запускать приложение от имени администратора"
-        };
-
         private sealed class ScrollItem
         {
             public IntPtr Handle;
@@ -125,15 +115,21 @@ namespace DPopCleaner.SimpleUpdate
         private readonly List<LegacySettingProxy> _legacySettings = new List<LegacySettingProxy>();
         private readonly Action<bool> _autoUpdateChanged;
         private readonly Action _checkUpdatesRequested;
-        private readonly IntPtr _legacyKeyEdit;
-        private readonly IntPtr _legacySaveButton;
-        private readonly IntPtr _legacyBuyButton;
+        private readonly IntPtr _parent;
+        private IntPtr _legacyKeyEdit;
+        private IntPtr _legacySaveButton;
+        private IntPtr _legacyBuyButton;
         private readonly IntPtr _font;
 
         private IntPtr _host;
         private IntPtr _autoUpdateCheckbox;
         private IntPtr _checkUpdatesButton;
+        private IntPtr _licenseHeading;
+        private IntPtr _licenseInfo;
         private IntPtr _licenseKeyEdit;
+        private IntPtr _licenseSaveProxy;
+        private IntPtr _licenseBuyProxy;
+        private IntPtr _licenseNote;
         private int _scrollPosition;
         private int _viewportHeight;
         private bool _disposed;
@@ -229,6 +225,7 @@ namespace DPopCleaner.SimpleUpdate
             if (parent == IntPtr.Zero) throw new ArgumentException("Parent window is required.", "parent");
             if (bounds == null) throw new ArgumentNullException("bounds");
 
+            _parent = parent;
             _autoUpdateChanged = autoUpdateChanged;
             _checkUpdatesRequested = checkUpdatesRequested;
             _legacyKeyEdit = legacyKeyEdit;
@@ -238,15 +235,15 @@ namespace DPopCleaner.SimpleUpdate
                 ? NativeBridge.SendMessage(adminAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero)
                 : IntPtr.Zero;
 
-            for (var i = 0; i < LegacySettingTexts.Length; i++)
+            var legacyHandles = NativeBridge.FindSettingsCheckboxes(parent, adminAnchor);
+            if (legacyHandles.Length != 6)
+                throw new InvalidOperationException("Frozen Settings checkbox group could not be identified.");
+            for (var i = 0; i < legacyHandles.Length; i++)
             {
-                var legacy = NativeBridge.FindChildByText(parent, LegacySettingTexts[i], "Button", true);
-                if (legacy == IntPtr.Zero)
-                    throw new InvalidOperationException("Frozen Settings control was not found: " + LegacySettingTexts[i]);
                 _legacySettings.Add(new LegacySettingProxy
                 {
-                    LegacyHandle = legacy,
-                    Text = LegacySettingTexts[i],
+                    LegacyHandle = legacyHandles[i],
+                    Text = NativeBridge.ReadWindowText(legacyHandles[i]),
                     Id = 1500 + i
                 });
             }
@@ -271,7 +268,9 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (_disposed || _host == IntPtr.Zero || bounds == null) return;
             _viewportHeight = bounds.Height;
+            RebindLegacySettingsFromCore();
             SyncLegacySettingsFromCore();
+            ApplyBridgeLocalization();
             NativeBridge.PositionChildWindow(_host, bounds);
             UpdateScrollInfo();
             NativeBridge.ShowWindow(_host, NativeBridge.SW_SHOW);
@@ -295,32 +294,36 @@ namespace DPopCleaner.SimpleUpdate
                 y += 30;
             }
 
-            _autoUpdateCheckbox = CreateChild("Button", "Включить автообновление приложения",
+            _autoUpdateCheckbox = CreateChild("Button", Localize("Включить автообновление приложения", "Enable application auto-updates"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                 NativeBridge.AutoUpdateCheckboxId, 10, y, 280, 26);
             NativeBridge.SetChecked(_autoUpdateCheckbox, autoUpdateEnabled);
 
-            _checkUpdatesButton = CreateChild("Button", "Проверить обновления",
+            _checkUpdatesButton = CreateChild("Button", Localize("Проверить обновления", "Check for updates"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                 NativeBridge.CheckNowButtonId, 300, y - 3, 170, 32);
             y += 46;
 
-            CreateStatic("Лицензия", NativeBridge.LicenseHeadingProxyId, 10, y, 220, 26);
+            _licenseHeading = CreateStatic(Localize("Лицензия", "License"), NativeBridge.LicenseHeadingProxyId, 10, y, 220, 26);
             y += 28;
-            CreateStatic("Бесплатная BETA. Лицензионный сервер будет подключён позже.", 1498, 10, y, 460, 34);
+            _licenseInfo = CreateStatic(Localize(
+                "Бесплатная BETA. Лицензионный сервер будет подключён позже.",
+                "Free BETA. License server will be connected later."), 1498, 10, y, 460, 34);
             y += 40;
 
             _licenseKeyEdit = CreateChild("Edit", NativeBridge.ReadWindowText(_legacyKeyEdit),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                 NativeBridge.LicenseKeyProxyId, 10, y, 300, 30);
-            CreateChild("Button", "Сохранить ключ",
+            _licenseSaveProxy = CreateChild("Button", LicenseButtonCaption(_legacySaveButton, "Сохранить ключ", "Save key"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                 NativeBridge.LicenseSaveProxyId, 320, y - 2, 140, 32);
             y += 42;
-            CreateChild("Button", "Купить лицензию",
+            _licenseBuyProxy = CreateChild("Button", LicenseButtonCaption(_legacyBuyButton, "Купить лицензию", "Buy license"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                 NativeBridge.LicenseBuyProxyId, 10, y, 155, 32);
-            CreateStatic("Покупка и проверка ключей будут подключены позже.", 1499, 178, y + 3, 282, 30);
+            _licenseNote = CreateStatic(Localize(
+                "Покупка и проверка ключей будут подключены позже.",
+                "Purchasing and online key validation will be connected later."), 1499, 178, y + 3, 282, 30);
 
             if (AutoScrollMinSize > ContentHeight)
                 throw new InvalidOperationException("AutoScrollMinSize cannot exceed the content layout height.");
@@ -418,6 +421,21 @@ namespace DPopCleaner.SimpleUpdate
             return DefWindowProc(hwnd, msg, wParam, lParam);
         }
 
+        private void RebindLegacySettingsFromCore()
+        {
+            var admin = NativeBridge.FindChildById(_parent, NativeBridge.AdminCheckboxId);
+            var current = NativeBridge.FindSettingsCheckboxes(_parent, admin);
+            if (current.Length == _legacySettings.Count)
+            {
+                for (var i = 0; i < current.Length; i++) _legacySettings[i].LegacyHandle = current[i];
+            }
+
+            var save = NativeBridge.FindChildById(_parent, NativeBridge.LicenseSaveButtonId);
+            if (save != IntPtr.Zero) _legacySaveButton = save;
+            var buy = NativeBridge.FindChildById(_parent, NativeBridge.LicenseBuyButtonId);
+            if (buy != IntPtr.Zero) _legacyBuyButton = buy;
+        }
+
         private void SyncLegacySetting(LegacySettingProxy setting)
         {
             if (setting == null || setting.LegacyHandle == IntPtr.Zero || setting.ProxyHandle == IntPtr.Zero) return;
@@ -430,8 +448,54 @@ namespace DPopCleaner.SimpleUpdate
         private void SyncLegacySettingsFromCore()
         {
             foreach (var setting in _legacySettings)
-                if (setting.ProxyHandle != IntPtr.Zero)
-                    NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
+            {
+                if (setting.ProxyHandle == IntPtr.Zero) continue;
+                var caption = NativeBridge.ReadWindowText(setting.LegacyHandle);
+                if (!string.IsNullOrWhiteSpace(caption) && !string.Equals(caption, setting.Text, StringComparison.Ordinal))
+                {
+                    setting.Text = caption;
+                    NativeBridge.WriteWindowText(setting.ProxyHandle, caption);
+                }
+                NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
+            }
+        }
+
+        private bool IsEnglishCoreLanguage()
+        {
+            if (_legacySettings.Count == 0) return false;
+            var adminCaption = NativeBridge.ReadWindowText(_legacySettings[_legacySettings.Count - 1].LegacyHandle);
+            return adminCaption.IndexOf("administrator", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   adminCaption.IndexOf("always run", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private string Localize(string russian, string english)
+        {
+            return IsEnglishCoreLanguage() ? english : russian;
+        }
+
+        private string LicenseButtonCaption(IntPtr legacyButton, string russianFallback, string englishFallback)
+        {
+            var caption = NativeBridge.ReadWindowText(legacyButton);
+            return string.IsNullOrWhiteSpace(caption) ? Localize(russianFallback, englishFallback) : caption;
+        }
+
+        private void ApplyBridgeLocalization()
+        {
+            NativeBridge.WriteWindowText(_autoUpdateCheckbox,
+                Localize("Включить автообновление приложения", "Enable application auto-updates"));
+            NativeBridge.WriteWindowText(_checkUpdatesButton,
+                Localize("Проверить обновления", "Check for updates"));
+            NativeBridge.WriteWindowText(_licenseHeading, Localize("Лицензия", "License"));
+            NativeBridge.WriteWindowText(_licenseInfo, Localize(
+                "Бесплатная BETA. Лицензионный сервер будет подключён позже.",
+                "Free BETA. License server will be connected later."));
+            NativeBridge.WriteWindowText(_licenseSaveProxy,
+                LicenseButtonCaption(_legacySaveButton, "Сохранить ключ", "Save key"));
+            NativeBridge.WriteWindowText(_licenseBuyProxy,
+                LicenseButtonCaption(_legacyBuyButton, "Купить лицензию", "Buy license"));
+            NativeBridge.WriteWindowText(_licenseNote, Localize(
+                "Покупка и проверка ключей будут подключены позже.",
+                "Purchasing and online key validation will be connected later."));
         }
 
         private void HandleVerticalScroll(int request)

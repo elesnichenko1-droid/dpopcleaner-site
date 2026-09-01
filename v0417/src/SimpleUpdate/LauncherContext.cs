@@ -41,7 +41,7 @@ namespace DPopCleaner.SimpleUpdate
             _lastSetting = _settings.LoadAutoUpdateEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev13");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev14");
             _updateClient = new UpdateClient(_http);
 
             _core = Process.Start(new ProcessStartInfo(corePath)
@@ -105,19 +105,18 @@ namespace DPopCleaner.SimpleUpdate
                 UpdateZapretEnhancements();
                 UpdateSettingsEnhancements();
             }
-            catch
+            catch (Exception ex)
             {
                 // UI bridge failures must never terminate the immutable authentic core.
+                BridgeDiagnostics.Record(ex);
             }
         }
 
         private void UpdateTrayRamBadge()
         {
-            var traySetting = NativeBridge.FindChildByText(
-                _mainWindow,
-                "Работать в трее и отслеживать новые установки",
-                "Button",
-                false);
+            var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
+            var settings = NativeBridge.FindSettingsCheckboxes(_mainWindow, admin);
+            var traySetting = settings.Length == 6 ? settings[3] : IntPtr.Zero;
             if (traySetting != IntPtr.Zero)
             {
                 _trayEnabled = NativeBridge.IsChecked(traySetting);
@@ -133,10 +132,10 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateZapretEnhancements()
         {
-            // The bridge-owned updater hides the frozen core's update buttons.
-            // Detect the Zapret page using a stable native heading instead of one of those buttons.
-            var marker = NativeBridge.FindChildByText(_mainWindow, "Дополнительно", "Static", true);
-            var zapretVisible = marker != IntPtr.Zero;
+            // Use the stable frozen control id instead of a localized caption. Language changes must
+            // never make the bridge conclude that the user left the Zapret page.
+            var marker = NativeBridge.FindChildById(_mainWindow, NativeBridge.ZapretApplyButtonId);
+            var zapretVisible = marker != IntPtr.Zero && NativeBridge.IsWindowVisible(marker);
             if (!zapretVisible)
             {
                 if (_zapretHost != null) _zapretHost.Hide();
@@ -157,8 +156,18 @@ namespace DPopCleaner.SimpleUpdate
 
         private void UpdateSettingsEnhancements()
         {
-            var settingsMarker = NativeBridge.FindChildByText(_mainWindow, "Настройки", "Static", true);
-            var settingsVisible = settingsMarker != IntPtr.Zero;
+            var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
+            var save = NativeBridge.FindChildById(_mainWindow, NativeBridge.SaveSettingsButtonId);
+            var adminVisible = admin != IntPtr.Zero && NativeBridge.IsWindowVisible(admin);
+            var saveVisible = save != IntPtr.Zero && NativeBridge.IsWindowVisible(save);
+            var settingsVisible = SettingsPageLocator.IsVisible(_mainWindow);
+
+            BridgeDiagnostics.RecordState(
+                "settings-probe visible=" + settingsVisible +
+                " admin=0x" + admin.ToInt64().ToString("X") + "/" + adminVisible +
+                " save=0x" + save.ToInt64().ToString("X") + "/" + saveVisible +
+                " host=" + (_settingsHost != null));
+
             if (!settingsVisible)
             {
                 if (_settingsHost != null) _settingsHost.Hide();
@@ -167,15 +176,36 @@ namespace DPopCleaner.SimpleUpdate
 
             if (_settingsHost == null)
             {
-                var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
-                if (admin == IntPtr.Zero) return;
+                if (admin == IntPtr.Zero)
+                {
+                    BridgeDiagnostics.RecordState("settings-return admin-zero");
+                    return;
+                }
+
+                var checkboxes = NativeBridge.FindSettingsCheckboxes(_mainWindow, admin);
+                BridgeDiagnostics.RecordState(
+                    "settings-checkboxes count=" + checkboxes.Length +
+                    " startup=0x" + NativeBridge.FindChildById(_mainWindow, NativeBridge.StartupCheckboxId).ToInt64().ToString("X"));
 
                 _settingsHostBounds = NativeBridge.GetSettingsScrollBounds(_mainWindow);
-                if (_settingsHostBounds == null) return;
+                if (_settingsHostBounds == null)
+                {
+                    BridgeDiagnostics.RecordState("settings-return bounds-null checkboxes=" + checkboxes.Length);
+                    return;
+                }
+
+                BridgeDiagnostics.RecordState(
+                    "settings-bounds " + _settingsHostBounds.Left + "," + _settingsHostBounds.Top +
+                    "-" + _settingsHostBounds.Right + "," + _settingsHostBounds.Bottom);
 
                 var legacyKey = NativeBridge.FindLegacyLicenseEdit(_mainWindow, _settingsHostBounds);
                 var legacySave = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseSaveButtonId);
                 var legacyBuy = NativeBridge.FindChildById(_mainWindow, NativeBridge.LicenseBuyButtonId);
+                BridgeDiagnostics.RecordState(
+                    "settings-construct key=0x" + legacyKey.ToInt64().ToString("X") +
+                    " save=0x" + legacySave.ToInt64().ToString("X") +
+                    " buy=0x" + legacyBuy.ToInt64().ToString("X"));
+
                 _settingsHost = new AdditionalSettingsHost(
                     _mainWindow,
                     _settingsHostBounds,
@@ -186,6 +216,9 @@ namespace DPopCleaner.SimpleUpdate
                     legacyKey,
                     legacySave,
                     legacyBuy);
+
+                BridgeDiagnostics.RecordState(
+                    "settings-created host=0x" + _settingsHost.Handle.ToInt64().ToString("X"));
             }
             else
             {
@@ -195,6 +228,7 @@ namespace DPopCleaner.SimpleUpdate
                 _settingsHost.Show(_settingsHostBounds);
             }
 
+            SettingsProxyLocalization.Apply(_mainWindow);
             NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds);
         }
 
