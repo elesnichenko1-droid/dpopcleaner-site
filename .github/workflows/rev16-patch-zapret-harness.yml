@@ -24,7 +24,8 @@ jobs:
           $path = 'tools/dpop0417_rev16_zapret_functional_smoke.ps1'
           $text = Get-Content -Raw -LiteralPath $path
           $oldImport = '[DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);'
-          $newImport = $oldImport + "`r`n    [DllImport(\"user32.dll\")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);"
+          $postImport = '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);'
+          $newImport = $oldImport + "`r`n    " + $postImport
           if (-not $text.Contains($oldImport)) { throw 'SendMessage import anchor missing.' }
           if ($text.Contains('public static extern bool PostMessage')) { throw 'PostMessage already present; refusing duplicate patch.' }
           $text = $text.Replace($oldImport, $newImport)
