@@ -1,0 +1,32 @@
+name: Rev16 Zapret functional RED
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'tools/dpop0417_rev16_zapret_functional_smoke.ps1'
+      - '.github/workflows/rev16-zapret-functional-red.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  published-rev15-zapret-red:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout rev.16 Zapret harness
+        uses: actions/checkout@v5
+
+      - name: Download published rev.15 installer
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.17-rev15/DPopCleaner_Setup_0.4.17.exe'
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\DPopCleaner_Setup_0.4.17_rev15.exe"
+
+      - name: Reproduce real installed Zapret lifecycle failure
+        shell: pwsh
+        run: |
+          ./tools/dpop0417_rev16_zapret_functional_smoke.ps1 `
+            -InstallerPath "$env:RUNNER_TEMP\DPopCleaner_Setup_0.4.17_rev15.exe" `
+            -OutputDir '_release/0.4.17/evidence/rev16-zapret-red'
