@@ -229,9 +229,9 @@ function Assert-SingleTray([Diagnostics.Process]$Launcher,[Diagnostics.Process]$
 
     Write-Host "REV16_TRAY_$Phase canonical=$($canonical.Count) extras=$($extras.Count)"
     foreach($entry in $dpop){ Write-Host "REV16_TRAY_ROW $entry" }
-    if($canonical.Count -ne 1){ throw "$Phase: expected exactly one canonical DPopCleaner tray identity, found $($canonical.Count)." }
-    if($canonical[0].HIcon -eq [IntPtr]::Zero){ throw "$Phase: canonical tray identity has empty hIcon." }
-    if($extras.Count -ne 0){ throw "$Phase: legacy/duplicate/ghost DPopCleaner tray entries remain: $($extras -join ' | ')" }
+    if($canonical.Count -ne 1){ throw "${Phase}: expected exactly one canonical DPopCleaner tray identity, found $($canonical.Count)." }
+    if($canonical[0].HIcon -eq [IntPtr]::Zero){ throw "${Phase}: canonical tray identity has empty hIcon." }
+    if($extras.Count -ne 0){ throw "${Phase}: legacy/duplicate/ghost DPopCleaner tray entries remain: $($extras -join ' | ')" }
     return $canonical[0]
 }
 
