@@ -66,5 +66,18 @@ namespace SimpleUpdate.Tests
                 localization.Contains("AdminCheckboxId"),
                 "Language detection must read the native Language ComboBox, not a hidden left-side checkbox caption.");
         }
+
+        [TestMethod]
+        public void SettingsProxyLocalization_MustScopeBridgeOwnedIdsToSettingsHost()
+        {
+            var localization = ReadSource("SettingsProxyLocalization.cs");
+
+            StringAssert.Contains(localization, "NativeBridge.SettingsScrollHostId");
+            StringAssert.Contains(localization, "FindChildById(parent, NativeBridge.SettingsScrollHostId)");
+            StringAssert.Contains(localization, "WriteIfDifferent(host,");
+            Assert.IsFalse(
+                localization.Contains("WriteIfDifferent(parent, FirstSettingProxyId"),
+                "Proxy ids 1500-1505 collide with descendants in the frozen core; localization must search from bridge host id=1492, not the main window.");
+        }
     }
 }
