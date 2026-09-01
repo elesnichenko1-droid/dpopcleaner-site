@@ -22,8 +22,9 @@ try {
     if ($install.ExitCode -ne 0) { throw "rev.15 silent install failed: $($install.ExitCode)" }
     $installed = $true
 
+    # This is another PowerShell script, not a native executable. Under ErrorActionPreference=Stop
+    # any terminating failure propagates directly; $LASTEXITCODE is not guaranteed to be defined.
     & (Join-Path $PSScriptRoot 'dpop0417_rev15_restart_recovery_smoke.ps1') -RootPath $installRoot
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     [pscustomobject]@{
         installer = $InstallerPath
