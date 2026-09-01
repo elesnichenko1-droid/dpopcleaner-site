@@ -104,9 +104,25 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(source, "InstallSelectedStrategyUsingUpstreamManager()");
             StringAssert.Contains(source, "ReadSelectedStrategy()");
             StringAssert.Contains(source, "service.bat");
-            StringAssert.Contains(source, "RedirectStandardInput = true");
             StringAssert.Contains(source, "RefreshRuntimeStatus()");
             StringAssert.Contains(source, "NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_HIDE)");
+        }
+
+        [TestMethod]
+        public void Proven_broken_install_action_preserves_upstream_parser_but_restores_uac_elevation()
+        {
+            var source = ReadSource("ZapretEnhancementHost.cs");
+            var install = SliceMethod(
+                source,
+                "private void InstallSelectedStrategyUsingUpstreamManager()",
+                "private static int FindStrategyMenuIndex");
+
+            StringAssert.Contains(install, "Verb = \"runas\"");
+            StringAssert.Contains(install, "UseShellExecute = true");
+            StringAssert.Contains(install, "service.bat");
+            StringAssert.Contains(install, "BuildUpstreamInstallWrapper");
+            Assert.IsFalse(install.Contains("RedirectStandardInput = true"),
+                "An unelevated redirected-stdin service.bat admin process bypasses Flowseal's own UAC hop and cannot create the zapret service.");
         }
     }
 }
