@@ -197,6 +197,13 @@ jobs:
             -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' `
             -OutputDir '_release/0.4.17/evidence/rev15-restart'
 
+      - name: Run rev.16 installed single tray identity smoke
+        shell: pwsh
+        run: |
+          ./tools/dpop0417_rev16_single_tray_smoke.ps1 `
+            -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' `
+            -OutputDir '_release/0.4.17/evidence/rev16-tray'
+
       - name: Upload 0.4.17 candidate evidence
         uses: actions/upload-artifact@v4
         with:
