@@ -67,5 +67,18 @@ namespace SimpleUpdate.Tests
             Assert.IsFalse(source.Contains("FindKeepWindow(processId)"),
                 "rev.16 must not rediscover the canonical tray HWND by window title when the exact HWND/uID is already owned by TrayRamBadgeHost.");
         }
+
+        [TestMethod]
+        public void Ghost_cleanup_reconciles_stale_dpopcleaner_rows_by_explorer_text_not_current_pid()
+        {
+            var source = ReadSource("BridgeTrayGhostSuppressor.cs");
+
+            StringAssert.Contains(source, "TB_GETBUTTONTEXTW");
+            StringAssert.Contains(source, "DPopCleaner");
+            Assert.IsFalse(source.Contains("trayOwner != (uint)ownerProcessId"),
+                "A killed prior launcher leaves Explorer rows whose HWND no longer belongs to the current launcher PID; filtering by the current PID cannot remove those ghosts.");
+            Assert.IsFalse(source.Contains("Process.GetCurrentProcess().Id"),
+                "Ghost reconciliation must classify the Explorer row itself, not trust a possibly stale/reused HWND owner PID.");
+        }
     }
 }
