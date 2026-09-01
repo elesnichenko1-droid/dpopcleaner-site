@@ -80,5 +80,33 @@ namespace SimpleUpdate.Tests
             Assert.IsFalse(source.Contains("Process.GetCurrentProcess().Id"),
                 "Ghost reconciliation must classify the Explorer row itself, not trust a possibly stale/reused HWND owner PID.");
         }
+
+        [TestMethod]
+        public void Zapret_bridge_reads_factual_runtime_state()
+        {
+            var runtime = ReadSource("ZapretRuntimeState.cs");
+
+            StringAssert.Contains(runtime, "internal static ZapretRuntimeState Read(string applicationRoot)");
+            StringAssert.Contains(runtime, "internal bool BundledWinwsRunning");
+            StringAssert.Contains(runtime, "internal bool ZapretServiceExists");
+            StringAssert.Contains(runtime, "internal bool ZapretServiceRunning");
+            StringAssert.Contains(runtime, "internal string BundledWinwsCommandLine");
+            StringAssert.Contains(ReadSource("ZapretEnhancementHost.cs"), "RefreshRuntimeStatus()");
+        }
+
+        [TestMethod]
+        public void Proven_broken_install_action_is_replaced_by_a_same_bounds_bridge_proxy()
+        {
+            var source = ReadSource("ZapretEnhancementHost.cs");
+
+            StringAssert.Contains(source, "InstallServiceProxyButtonId");
+            StringAssert.Contains(source, "CreateInstallServiceProxy()");
+            StringAssert.Contains(source, "InstallSelectedStrategyUsingUpstreamManager()");
+            StringAssert.Contains(source, "ReadSelectedStrategy()");
+            StringAssert.Contains(source, "service.bat");
+            StringAssert.Contains(source, "RedirectStandardInput = true");
+            StringAssert.Contains(source, "RefreshRuntimeStatus()");
+            StringAssert.Contains(source, "NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_HIDE)");
+        }
     }
 }
