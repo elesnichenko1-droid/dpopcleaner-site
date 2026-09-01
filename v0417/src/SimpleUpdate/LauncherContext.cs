@@ -10,7 +10,10 @@ namespace DPopCleaner.SimpleUpdate
 {
     internal sealed class LauncherContext : ApplicationContext
     {
-        private readonly Process _core;
+        private const int CoreRestartGraceMilliseconds = 1200;
+
+        private Process _core;
+        private readonly string _corePath;
         private readonly string _applicationRoot;
         private readonly SettingsStore _settings;
         private readonly LauncherOptions _options;
@@ -31,11 +34,14 @@ namespace DPopCleaner.SimpleUpdate
         private bool _automaticCheckStarted;
         private bool _updateCheckRunning;
         private bool _updateInstallInProgress;
+        private DateTime? _coreExitObservedUtc;
+        private DateTime _coreStartUtc;
 
         internal LauncherContext(string corePath, string settingsPath, LauncherOptions options)
         {
             if (!File.Exists(corePath)) throw new FileNotFoundException("DPopCleaner core not found.", corePath);
-            _applicationRoot = Path.GetDirectoryName(Path.GetFullPath(corePath));
+            _corePath = Path.GetFullPath(corePath);
+            _applicationRoot = Path.GetDirectoryName(_corePath);
             _options = options ?? LauncherOptions.Parse(new string[0]);
             _settings = new SettingsStore(settingsPath);
             _lastSetting = _settings.LoadAutoUpdateEnabled();
@@ -44,12 +50,8 @@ namespace DPopCleaner.SimpleUpdate
             _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev14");
             _updateClient = new UpdateClient(_http);
 
-            _core = Process.Start(new ProcessStartInfo(corePath)
-            {
-                WorkingDirectory = _applicationRoot,
-                UseShellExecute = true
-            });
-            if (_core == null) throw new InvalidOperationException("Failed to start DPopCleaner core.");
+            _core = StartCoreProcess();
+            _coreStartUtc = ReadStartTimeUtc(_core);
 
             _timer = new System.Windows.Forms.Timer { Interval = 100 };
             _timer.Tick += OnTick;
@@ -58,6 +60,17 @@ namespace DPopCleaner.SimpleUpdate
 
         internal Process CoreProcess { get { return _core; } }
 
+        private Process StartCoreProcess()
+        {
+            var process = Process.Start(new ProcessStartInfo(_corePath)
+            {
+                WorkingDirectory = _applicationRoot,
+                UseShellExecute = true
+            });
+            if (process == null) throw new InvalidOperationException("Failed to start DPopCleaner core.");
+            return process;
+        }
+
         private void OnTick(object sender, EventArgs e)
         {
             try
@@ -65,10 +78,29 @@ namespace DPopCleaner.SimpleUpdate
                 _core.Refresh();
                 if (_core.HasExited)
                 {
+                    if (_updateInstallInProgress)
+                    {
+                        _timer.Stop();
+                        return;
+                    }
+
+                    if (!_coreExitObservedUtc.HasValue)
+                    {
+                        _coreExitObservedUtc = DateTime.UtcNow;
+                        BridgeDiagnostics.RecordState("core-exit-observed pid=" + _core.Id);
+                    }
+
+                    if (TryAttachRestartedCore()) return;
+
+                    if ((DateTime.UtcNow - _coreExitObservedUtc.Value).TotalMilliseconds < CoreRestartGraceMilliseconds)
+                        return;
+
                     _timer.Stop();
-                    if (!_updateInstallInProgress) ExitThread();
+                    ExitThread();
                     return;
                 }
+
+                _coreExitObservedUtc = null;
 
                 if (_mainWindow == IntPtr.Zero)
                     _mainWindow = _core.MainWindowHandle;
@@ -79,9 +111,9 @@ namespace DPopCleaner.SimpleUpdate
                 if (!NativeBridge.IsWindowVisible(_mainWindow))
                 {
                     // Temporary visibility changes are not exit signals. The frozen application can
-                    // hide itself while minimizing/restoring or working in the tray; only HasExited
-                    // above is allowed to terminate the launcher. The RAM tray host intentionally
-                    // continues updating before this branch so the one visible tray icon remains live.
+                    // hide itself while minimizing/restoring or working in the tray; only a real exit
+                    // without a same-path successor is allowed to terminate the launcher. The RAM tray
+                    // host intentionally continues updating before this branch.
                     if (_settingsHost != null) _settingsHost.Hide();
                     if (_zapretHost != null) _zapretHost.Hide();
                     if (_zapretVisualHost != null) _zapretVisualHost.Hide();
@@ -110,6 +142,103 @@ namespace DPopCleaner.SimpleUpdate
                 // UI bridge failures must never terminate the immutable authentic core.
                 BridgeDiagnostics.Record(ex);
             }
+        }
+
+        private bool TryAttachRestartedCore()
+        {
+            Process successor = null;
+            var currentId = _core == null ? -1 : _core.Id;
+            var processName = Path.GetFileNameWithoutExtension(_corePath);
+
+            foreach (var candidate in Process.GetProcessesByName(processName))
+            {
+                if (candidate.Id == currentId)
+                {
+                    candidate.Dispose();
+                    continue;
+                }
+
+                try
+                {
+                    candidate.Refresh();
+                    if (candidate.HasExited || !IsExpectedCoreProcess(candidate))
+                    {
+                        candidate.Dispose();
+                        continue;
+                    }
+
+                    var startedUtc = ReadStartTimeUtc(candidate);
+                    if (startedUtc <= _coreStartUtc)
+                    {
+                        candidate.Dispose();
+                        continue;
+                    }
+
+                    if (successor == null || startedUtc > ReadStartTimeUtc(successor))
+                    {
+                        if (successor != null) successor.Dispose();
+                        successor = candidate;
+                    }
+                    else
+                    {
+                        candidate.Dispose();
+                    }
+                }
+                catch
+                {
+                    candidate.Dispose();
+                }
+            }
+
+            if (successor == null) return false;
+
+            var old = _core;
+            ResetBridgeForRestartedCore();
+            _core = successor;
+            _coreStartUtc = ReadStartTimeUtc(successor);
+            _coreExitObservedUtc = null;
+            try { if (old != null) old.Dispose(); } catch { }
+
+            BridgeDiagnostics.RecordState("core-restart-attached pid=" + _core.Id);
+            return true;
+        }
+
+        private bool IsExpectedCoreProcess(Process process)
+        {
+            try
+            {
+                var path = process.MainModule == null ? string.Empty : process.MainModule.FileName;
+                if (string.IsNullOrEmpty(path)) return false;
+                return string.Equals(Path.GetFullPath(path), _corePath, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static DateTime ReadStartTimeUtc(Process process)
+        {
+            try { return process.StartTime.ToUniversalTime(); }
+            catch { return DateTime.UtcNow; }
+        }
+
+        private void ResetBridgeForRestartedCore()
+        {
+            if (_trayRamHost != null) _trayRamHost.Dispose();
+            if (_settingsHost != null) _settingsHost.Dispose();
+            if (_zapretVisualHost != null) _zapretVisualHost.Dispose();
+            if (_zapretHost != null) _zapretHost.Dispose();
+
+            _trayRamHost = null;
+            _settingsHost = null;
+            _zapretVisualHost = null;
+            _zapretHost = null;
+            _settingsHostBounds = null;
+            _mainWindow = IntPtr.Zero;
+            _traySettingKnown = false;
+            _trayEnabled = false;
+            _iconApplied = false;
         }
 
         private void UpdateTrayRamBadge()
