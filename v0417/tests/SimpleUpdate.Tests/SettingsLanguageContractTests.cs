@@ -79,5 +79,20 @@ namespace SimpleUpdate.Tests
                 localization.Contains("WriteIfDifferent(parent, FirstSettingProxyId"),
                 "Proxy ids 1500-1505 collide with descendants in the frozen core; localization must search from bridge host id=1492, not the main window.");
         }
+
+        [TestMethod]
+        public void Launcher_MustRecoverBridgeWhenFrozenCoreSelfRestartsForLanguageChange()
+        {
+            var launcher = ReadSource("LauncherContext.cs");
+
+            Assert.IsFalse(
+                launcher.Contains("private readonly Process _core;"),
+                "A language change can replace the frozen core process; the launcher must be able to adopt the successor process.");
+            StringAssert.Contains(launcher, "TryAttachRestartedCore");
+            StringAssert.Contains(launcher, "ResetBridgeForRestartedCore");
+            Assert.IsFalse(
+                launcher.Contains("if (!_updateInstallInProgress) ExitThread();\n                    return;"),
+                "The launcher must not immediately exit when the frozen core exits if that exit produced a successor process for a language restart.");
+        }
     }
 }
