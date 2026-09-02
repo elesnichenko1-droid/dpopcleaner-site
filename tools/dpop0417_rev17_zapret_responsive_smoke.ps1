@@ -182,7 +182,10 @@ try {
 
         $heights=@($buttons | ForEach-Object { $_.Bottom-$_.Top })
         $minHeight=($heights | Measure-Object -Minimum).Minimum; $maxHeight=($heights | Measure-Object -Maximum).Maximum
-        if(($maxHeight-$minHeight) -gt 2){ throw "$($size.Name): unified Zapret button heights diverged min=$minHeight max=$maxHeight." }
+        if(($maxHeight-$minHeight) -gt 2){
+            $heightDetail=@($buttons | Sort-Object Id | ForEach-Object { 'id='+$_.Id+' h='+($_.Bottom-$_.Top)+' y='+$_.Top+'..'+$_.Bottom }) -join '; '
+            throw "$($size.Name): unified Zapret button heights diverged min=$minHeight max=$maxHeight; $heightDetail"
+        }
         $rightmost=($buttons | Measure-Object Right -Maximum).Maximum
         $unusedRight=$windowBounds.Right-$rightmost
         if($unusedRight -gt 48){ throw "$($size.Name): responsive rows leave too much unused window width: windowRight=$($windowBounds.Right) rightmost=$rightmost unused=$unusedRight." }
