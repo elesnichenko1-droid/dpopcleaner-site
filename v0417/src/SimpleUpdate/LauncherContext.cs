@@ -26,6 +26,7 @@ namespace DPopCleaner.SimpleUpdate
         private NativeBridge.ClientBounds _settingsHostBounds;
         private ZapretEnhancementHost _zapretHost;
         private ZapretVisualPolishHost _zapretVisualHost;
+        private ZapretResponsiveLayoutHost _zapretResponsiveHost;
         private TrayRamBadgeHost _trayRamHost;
         private bool _traySettingKnown;
         private bool _trayEnabled;
@@ -117,6 +118,7 @@ namespace DPopCleaner.SimpleUpdate
                     if (_settingsHost != null) _settingsHost.Hide();
                     if (_zapretHost != null) _zapretHost.Hide();
                     if (_zapretVisualHost != null) _zapretVisualHost.Hide();
+                    if (_zapretResponsiveHost != null) _zapretResponsiveHost.Hide();
                     return;
                 }
 
@@ -226,10 +228,12 @@ namespace DPopCleaner.SimpleUpdate
         private void ResetBridgeForRestartedCore()
         {
             if (_settingsHost != null) _settingsHost.Dispose();
+            if (_zapretResponsiveHost != null) _zapretResponsiveHost.Dispose();
             if (_zapretVisualHost != null) _zapretVisualHost.Dispose();
             if (_zapretHost != null) _zapretHost.Dispose();
 
             _settingsHost = null;
+            _zapretResponsiveHost = null;
             _zapretVisualHost = null;
             _zapretHost = null;
             _settingsHostBounds = null;
@@ -270,6 +274,7 @@ namespace DPopCleaner.SimpleUpdate
             {
                 if (_zapretHost != null) _zapretHost.Hide();
                 if (_zapretVisualHost != null) _zapretVisualHost.Hide();
+                if (_zapretResponsiveHost != null) _zapretResponsiveHost.Hide();
                 return;
             }
 
@@ -282,6 +287,14 @@ namespace DPopCleaner.SimpleUpdate
                 _zapretVisualHost = new ZapretVisualPolishHost(_mainWindow, _applicationRoot);
             else
                 _zapretVisualHost.Show();
+
+            // rev.17 geometry intentionally runs after both previous layers. ZapretEnhancementHost
+            // may copy frozen proxy bounds every 100ms and visual polish may change owner-draw styles;
+            // the final pass must therefore own the authoritative responsive positions for this tick.
+            if (_zapretResponsiveHost == null)
+                _zapretResponsiveHost = new ZapretResponsiveLayoutHost(_mainWindow);
+            else
+                _zapretResponsiveHost.Show();
         }
 
         private void UpdateSettingsEnhancements()
@@ -514,6 +527,7 @@ namespace DPopCleaner.SimpleUpdate
             try { _updateCancellation.Cancel(); } catch { }
             if (_trayRamHost != null) _trayRamHost.Dispose();
             if (_settingsHost != null) _settingsHost.Dispose();
+            if (_zapretResponsiveHost != null) _zapretResponsiveHost.Dispose();
             if (_zapretVisualHost != null) _zapretVisualHost.Dispose();
             if (_zapretHost != null) _zapretHost.Dispose();
             if (_timer != null) _timer.Dispose();
