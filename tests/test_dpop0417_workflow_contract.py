@@ -59,16 +59,17 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         path = ROOT / "tools" / "dpop0417_rev16_zapret_functional_smoke.ps1"
         text = path.read_text(encoding="utf-8")
 
-        finally_block = text.rfind("finally {")
+        failure_catch = text.find("catch {\n    $failure=$_.Exception.Message")
+        finally_block = text.find("finally {", failure_catch)
         success_marker = text.rfind("REV16_ZAPRET_FUNCTIONAL_SMOKE_OK")
         explicit_success_exit = text.rfind("exit 0")
-        catch_block = text.rfind("catch {")
-        rethrow = text.find("throw", catch_block)
+        rethrow = text.find("throw", failure_catch, finally_block)
 
-        self.assertGreater(finally_block, 0)
+        self.assertGreater(failure_catch, 0)
+        self.assertGreater(rethrow, failure_catch)
+        self.assertGreater(finally_block, rethrow)
         self.assertGreater(success_marker, finally_block)
         self.assertGreater(explicit_success_exit, success_marker)
-        self.assertGreater(rethrow, catch_block)
 
 
 if __name__ == "__main__":
