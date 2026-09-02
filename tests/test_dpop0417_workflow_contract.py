@@ -80,7 +80,7 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
             "REV16_ZAPRET_DARK_THEME_OK",
             "REV16_ZAPRET_BUTTON_LAYOUT_OK",
             "REV16_ZAPRET_JOURNAL_HIDDEN_OK",
-            "REV16_ZAPRET_JOURNAL_RESTORED_OK",
+            "REV16_OTHER_PAGE_LOG_UNCHANGED_OK",
             "BS_OWNERDRAW",
             "GetPixel",
             "ListBox",
