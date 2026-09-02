@@ -159,8 +159,6 @@ namespace DPopCleaner.SimpleUpdate
 
             _actionToolbar = CreateHost(ToolbarWidth, ToolbarHeight);
 
-            // One safe row beside the frozen "Дополнительно" heading. Widths deliberately
-            // preserve the full Russian labels while keeping all four actions inside the old page.
             var x = 0;
             CreateButton(_actionToolbar, "Починка трансляции", RepairBroadcastButtonId, x, 0, 165, ToolbarHeight, font);
             x += 165 + ButtonGap;
@@ -372,16 +370,17 @@ namespace DPopCleaner.SimpleUpdate
                         while (DateTime.UtcNow < deadline)
                         {
                             var state = ZapretRuntimeState.Read(_applicationRoot);
-                            if (!state.ZapretServiceExists && !state.BundledWinwsRunning)
+                            if (!state.ZapretServiceExists && !state.BundledWinwsRunning &&
+                                !state.WinDivertServiceExists && !state.WinDivert14ServiceExists)
                             {
                                 RefreshRuntimeStatus();
                                 return;
                             }
                             if (process.HasExited)
-                                throw new InvalidOperationException("Upstream service.bat завершился до удаления службы. Код выхода: " + process.ExitCode);
+                                throw new InvalidOperationException("Upstream service.bat завершился до полного удаления Zapret/WinDivert. Код выхода: " + process.ExitCode);
                             Thread.Sleep(200);
                         }
-                        throw new TimeoutException("Upstream service.bat не удалил службу zapret вовремя.");
+                        throw new TimeoutException("Upstream service.bat не завершил удаление zapret/WinDivert вовремя.");
                     }
                     finally
                     {
