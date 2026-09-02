@@ -71,6 +71,26 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         self.assertGreater(success_marker, finally_block)
         self.assertGreater(explicit_success_exit, success_marker)
 
+    def test_rev16_installed_presentation_smoke_gates_theme_layout_and_journal_policy(self):
+        smoke_path = ROOT / "tools" / "dpop0417_rev16_zapret_presentation_smoke.ps1"
+        self.assertTrue(smoke_path.is_file())
+        smoke = smoke_path.read_text(encoding="utf-8")
+        for token in (
+            "REV16_ZAPRET_LIGHT_THEME_OK",
+            "REV16_ZAPRET_DARK_THEME_OK",
+            "REV16_ZAPRET_BUTTON_LAYOUT_OK",
+            "REV16_ZAPRET_JOURNAL_HIDDEN_OK",
+            "REV16_ZAPRET_JOURNAL_RESTORED_OK",
+            "BS_OWNERDRAW",
+            "GetPixel",
+            "ListBox",
+        ):
+            self.assertIn(token, smoke)
+
+        foundation = (ROOT / ".github" / "workflows" / "DPopCleaner_0.4.17_FOUNDATION.yml").read_text(encoding="utf-8").replace("\\", "/")
+        self.assertIn("tools/dpop0417_rev16_zapret_presentation_smoke.ps1", foundation)
+        self.assertIn("rev16-zapret-presentation", foundation)
+
 
 if __name__ == "__main__":
     unittest.main()
