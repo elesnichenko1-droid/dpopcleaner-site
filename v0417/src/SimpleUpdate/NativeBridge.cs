@@ -40,6 +40,7 @@ namespace DPopCleaner.SimpleUpdate
         internal const int SW_SHOW = 5;
 
         private const uint CB_GETCOUNT = 0x0146;
+        private const uint CB_GETCURSEL = 0x0147;
         private const uint CB_GETLBTEXT = 0x0148;
         private const uint CB_GETLBTEXTLEN = 0x0149;
         private const uint CB_RESETCONTENT = 0x014B;
@@ -393,6 +394,48 @@ namespace DPopCleaner.SimpleUpdate
                 if (string.Equals(values[i], selectedText, StringComparison.OrdinalIgnoreCase)) selectedIndex = i;
             }
             SendMessage(combo, CB_SETCURSEL, new IntPtr(selectedIndex), IntPtr.Zero);
+            return true;
+        }
+
+        internal static string ReadSettingsThemeSelection(IntPtr parent)
+        {
+            if (parent == IntPtr.Zero) return string.Empty;
+            var startup = FindChildById(parent, StartupCheckboxId);
+            var startupBounds = GetChildClientBounds(parent, startup);
+            if (startupBounds == null) return string.Empty;
+
+            ChildInfo best = null;
+            var bestDistance = int.MaxValue;
+            foreach (var child in GetChildren(parent))
+            {
+                if (!string.Equals(child.ClassName, "ComboBox", StringComparison.OrdinalIgnoreCase)) continue;
+                var bounds = GetChildClientBounds(parent, child.Handle);
+                if (bounds == null || bounds.Bottom > startupBounds.Top + 4) continue;
+                var distance = startupBounds.Top - bounds.Top;
+                if (distance < 12 || distance > 140 || distance >= bestDistance) continue;
+                best = child;
+                bestDistance = distance;
+            }
+            if (best == null) return string.Empty;
+
+            var index = SendMessage(best.Handle, CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero).ToInt32();
+            var selected = index >= 0 ? ReadComboItem(best.Handle, index) : string.Empty;
+            if (string.IsNullOrWhiteSpace(selected)) selected = ReadWindowText(best.Handle);
+            return (selected ?? string.Empty).Trim();
+        }
+
+        internal static bool IsDarkThemeSelected(IntPtr parent)
+        {
+            var selected = ReadSettingsThemeSelection(parent);
+            if (selected.IndexOf("light", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                selected.IndexOf("свет", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+            if (selected.IndexOf("dark", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                selected.IndexOf("тём", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                selected.IndexOf("тем", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            // Preserve the long-standing Midnight UI if the frozen combo cannot be resolved yet.
             return true;
         }
 
