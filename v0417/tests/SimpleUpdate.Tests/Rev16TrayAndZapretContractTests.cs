@@ -170,5 +170,31 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(remove, "!state.WinDivert14ServiceExists");
             StringAssert.Contains(remove, "File.Delete(removeManager)");
         }
+
+        [TestMethod]
+        public void Proven_broken_standalone_start_action_is_replaced_by_a_same_bounds_upstream_proxy()
+        {
+            var source = ReadSource("ZapretEnhancementHost.cs");
+
+            StringAssert.Contains(source, "StartStandaloneProxyButtonId = 1713");
+            StringAssert.Contains(source, "CreateStartStandaloneProxy()");
+            StringAssert.Contains(source, "StartSelectedStrategyUsingUpstreamBatch()");
+            StringAssert.Contains(source, "NativeBridge.ShowWindow(_legacyStartStandaloneButton, NativeBridge.SW_HIDE)");
+
+            var start = SliceMethod(
+                source,
+                "private void StartSelectedStrategyUsingUpstreamBatch()",
+                "private void InstallSelectedStrategyUsingUpstreamManager()");
+            StringAssert.Contains(start, "ReadSelectedStrategy()");
+            StringAssert.Contains(start, "Path.GetFullPath(Path.Combine(zapretRoot, selected))");
+            StringAssert.Contains(start, "new ProcessStartInfo(\"cmd.exe\")");
+            StringAssert.Contains(start, "WorkingDirectory = zapretRoot");
+            StringAssert.Contains(start, "ZapretRuntimeState.Read(_applicationRoot)");
+            StringAssert.Contains(start, "state.ZapretServiceRunning");
+            StringAssert.Contains(start, "state.BundledWinwsRunning");
+            StringAssert.Contains(start, "RefreshRuntimeStatus()");
+            Assert.IsFalse(start.Contains("taskkill"),
+                "Standalone start must execute only the selected bundled Flowseal strategy and must not use global process termination.");
+        }
     }
 }
