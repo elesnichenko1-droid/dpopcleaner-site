@@ -13,7 +13,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: windows-2022
-    timeout-minutes: 10
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v5
 
@@ -44,7 +44,7 @@ jobs:
               Invoke-Cmd ('sc.exe stop ' + $name + ' >nul 2>&1') | Out-Null
               Invoke-Cmd ('sc.exe delete ' + $name + ' >nul 2>&1') | Out-Null
             }
-            Start-Sleep -Milliseconds 800
+            Start-Sleep -Milliseconds 700
           }
 
           function Snapshot([string]$Mode,[int]$ElapsedMs) {
@@ -74,6 +74,15 @@ jobs:
             }
           }
 
+          function Save-CompletedRead($Task,[string]$Path) {
+            try {
+              if ($Task.Wait(1500)) { $Task.Result | Set-Content -Encoding UTF8 -LiteralPath $Path }
+              else { '[read task did not complete before timeout]' | Set-Content -Encoding UTF8 -LiteralPath $Path }
+            } catch {
+              ('[read failed] ' + $_.Exception.Message) | Set-Content -Encoding UTF8 -LiteralPath $Path
+            }
+          }
+
           Clear-ZapretState
           $source = (Get-Content -Raw -LiteralPath $service) -replace "`r`n", "`n"
           $anchor = 'title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!'
@@ -100,20 +109,23 @@ jobs:
 
           $samples = [Collections.Generic.List[object]]::new()
           $start = [DateTime]::UtcNow
-          while (([DateTime]::UtcNow - $start).TotalSeconds -lt 15) {
+          while (([DateTime]::UtcNow - $start).TotalSeconds -lt 10) {
             $elapsed = [int]([DateTime]::UtcNow - $start).TotalMilliseconds
             $samples.Add((Snapshot 'service' $elapsed))
             Start-Sleep -Milliseconds 125
           }
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
-          try { $outTask.Wait(2000) | Out-Null; $outTask.Result | Set-Content -Encoding UTF8 $serviceOut } catch { }
-          try { $errTask.Wait(2000) | Out-Null; $errTask.Result | Set-Content -Encoding UTF8 $serviceErr } catch { }
+          Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Save-CompletedRead $outTask $serviceOut
+          Save-CompletedRead $errTask $serviceErr
           $samples | Export-Csv -NoTypeInformation -Encoding UTF8 (Join-Path $diag 'service-samples.csv')
           $samples | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $diag 'service-samples.json')
           $firstExists = $samples | Where-Object ServiceExists | Select-Object -First 1
           $firstRunning = $samples | Where-Object ServiceState -eq 'Running' | Select-Object -First 1
           $lastService = $samples[$samples.Count-1]
-          Write-Host "REV16_SERVICE_PROBE first_exists_ms=$($firstExists.ElapsedMs) first_running_ms=$(if($firstRunning){$firstRunning.ElapsedMs}else{-1}) last_state=$($lastService.ServiceState) exit=$($lastService.ServiceExitCode) strategy='$($lastService.SelectedStrategy)' image_len=$($lastService.ImagePathLength) drivers='$($lastService.DriverStates)'"
+          $firstExistsMs = if($firstExists){$firstExists.ElapsedMs}else{-1}
+          $firstRunningMs = if($firstRunning){$firstRunning.ElapsedMs}else{-1}
+          Write-Host "REV16_SERVICE_PROBE first_exists_ms=$firstExistsMs first_running_ms=$firstRunningMs last_state=$($lastService.ServiceState) exit=$($lastService.ServiceExitCode) strategy='$($lastService.SelectedStrategy)' image_len=$($lastService.ImagePathLength) drivers='$($lastService.DriverStates)'"
 
           $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=[DateTime]::Now.AddMinutes(-5)} -ErrorAction SilentlyContinue |
             Where-Object { $_.ProviderName -eq 'Service Control Manager' -and $_.Message -match '(?i)zapret|WinDivert|winws' } |
@@ -136,7 +148,7 @@ jobs:
           $standOutTask = $stand.StandardOutput.ReadToEndAsync(); $standErrTask = $stand.StandardError.ReadToEndAsync()
           $standSamples = [Collections.Generic.List[object]]::new()
           $standStart = [DateTime]::UtcNow
-          while (([DateTime]::UtcNow - $standStart).TotalSeconds -lt 12) {
+          while (([DateTime]::UtcNow - $standStart).TotalSeconds -lt 8) {
             $elapsed = [int]([DateTime]::UtcNow - $standStart).TotalMilliseconds
             $snap = Snapshot 'standalone' $elapsed
             $standSamples.Add($snap)
@@ -145,13 +157,16 @@ jobs:
           }
           $standExit = if($stand.HasExited){$stand.ExitCode}else{-999}
           if (-not $stand.HasExited) { Stop-Process -Id $stand.Id -Force -ErrorAction SilentlyContinue }
-          try { $standOutTask.Wait(2000) | Out-Null; $standOutTask.Result | Set-Content -Encoding UTF8 $standOut } catch { }
-          try { $standErrTask.Wait(2000) | Out-Null; $standErrTask.Result | Set-Content -Encoding UTF8 $standErr } catch { }
+          Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Milliseconds 250
+          Save-CompletedRead $standOutTask $standOut
+          Save-CompletedRead $standErrTask $standErr
           $standSamples | Export-Csv -NoTypeInformation -Encoding UTF8 (Join-Path $diag 'standalone-samples.csv')
           $standSamples | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $diag 'standalone-samples.json')
           $firstWinws = $standSamples | Where-Object WinwsCount -gt 0 | Select-Object -First 1
           $lastStand = $standSamples[$standSamples.Count-1]
-          Write-Host "REV16_STANDALONE_PROBE first_winws_ms=$(if($firstWinws){$firstWinws.ElapsedMs}else{-1}) cmd_exit=$standExit last_winws=$($lastStand.WinwsCount) drivers='$($lastStand.DriverStates)'"
+          $firstWinwsMs = if($firstWinws){$firstWinws.ElapsedMs}else{-1}
+          Write-Host "REV16_STANDALONE_PROBE first_winws_ms=$firstWinwsMs cmd_exit=$standExit last_winws=$($lastStand.WinwsCount) drivers='$($lastStand.DriverStates)'"
 
           $driverEvents = Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=[DateTime]::Now.AddMinutes(-5)} -ErrorAction SilentlyContinue |
             Where-Object { $_.Message -match '(?i)WinDivert|winws|zapret' } |
