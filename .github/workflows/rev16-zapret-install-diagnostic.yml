@@ -27,89 +27,10 @@ jobs:
           $pattern = '(?s)        private void InstallSelectedStrategyUsingUpstreamManager\(\).*?(?=        private static int FindStrategyMenuIndex)'
           $matches = [regex]::Matches($source, $pattern)
           if ($matches.Count -ne 1) { throw "Expected exactly one install method, found $($matches.Count)." }
-
-          $replacement = @'
-        private void InstallSelectedStrategyUsingUpstreamManager()
-        {
-            var selected = ReadSelectedStrategy();
-            if (string.IsNullOrWhiteSpace(selected)) throw new InvalidOperationException("Сначала выберите стратегию Zapret.");
-
-            var zapretRoot = GetZapretRoot();
-            var service = Path.Combine(zapretRoot, "service.bat");
-            if (!File.Exists(service)) throw new FileNotFoundException("service.bat Zapret 1.10.2 не найден.", service);
-            var menuIndex = FindStrategyMenuIndex(zapretRoot, selected);
-            if (menuIndex <= 0) throw new InvalidOperationException("Выбранная стратегия отсутствует в upstream manager: " + selected);
-
-            var directManager = BuildDirectUpstreamInstallManager(service);
-            try
-            {
-                var info = new ProcessStartInfo("cmd.exe")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardInput = true,
-                    Arguments = "/d /c \"\"" + directManager + "\" admin\"",
-                    WorkingDirectory = zapretRoot
-                };
-
-                using (var process = Process.Start(info))
-                {
-                    if (process == null) throw new InvalidOperationException("Не удалось запустить upstream service.bat.");
-                    try
-                    {
-                        process.StandardInput.WriteLine(menuIndex.ToString());
-                        process.StandardInput.Flush();
-
-                        var deadline = DateTime.UtcNow.AddSeconds(15);
-                        while (DateTime.UtcNow < deadline)
-                        {
-                            var state = ZapretRuntimeState.Read(_applicationRoot);
-                            if (state.ZapretServiceRunning)
-                            {
-                                RefreshRuntimeStatus();
-                                return;
-                            }
-                            if (process.HasExited)
-                                throw new InvalidOperationException("Upstream service.bat завершился до запуска службы. Стратегия: " + selected + ". Код выхода: " + process.ExitCode);
-                            Thread.Sleep(200);
-                        }
-                        throw new TimeoutException("Upstream service.bat не запустил службу zapret. Стратегия: " + selected + ".");
-                    }
-                    finally
-                    {
-                        try { if (!process.HasExited) process.Kill(); } catch { }
-                    }
-                }
-            }
-            finally
-            {
-                try { if (File.Exists(directManager)) File.Delete(directManager); } catch { }
-            }
-        }
-
-        private static string BuildDirectUpstreamInstallManager(string service)
-        {
-            var source = File.ReadAllText(service);
-            const string anchor = "title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!";
-            var first = source.IndexOf(anchor, StringComparison.Ordinal);
-            if (first < 0 || source.IndexOf(anchor, first + anchor.Length, StringComparison.Ordinal) >= 0)
-                throw new InvalidDataException("Flowseal service manager anchor is missing or ambiguous.");
-
-            var newline = source.IndexOf("\r\n", StringComparison.Ordinal) >= 0 ? "\r\n" : "\n";
-            var modified = source.Insert(first + anchor.Length, newline + "goto service_install");
-            var directory = Path.GetDirectoryName(service);
-            if (string.IsNullOrWhiteSpace(directory)) throw new InvalidDataException("Flowseal service manager directory is invalid.");
-
-            var directManager = Path.Combine(directory, "service-dpop-install-" + Guid.NewGuid().ToString("N") + ".bat");
-            File.WriteAllText(directManager, modified, new UTF8Encoding(false));
-            return directManager;
-        }
-
-'@
-
+          $replacementBase64 = 'ICAgICAgICBwcml2YXRlIHZvaWQgSW5zdGFsbFNlbGVjdGVkU3RyYXRlZ3lVc2luZ1Vwc3RyZWFtTWFuYWdlcigpCiAgICAgICAgewogICAgICAgICAgICB2YXIgc2VsZWN0ZWQgPSBSZWFkU2VsZWN0ZWRTdHJhdGVneSgpOwogICAgICAgICAgICBpZiAoc3RyaW5nLklzTnVsbE9yV2hpdGVTcGFjZShzZWxlY3RlZCkpIHRocm93IG5ldyBJbnZhbGlkT3BlcmF0aW9uRXhjZXB0aW9uKCLQodC90LDRh9Cw0LvQsCDQstGL0LHQtdGA0LjRgtC1INGB0YLRgNCw0YLQtdCz0LjRjiBaYXByZXQuIik7CgogICAgICAgICAgICB2YXIgemFwcmV0Um9vdCA9IEdldFphcHJldFJvb3QoKTsKICAgICAgICAgICAgdmFyIHNlcnZpY2UgPSBQYXRoLkNvbWJpbmUoemFwcmV0Um9vdCwgInNlcnZpY2UuYmF0Iik7CiAgICAgICAgICAgIGlmICghRmlsZS5FeGlzdHMoc2VydmljZSkpIHRocm93IG5ldyBGaWxlTm90Rm91bmRFeGNlcHRpb24oInNlcnZpY2UuYmF0IFphcHJldCAxLjEwLjIg0L3QtSDQvdCw0LnQtNC10L0uIiwgc2VydmljZSk7CiAgICAgICAgICAgIHZhciBtZW51SW5kZXggPSBGaW5kU3RyYXRlZ3lNZW51SW5kZXgoemFwcmV0Um9vdCwgc2VsZWN0ZWQpOwogICAgICAgICAgICBpZiAobWVudUluZGV4IDw9IDApIHRocm93IG5ldyBJbnZhbGlkT3BlcmF0aW9uRXhjZXB0aW9uKCLQktGL0LHRgNCw0L3QvdCw0Y8g0YHRgtGA0LDRgtC10LPQuNGPINC+0YLRgdGD0YLRgdGC0LLRg9C10YIg0LIgdXBzdHJlYW0gbWFuYWdlcjogIiArIHNlbGVjdGVkKTsKCiAgICAgICAgICAgIHZhciBkaXJlY3RNYW5hZ2VyID0gQnVpbGREaXJlY3RVcHN0cmVhbUluc3RhbGxNYW5hZ2VyKHNlcnZpY2UpOwogICAgICAgICAgICB0cnkKICAgICAgICAgICAgewogICAgICAgICAgICAgICAgdmFyIGluZm8gPSBuZXcgUHJvY2Vzc1N0YXJ0SW5mbygiY21kLmV4ZSIpCiAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgVXNlU2hlbGxFeGVjdXRlID0gZmFsc2UsCiAgICAgICAgICAgICAgICAgICAgQ3JlYXRlTm9XaW5kb3cgPSB0cnVlLAogICAgICAgICAgICAgICAgICAgIFJlZGlyZWN0U3RhbmRhcmRJbnB1dCA9IHRydWUsCiAgICAgICAgICAgICAgICAgICAgQXJndW1lbnRzID0gIi9kIC9jIFwiXCIiICsgZGlyZWN0TWFuYWdlciArICJcIiBhZG1pblwiIiwKICAgICAgICAgICAgICAgICAgICBXb3JraW5nRGlyZWN0b3J5ID0gemFwcmV0Um9vdAogICAgICAgICAgICAgICAgfTsKCiAgICAgICAgICAgICAgICB1c2luZyAodmFyIHByb2Nlc3MgPSBQcm9jZXNzLlN0YXJ0KGluZm8pKQogICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAgIGlmIChwcm9jZXNzID09IG51bGwpIHRocm93IG5ldyBJbnZhbGlkT3BlcmF0aW9uRXhjZXB0aW9uKCLQndC1INGD0LTQsNC70L7RgdGMINC30LDQv9GD0YHRgtC40YLRjCB1cHN0cmVhbSBzZXJ2aWNlLmJhdC4iKTsKICAgICAgICAgICAgICAgICAgICB0cnkKICAgICAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgICAgIHByb2Nlc3MuU3RhbmRhcmRJbnB1dC5Xcml0ZUxpbmUobWVudUluZGV4LlRvU3RyaW5nKCkpOwogICAgICAgICAgICAgICAgICAgICAgICBwcm9jZXNzLlN0YW5kYXJkSW5wdXQuRmx1c2goKTsKCiAgICAgICAgICAgICAgICAgICAgICAgIHZhciBkZWFkbGluZSA9IERhdGVUaW1lLlV0Y05vdy5BZGRTZWNvbmRzKDE1KTsKICAgICAgICAgICAgICAgICAgICAgICAgd2hpbGUgKERhdGVUaW1lLlV0Y05vdyA8IGRlYWRsaW5lKQogICAgICAgICAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB2YXIgc3RhdGUgPSBaYXByZXRSdW50aW1lU3RhdGUuUmVhZChfYXBwbGljYXRpb25Sb290KTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlmIChzdGF0ZS5aYXByZXRTZXJ2aWNlUnVubmluZykKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBSZWZyZXNoUnVudGltZVN0YXR1cygpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHJldHVybjsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlmIChwcm9jZXNzLkhhc0V4aXRlZCkKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB0aHJvdyBuZXcgSW52YWxpZE9wZXJhdGlvbkV4Y2VwdGlvbigiVXBzdHJlYW0gc2VydmljZS5iYXQg0LfQsNCy0LXRgNGI0LjQu9GB0Y8g0LTQviDQt9Cw0L/Rg9GB0LrQsCDRgdC70YPQttCx0YsuINCh0YLRgNCw0YLQtdCz0LjRjzogIiArIHNlbGVjdGVkICsgIi4g0JrQvtC0INCy0YvRhdC+0LTQsDogIiArIHByb2Nlc3MuRXhpdENvZGUpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgVGhyZWFkLlNsZWVwKDIwMCk7CiAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgICAgdGhyb3cgbmV3IFRpbWVvdXRFeGNlcHRpb24oIlVwc3RyZWFtIHNlcnZpY2UuYmF0INC90LUg0LfQsNC/0YPRgdGC0LjQuyDRgdC70YPQttCx0YMgemFwcmV0LiDQodGC0YDQsNGC0LXQs9C40Y86ICIgKyBzZWxlY3RlZCArICIuIik7CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIGZpbmFsbHkKICAgICAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRyeSB7IGlmICghcHJvY2Vzcy5IYXNFeGl0ZWQpIHByb2Nlc3MuS2lsbCgpOyB9IGNhdGNoIHsgfQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgICAgICBmaW5hbGx5CiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIHRyeSB7IGlmIChGaWxlLkV4aXN0cyhkaXJlY3RNYW5hZ2VyKSkgRmlsZS5EZWxldGUoZGlyZWN0TWFuYWdlcik7IH0gY2F0Y2ggeyB9CiAgICAgICAgICAgIH0KICAgICAgICB9CgogICAgICAgIHByaXZhdGUgc3RhdGljIHN0cmluZyBCdWlsZERpcmVjdFVwc3RyZWFtSW5zdGFsbE1hbmFnZXIoc3RyaW5nIHNlcnZpY2UpCiAgICAgICAgewogICAgICAgICAgICB2YXIgc291cmNlID0gRmlsZS5SZWFkQWxsVGV4dChzZXJ2aWNlKTsKICAgICAgICAgICAgY29uc3Qgc3RyaW5nIGFuY2hvciA9ICJ0aXRsZSBaQVBSRVQgU0VSVklDRSBNQU5BR0VSIHYhTE9DQUxfVkVSU0lPTiEiOwogICAgICAgICAgICB2YXIgZmlyc3QgPSBzb3VyY2UuSW5kZXhPZihhbmNob3IsIFN0cmluZ0NvbXBhcmlzb24uT3JkaW5hbCk7CiAgICAgICAgICAgIGlmIChmaXJzdCA8IDAgfHwgc291cmNlLkluZGV4T2YoYW5jaG9yLCBmaXJzdCArIGFuY2hvci5MZW5ndGgsIFN0cmluZ0NvbXBhcmlzb24uT3JkaW5hbCkgPj0gMCkKICAgICAgICAgICAgICAgIHRocm93IG5ldyBJbnZhbGlkRGF0YUV4Y2VwdGlvbigiRmxvd3NlYWwgc2VydmljZSBtYW5hZ2VyIGFuY2hvciBpcyBtaXNzaW5nIG9yIGFtYmlndW91cy4iKTsKCiAgICAgICAgICAgIHZhciBuZXdsaW5lID0gc291cmNlLkluZGV4T2YoIlxyXG4iLCBTdHJpbmdDb21wYXJpc29uLk9yZGluYWwpID49IDAgPyAiXHJcbiIgOiAiXG4iOwogICAgICAgICAgICB2YXIgbW9kaWZpZWQgPSBzb3VyY2UuSW5zZXJ0KGZpcnN0ICsgYW5jaG9yLkxlbmd0aCwgbmV3bGluZSArICJnb3RvIHNlcnZpY2VfaW5zdGFsbCIpOwogICAgICAgICAgICB2YXIgZGlyZWN0b3J5ID0gUGF0aC5HZXREaXJlY3RvcnlOYW1lKHNlcnZpY2UpOwogICAgICAgICAgICBpZiAoc3RyaW5nLklzTnVsbE9yV2hpdGVTcGFjZShkaXJlY3RvcnkpKSB0aHJvdyBuZXcgSW52YWxpZERhdGFFeGNlcHRpb24oIkZsb3dzZWFsIHNlcnZpY2UgbWFuYWdlciBkaXJlY3RvcnkgaXMgaW52YWxpZC4iKTsKCiAgICAgICAgICAgIHZhciBkaXJlY3RNYW5hZ2VyID0gUGF0aC5Db21iaW5lKGRpcmVjdG9yeSwgInNlcnZpY2UtZHBvcC1pbnN0YWxsLSIgKyBHdWlkLk5ld0d1aWQoKS5Ub1N0cmluZygiTiIpICsgIi5iYXQiKTsKICAgICAgICAgICAgRmlsZS5Xcml0ZUFsbFRleHQoZGlyZWN0TWFuYWdlciwgbW9kaWZpZWQsIG5ldyBVVEY4RW5jb2RpbmcoZmFsc2UpKTsKICAgICAgICAgICAgcmV0dXJuIGRpcmVjdE1hbmFnZXI7CiAgICAgICAgfQoK'
+          $replacement = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($replacementBase64))
           $updated = [regex]::Replace($source, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $replacement }, 1)
           [IO.File]::WriteAllText((Resolve-Path $path), $updated, [Text.UTF8Encoding]::new($false))
-
           if ($updated -match 'process\.StandardInput\.WriteLine\("1"\)') { throw 'Broken root-menu input is still present.' }
           if ($updated -notmatch 'goto service_install') { throw 'Direct upstream service_install jump is missing.' }
 
