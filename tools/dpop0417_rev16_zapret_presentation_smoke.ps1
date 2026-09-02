@@ -71,6 +71,8 @@ public static class Rev16PresentationNative {
 '@
 Add-Type -TypeDefinition $native -Language CSharp
 
+$BS_OWNERDRAW=0xB
+
 function Get-Children([IntPtr]$Window) { @([Rev16PresentationNative]::Children($Window)) }
 function Wait-Until([int]$Seconds,[string]$Description,[scriptblock]$Condition) {
     $deadline=[DateTime]::UtcNow.AddSeconds($Seconds)
@@ -103,25 +105,39 @@ function Wait-PageButton([IntPtr]$Window,[int]$Id) {
         @(Get-Children $Window | Where-Object { $_.Visible -and $_.Id -eq $Id -and $_.ClassName -eq 'Button' }).Count -ge 1
     }
 }
-function Find-Journal([IntPtr]$Window) {
+function Find-ZapretJournal([IntPtr]$Window) {
     $children=@(Get-Children $Window)
-    $lists=@($children | Where-Object { $_.Visible -and $_.ClassName -eq 'ListBox' } | Sort-Object @{Expression={($_.Right-$_.Left)*($_.Bottom-$_.Top)}} -Descending)
-    if($lists.Count -eq 0){ throw 'Visible native Journal ListBox was not found outside Zapret.' }
+    $lists=@($children | Where-Object { $_.ClassName -eq 'ListBox' } | Sort-Object @{Expression={($_.Right-$_.Left)*($_.Bottom-$_.Top)}} -Descending)
+    if($lists.Count -eq 0){ throw 'Native Zapret Journal ListBox was not found structurally.' }
     $list=$lists[0]
     $heading=$children | Where-Object {
-        $_.Visible -and $_.ClassName -eq 'Static' -and $_.Bottom -le ($list.Top+8) -and $_.Left -lt $list.Right -and $_.Right -gt $list.Left
+        $_.ClassName -eq 'Static' -and $_.Bottom -le ($list.Top+8) -and $_.Left -lt $list.Right -and $_.Right -gt $list.Left
     } | Sort-Object @{Expression={[Math]::Max(0,$list.Top-$_.Bottom)}} | Select-Object -First 1
-    if(-not $heading){ throw 'Native Journal heading was not found structurally above ListBox.' }
+    if(-not $heading){ throw 'Native Zapret Journal heading was not found structurally above ListBox.' }
     [pscustomobject]@{Heading=$heading;List=$list}
 }
-function Open-Ram-And-CaptureJournal([IntPtr]$Window) {
-    Click-Id $Window 910
-    Start-Sleep -Milliseconds 350
-    Find-Journal $Window
+function Open-Zapret-And-FindJournal([IntPtr]$Window) {
+    Click-Id $Window 905
+    Wait-PageButton $Window 1703
+    Start-Sleep -Milliseconds 500
+    Find-ZapretJournal $Window
 }
-function Set-NativeTheme([IntPtr]$Window,[ValidateSet('light','dark')][string]$Theme,[string]$Root) {
+function Assert-OtherPageLogUnchanged([IntPtr]$Window,[object]$ZapretJournal) {
     Click-Id $Window 906
     Wait-PageButton $Window 1401
+    Start-Sleep -Milliseconds 400
+    if([Rev16PresentationNative]::IsWindowVisible($ZapretJournal.List.Handle) -or [Rev16PresentationNative]::IsWindowVisible($ZapretJournal.Heading.Handle)) {
+        throw 'Zapret Journal resurfaced after leaving Zapret.'
+    }
+    $edits=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object @{Expression={($_.Right-$_.Left)*($_.Bottom-$_.Top)}} -Descending)
+    if($edits.Count -eq 0){ throw 'Native log control on Settings disappeared after leaving Zapret.' }
+    $log=$edits[0]
+    if(($log.Bottom-$log.Top) -lt 45){ throw "Expected native Settings log Edit, got height=$($log.Bottom-$log.Top)." }
+    Write-Host 'REV16_OTHER_PAGE_LOG_UNCHANGED_OK'
+}
+function Set-NativeTheme([IntPtr]$Window,[ValidateSet('light','dark')][string]$Theme,[string]$Root) {
+    $saveVisible=@(Get-Children $Window | Where-Object { $_.Visible -and $_.Id -eq 1401 -and $_.ClassName -eq 'Button' }).Count -ge 1
+    if(-not $saveVisible){ Click-Id $Window 906; Wait-PageButton $Window 1401 }
     $combos=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' } | Sort-Object Top)
     if($combos.Count -lt 2){ throw "Expected Language + Theme ComboBox, found $($combos.Count)." }
     $combo=$combos[1]
@@ -146,7 +162,7 @@ function Assert-OwnerDrawAndLayout([IntPtr]$Window) {
     if($buttons.Count -lt 16){ throw "Too few visible Zapret action buttons for unified presentation: $($buttons.Count)." }
     foreach($b in $buttons) {
         $type=[Rev16PresentationNative]::Style($b.Handle) -band 0xF
-        if($type -ne 0xB){ throw "Zapret button id=$($b.Id) is not BS_OWNERDRAW; style=0x$(([Rev16PresentationNative]::Style($b.Handle)).ToString('X'))." }
+        if($type -ne $BS_OWNERDRAW){ throw "Zapret button id=$($b.Id) is not BS_OWNERDRAW; style=0x$(([Rev16PresentationNative]::Style($b.Handle)).ToString('X'))." }
     }
 
     $actions=@($buttons | Where-Object { $_.Id -ge 1720 -and $_.Id -le 1723 } | Sort-Object Left)
@@ -193,7 +209,6 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 $installer=(Resolve-Path -LiteralPath $InstallerPath).Path
 $installRoot=Join-Path ([IO.Path]::GetTempPath()) 'dpop0417-rev16-zapret-presentation'
 $installed=$false; $launcher=$null; $core=$null; $failure=$null
-$lightSamples=$null; $darkSamples=$null
 try {
     Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
     $setup=Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$installRoot+'"')) -PassThru -Wait
@@ -208,10 +223,7 @@ try {
 
     $light=Set-NativeTheme $window light $installRoot
     $window=$light.Window
-    $journal=Open-Ram-And-CaptureJournal $window
-    Click-Id $window 905
-    Wait-PageButton $window 1703
-    Start-Sleep -Milliseconds 500
+    $journal=Open-Zapret-And-FindJournal $window
     if([Rev16PresentationNative]::IsWindowVisible($journal.List.Handle) -or [Rev16PresentationNative]::IsWindowVisible($journal.Heading.Handle)) {
         throw 'Native Journal remained visible on Zapret.'
     }
@@ -227,19 +239,11 @@ try {
     if((Color-Distance $lightBridge $lightNative) -gt 90){ throw "Light native/bridge Zapret buttons are visually inconsistent: bridge=$lightBridge native=$lightNative" }
     Write-Host "REV16_ZAPRET_LIGHT_THEME_OK selected='$($light.Value)' bridge=$lightBridge native=$lightNative"
 
-    Click-Id $window 910
-    Start-Sleep -Milliseconds 400
-    if(-not [Rev16PresentationNative]::IsWindowVisible($journal.List.Handle) -or -not [Rev16PresentationNative]::IsWindowVisible($journal.Heading.Handle)) {
-        throw 'Native Journal was not restored after leaving Zapret.'
-    }
-    Write-Host 'REV16_ZAPRET_JOURNAL_RESTORED_OK'
+    Assert-OtherPageLogUnchanged $window $journal
 
     $dark=Set-NativeTheme $window dark $installRoot
     $window=$dark.Window
-    $journalDark=Open-Ram-And-CaptureJournal $window
-    Click-Id $window 905
-    Wait-PageButton $window 1703
-    Start-Sleep -Milliseconds 500
+    $journalDark=Open-Zapret-And-FindJournal $window
     if([Rev16PresentationNative]::IsWindowVisible($journalDark.List.Handle) -or [Rev16PresentationNative]::IsWindowVisible($journalDark.Heading.Handle)) {
         throw 'Native Journal remained visible on Zapret after dark-theme switch.'
     }
