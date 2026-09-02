@@ -8,7 +8,7 @@ on:
       - '.github/workflows/rev16-release-identity-apply.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply:
@@ -40,23 +40,30 @@ jobs:
           p.write_text(text.replace(anchor, addition), encoding='utf-8')
           PY
 
-      - name: Verify release contracts before commit
+      - name: Verify release contracts
         run: |
           python tests/test_dpop0417_rev16_release_contract.py -v
           python tests/test_dpop0417_release_contract.py -v
+          git diff --check
 
-      - name: Commit approved release identity
+      - name: Collect verified release materialization
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            v0417/src/SimpleUpdate/Program.cs \
-            v0417/src/SimpleUpdate/LauncherContext.cs \
-            version.json update/stable.json release-manifest.js index.html \
-            release/RELEASE_NOTES_0.4.17.md \
-            .github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml \
-            .github/workflows/publish-dpopcleaner-0.4.17.yml \
-            tests/test_dpop0417_release_contract.py
-          git diff --cached --check
-          git commit -m 'release: prepare DPopCleaner 0.4.17 rev.16'
-          git push origin HEAD:feat/0.4.17-rev16-single-tray-zapret
+          mkdir -p _rev16_release/v0417/src/SimpleUpdate _rev16_release/update _rev16_release/release _rev16_release/.github/workflows _rev16_release/tests
+          cp v0417/src/SimpleUpdate/Program.cs _rev16_release/v0417/src/SimpleUpdate/Program.cs
+          cp v0417/src/SimpleUpdate/LauncherContext.cs _rev16_release/v0417/src/SimpleUpdate/LauncherContext.cs
+          cp version.json _rev16_release/version.json
+          cp update/stable.json _rev16_release/update/stable.json
+          cp release-manifest.js _rev16_release/release-manifest.js
+          cp index.html _rev16_release/index.html
+          cp release/RELEASE_NOTES_0.4.17.md _rev16_release/release/RELEASE_NOTES_0.4.17.md
+          cp .github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml _rev16_release/.github/workflows/DPopCleaner_0.4.17_FOUNDATION.yml
+          cp .github/workflows/publish-dpopcleaner-0.4.17.yml _rev16_release/.github/workflows/publish-dpopcleaner-0.4.17.yml
+          cp tests/test_dpop0417_release_contract.py _rev16_release/tests/test_dpop0417_release_contract.py
+          cp tests/test_dpop0417_rev16_release_contract.py _rev16_release/tests/test_dpop0417_rev16_release_contract.py
+
+      - name: Upload verified release materialization
+        uses: actions/upload-artifact@v4
+        with:
+          name: rev16-release-materialization-${{ github.run_id }}
+          path: _rev16_release
+          if-no-files-found: error
