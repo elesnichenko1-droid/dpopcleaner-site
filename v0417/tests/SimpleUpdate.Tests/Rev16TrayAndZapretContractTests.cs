@@ -109,7 +109,7 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void Install_action_bypasses_only_the_broken_root_menu_and_keeps_upstream_service_install()
+        public void Install_action_preserves_root_initialization_and_replaces_only_interactive_choices()
         {
             var source = ReadSource("ZapretEnhancementHost.cs");
             var install = SliceMethod(
@@ -117,17 +117,22 @@ namespace SimpleUpdate.Tests
                 "private void InstallSelectedStrategyUsingUpstreamManager()",
                 "private static int FindStrategyMenuIndex");
 
-            StringAssert.Contains(install, "BuildDirectUpstreamInstallManager");
-            StringAssert.Contains(install, "RedirectStandardInput = true");
-            StringAssert.Contains(install, "process.StandardInput.WriteLine(menuIndex.ToString())");
-            Assert.IsFalse(install.Contains("process.StandardInput.WriteLine(\"1\")"),
-                "The Flowseal 1.10.2 root menu is the proven automation failure; the bridge must enter :service_install directly and write only the strategy index.");
+            StringAssert.Contains(install, "BuildDirectUpstreamInstallManager(service, menuIndex)");
+            Assert.IsFalse(install.Contains("RedirectStandardInput = true"),
+                "Flowseal child commands run before both prompts and can consume redirected stdin; rev.16 must make the temporary manager noninteractive instead.");
+            Assert.IsFalse(install.Contains("process.StandardInput"),
+                "The selected menu choices must be embedded only in the temporary service manager, not streamed through shared stdin.");
             StringAssert.Contains(install, "File.Delete(directManager)");
 
-            StringAssert.Contains(source, "private static string BuildDirectUpstreamInstallManager");
-            StringAssert.Contains(source, "title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!");
-            StringAssert.Contains(source, "goto service_install");
+            StringAssert.Contains(source, "private static string BuildDirectUpstreamInstallManager(string service, int menuIndex)");
+            StringAssert.Contains(source, "set /p menu_choice=   Select option (0-12): ");
+            StringAssert.Contains(source, "set /p \"choice=Input option (0-!count!, default: 0): \"");
+            StringAssert.Contains(source, "DPOP_INSTALL_ONCE");
+            StringAssert.Contains(source, "set \"menu_choice=1\"");
+            StringAssert.Contains(source, "set \"choice=\" + menuIndex.ToString()");
             StringAssert.Contains(source, "service-dpop-install-");
+            Assert.IsFalse(source.Contains("goto service_install"),
+                "Jumping directly to :service_install skips Flowseal root-menu initialization, including GameFilterTCP/GameFilterUDP fallback values, and produces a service that exits with 1067.");
         }
     }
 }
