@@ -22,6 +22,19 @@ jobs:
       - name: Apply approved rev.16 release identity
         run: python .github/scripts/rev16_release_identity_apply.py
 
+      - name: Preserve visual release-note contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('release/RELEASE_NOTES_0.4.17.md')
+          text = p.read_text(encoding='utf-8')
+          old = 'Installed pixel-smoke проверяет **Light** и **Midnight**, а native и bridge-кнопки больше не должны визуально выбиваться друг из друга.'
+          new = old + ' При смене темы Zapret-кнопки сразу перерисовываются в выбранной палитре.'
+          if text.count(old) != 1:
+              raise SystemExit('release notes visual anchor mismatch')
+          p.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
       - name: Verify release contracts before commit
         run: |
           python tests/test_dpop0417_rev16_release_contract.py -v
