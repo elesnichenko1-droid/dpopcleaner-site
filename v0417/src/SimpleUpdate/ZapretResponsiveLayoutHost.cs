@@ -91,7 +91,7 @@ namespace DPopCleaner.SimpleUpdate
 
             var contentLeft = Math.Max(0, statusBounds.Left);
             var rightMargin = Scale(24, scale);
-            var contentRight = Math.Min(statusBounds.Right, Math.Max(contentLeft + 1, clientWidth - rightMargin));
+            var contentRight = Math.Max(contentLeft + 1, clientWidth - rightMargin);
             var contentWidth = contentRight - contentLeft;
             if (contentWidth < Scale(620, scale)) return;
 
