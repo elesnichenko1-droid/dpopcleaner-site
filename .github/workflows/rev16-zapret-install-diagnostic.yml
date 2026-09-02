@@ -70,7 +70,15 @@ jobs:
           $probeInput = Join-Path $diag 'setp-probe-input.txt'
           $probeOut = Join-Path $diag 'setp-probe-stdout.txt'
           $probeErr = Join-Path $diag 'setp-probe-stderr.txt'
-          [IO.File]::WriteAllText($probeBat, "@echo off`r`nset \"probe=null\"`r`nset /p probe=PROBE:`r`necho RESULT=[%probe%]`r`nif \"%probe%\"==\"alpha\" exit /b 0`r`nexit /b 7`r`n", [Text.Encoding]::ASCII)
+          $probeLines = @(
+            '@echo off',
+            'set "probe=null"',
+            'set /p probe=PROBE:',
+            'echo RESULT=[%probe%]',
+            'if "%probe%"=="alpha" exit /b 0',
+            'exit /b 7'
+          )
+          [IO.File]::WriteAllText($probeBat, (($probeLines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
           [IO.File]::WriteAllText($probeInput, "alpha`r`n", [Text.Encoding]::ASCII)
           $probeArg = '/d /c ""' + $probeBat + '""'
           $probe = Start-Process -FilePath 'cmd.exe' -ArgumentList $probeArg -RedirectStandardInput $probeInput -RedirectStandardOutput $probeOut -RedirectStandardError $probeErr -PassThru -Wait
@@ -83,16 +91,16 @@ jobs:
           $driver = Join-Path $diag 'flowseal-pipe-driver.cmd'
           $pipeOut = Join-Path $diag 'flowseal-pipe-stdout.txt'
           $pipeErr = Join-Path $diag 'flowseal-pipe-stderr.txt'
-          $driverText = @"
-@echo off
-(
-  echo 1
-  echo 1
-  echo x
-  echo 0
-) | call "$service" admin
-"@
-          [IO.File]::WriteAllText($driver, ($driverText -replace "`n", "`r`n"), [Text.Encoding]::ASCII)
+          $driverLines = @(
+            '@echo off',
+            '(',
+            '  echo 1',
+            '  echo 1',
+            '  echo x',
+            '  echo 0',
+            (') | call "' + $service + '" admin')
+          )
+          [IO.File]::WriteAllText($driver, (($driverLines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
           $driverArg = '/d /c ""' + $driver + '""'
           "cmd.exe $driverArg" | Set-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-command.txt')
           Get-Content -Raw -LiteralPath $driver | Set-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-driver-copy.txt')
