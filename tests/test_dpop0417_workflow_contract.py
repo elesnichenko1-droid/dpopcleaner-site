@@ -55,6 +55,21 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("stage/bin/winws.exe", normalized)
         self.assertIn("1.10.2", lowered)
 
+    def test_rev16_zapret_functional_smoke_exits_zero_only_after_successful_cleanup(self):
+        path = ROOT / "tools" / "dpop0417_rev16_zapret_functional_smoke.ps1"
+        text = path.read_text(encoding="utf-8")
+
+        finally_block = text.rfind("finally {")
+        success_marker = text.rfind("REV16_ZAPRET_FUNCTIONAL_SMOKE_OK")
+        explicit_success_exit = text.rfind("exit 0")
+        catch_block = text.rfind("catch {")
+        rethrow = text.find("throw", catch_block)
+
+        self.assertGreater(finally_block, 0)
+        self.assertGreater(success_marker, finally_block)
+        self.assertGreater(explicit_success_exit, success_marker)
+        self.assertGreater(rethrow, catch_block)
+
 
 if __name__ == "__main__":
     unittest.main()
