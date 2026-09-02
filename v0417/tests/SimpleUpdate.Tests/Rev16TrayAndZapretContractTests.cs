@@ -196,5 +196,47 @@ namespace SimpleUpdate.Tests
             Assert.IsFalse(start.Contains("taskkill"),
                 "Standalone start must execute only the selected bundled Flowseal strategy and must not use global process termination.");
         }
+
+        [TestMethod]
+        public void Zapret_visual_layer_follows_native_theme_and_styles_every_action_consistently()
+        {
+            var visual = ReadSource("ZapretVisualPolishHost.cs");
+            var bridge = ReadSource("NativeBridge.cs");
+            var enhancement = ReadSource("ZapretEnhancementHost.cs");
+
+            StringAssert.Contains(bridge, "internal static bool IsDarkThemeSelected(IntPtr parent)");
+            StringAssert.Contains(bridge, "ReadSettingsThemeSelection(parent)");
+            StringAssert.Contains(visual, "NativeBridge.IsDarkThemeSelected(_parent)");
+            StringAssert.Contains(visual, "UnifiedZapretButtonIds");
+            StringAssert.Contains(visual, "DarkButtonBrush");
+            StringAssert.Contains(visual, "LightButtonBrush");
+            StringAssert.Contains(visual, "ZapretEnhancementHost.InstallServiceProxyButtonId");
+            StringAssert.Contains(visual, "ZapretEnhancementHost.RemoveServicesProxyButtonId");
+            StringAssert.Contains(visual, "ZapretEnhancementHost.StartStandaloneProxyButtonId");
+            foreach (var nativeId in new[] { "1703", "1714", "1716", "1717", "1704", "1705", "1707", "1708", "1710", "1711" })
+                StringAssert.Contains(visual, nativeId);
+            Assert.IsFalse(visual.Contains("EnsureDarkBridgeButtons"),
+                "Zapret presentation must not be permanently dark after the native theme changes.");
+            Assert.IsFalse(enhancement.Contains("SetWindowTheme(button, \"DarkMode_Explorer\""),
+                "Bridge controls must not force DarkMode_Explorer independently of the unified Zapret presentation layer.");
+        }
+
+        [TestMethod]
+        public void Zapret_visual_layer_hides_only_native_journal_while_zapret_is_active_and_restores_it()
+        {
+            var visual = ReadSource("ZapretVisualPolishHost.cs");
+            var show = SliceMethod(visual, "internal void Show()", "internal void Hide()");
+            var hide = SliceMethod(visual, "internal void Hide()", "private void EnsureUnifiedZapretButtons()");
+
+            StringAssert.Contains(show, "HideJournalForZapret()");
+            StringAssert.Contains(hide, "RestoreJournal()");
+            StringAssert.Contains(visual, "private void HideJournalForZapret()");
+            StringAssert.Contains(visual, "private void RestoreJournal()");
+            StringAssert.Contains(visual, "\"ListBox\"");
+            StringAssert.Contains(visual, "NativeBridge.ShowWindow(_journalHeading, NativeBridge.SW_HIDE)");
+            StringAssert.Contains(visual, "NativeBridge.ShowWindow(_journalList, NativeBridge.SW_HIDE)");
+            StringAssert.Contains(visual, "NativeBridge.ShowWindow(_journalHeading, NativeBridge.SW_SHOW)");
+            StringAssert.Contains(visual, "NativeBridge.ShowWindow(_journalList, NativeBridge.SW_SHOW)");
+        }
     }
 }
