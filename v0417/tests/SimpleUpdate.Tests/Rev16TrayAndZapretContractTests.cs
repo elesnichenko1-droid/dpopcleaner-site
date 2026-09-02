@@ -136,5 +136,33 @@ namespace SimpleUpdate.Tests
             Assert.IsFalse(source.Contains("goto service_install"),
                 "Jumping directly to :service_install skips Flowseal root-menu initialization, including GameFilterTCP/GameFilterUDP fallback values, and produces a service that exits with 1067.");
         }
+
+        [TestMethod]
+        public void Proven_broken_remove_action_is_replaced_by_a_same_bounds_upstream_proxy()
+        {
+            var source = ReadSource("ZapretEnhancementHost.cs");
+
+            StringAssert.Contains(source, "RemoveServicesProxyButtonId = 1702");
+            StringAssert.Contains(source, "CreateRemoveServicesProxy()");
+            StringAssert.Contains(source, "RemoveUsingUpstreamManager()");
+            StringAssert.Contains(source, "BuildDirectUpstreamRemoveManager(service)");
+            StringAssert.Contains(source, "DPOP_REMOVE_ONCE");
+            StringAssert.Contains(source, "set \\\"menu_choice=2\\\"");
+            StringAssert.Contains(source, "service-dpop-remove-");
+            StringAssert.Contains(source, "NativeBridge.ShowWindow(_legacyRemoveServicesButton, NativeBridge.SW_HIDE)");
+
+            var remove = SliceMethod(
+                source,
+                "private void RemoveUsingUpstreamManager()",
+                "private static string BuildDirectUpstreamRemoveManager");
+            Assert.IsFalse(remove.Contains("RedirectStandardInput = true"),
+                "The upstream remove manager must be made noninteractive rather than sharing stdin with Flowseal child commands.");
+            Assert.IsFalse(remove.Contains("process.StandardInput"),
+                "Remove must embed root choice 2 in the temporary upstream manager.");
+            StringAssert.Contains(remove, "ZapretRuntimeState.Read(_applicationRoot)");
+            StringAssert.Contains(remove, "!state.ZapretServiceExists");
+            StringAssert.Contains(remove, "!state.BundledWinwsRunning");
+            StringAssert.Contains(remove, "File.Delete(removeManager)");
+        }
     }
 }
