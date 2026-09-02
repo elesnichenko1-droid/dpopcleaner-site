@@ -19,6 +19,7 @@ namespace DPopCleaner.SimpleUpdate
         internal const int LegacyCheckVersionButtonId = 1724;
         internal const int LegacyDownloadButtonId = 1725;
         internal const int InstallServiceProxyButtonId = 1701;
+        internal const int RemoveServicesProxyButtonId = 1702;
 
         private const int ToolbarButtonCount = 4;
         private const int ButtonGap = 8;
@@ -48,9 +49,11 @@ namespace DPopCleaner.SimpleUpdate
         private IntPtr _actionToolbar;
         private IntPtr _updateToolbar;
         private IntPtr _installServiceToolbar;
+        private IntPtr _removeServicesToolbar;
         private IntPtr _legacyCheckVersionButton;
         private IntPtr _legacyDownloadButton;
         private IntPtr _legacyInstallServiceButton;
+        private IntPtr _legacyRemoveServicesButton;
         private DateTime _nextRuntimeRefreshUtc = DateTime.MinValue;
         private bool _disposed;
 
@@ -110,6 +113,7 @@ namespace DPopCleaner.SimpleUpdate
             CreateToolbar();
             CreateLegacyUpdateProxy();
             CreateInstallServiceProxy();
+            CreateRemoveServicesProxy();
             RefreshDisplayedZapretVersion();
             RefreshRuntimeStatus();
         }
@@ -120,6 +124,7 @@ namespace DPopCleaner.SimpleUpdate
             PositionActionToolbar();
             PositionUpdateToolbar();
             PositionInstallServiceProxy();
+            PositionRemoveServicesProxy();
             RefreshDisplayedZapretVersion();
             if (DateTime.UtcNow >= _nextRuntimeRefreshUtc) RefreshRuntimeStatus();
             if (_legacyCheckVersionButton != IntPtr.Zero)
@@ -128,9 +133,12 @@ namespace DPopCleaner.SimpleUpdate
                 NativeBridge.ShowWindow(_legacyDownloadButton, NativeBridge.SW_HIDE);
             if (_legacyInstallServiceButton != IntPtr.Zero)
                 NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_HIDE);
+            if (_legacyRemoveServicesButton != IntPtr.Zero)
+                NativeBridge.ShowWindow(_legacyRemoveServicesButton, NativeBridge.SW_HIDE);
             if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_SHOW);
             if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_SHOW);
             if (_installServiceToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_installServiceToolbar, NativeBridge.SW_SHOW);
+            if (_removeServicesToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_removeServicesToolbar, NativeBridge.SW_SHOW);
         }
 
         internal void Hide()
@@ -139,6 +147,7 @@ namespace DPopCleaner.SimpleUpdate
             if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_HIDE);
             if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_HIDE);
             if (_installServiceToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_installServiceToolbar, NativeBridge.SW_HIDE);
+            if (_removeServicesToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_removeServicesToolbar, NativeBridge.SW_HIDE);
         }
 
         private void CreateToolbar()
@@ -214,6 +223,28 @@ namespace DPopCleaner.SimpleUpdate
             if (_installServiceToolbar == IntPtr.Zero || _legacyInstallServiceButton == IntPtr.Zero) return;
             var bounds = NativeBridge.GetChildClientBounds(_parent, _legacyInstallServiceButton);
             if (bounds != null) NativeBridge.PositionChildWindow(_installServiceToolbar, bounds);
+        }
+
+        private void CreateRemoveServicesProxy()
+        {
+            _legacyRemoveServicesButton = NativeBridge.FindChildById(_parent, RemoveServicesProxyButtonId);
+            if (_legacyRemoveServicesButton == IntPtr.Zero) return;
+            var bounds = NativeBridge.GetChildClientBounds(_parent, _legacyRemoveServicesButton);
+            if (bounds == null) return;
+
+            var font = NativeBridge.SendMessage(_legacyRemoveServicesButton, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
+            var caption = NativeBridge.ReadWindowText(_legacyRemoveServicesButton);
+            _removeServicesToolbar = CreateHost(bounds.Width, bounds.Height);
+            CreateButton(_removeServicesToolbar, caption, RemoveServicesProxyButtonId, 0, 0, bounds.Width, bounds.Height, font);
+            NativeBridge.ShowWindow(_legacyRemoveServicesButton, NativeBridge.SW_HIDE);
+            PositionRemoveServicesProxy();
+        }
+
+        private void PositionRemoveServicesProxy()
+        {
+            if (_removeServicesToolbar == IntPtr.Zero || _legacyRemoveServicesButton == IntPtr.Zero) return;
+            var bounds = NativeBridge.GetChildClientBounds(_parent, _legacyRemoveServicesButton);
+            if (bounds != null) NativeBridge.PositionChildWindow(_removeServicesToolbar, bounds);
         }
 
         private string ReadSelectedStrategy()
@@ -313,6 +344,76 @@ namespace DPopCleaner.SimpleUpdate
             var directManager = Path.Combine(directory, "service-dpop-install-" + Guid.NewGuid().ToString("N") + ".bat");
             File.WriteAllText(directManager, modified, new UTF8Encoding(false));
             return directManager;
+        }
+
+        private void RemoveUsingUpstreamManager()
+        {
+            var zapretRoot = GetZapretRoot();
+            var service = Path.Combine(zapretRoot, "service.bat");
+            if (!File.Exists(service)) throw new FileNotFoundException("service.bat Zapret 1.10.2 не найден.", service);
+
+            var removeManager = BuildDirectUpstreamRemoveManager(service);
+            try
+            {
+                var info = new ProcessStartInfo("cmd.exe")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    Arguments = "/d /c \"\"" + removeManager + "\" admin\"",
+                    WorkingDirectory = zapretRoot
+                };
+
+                using (var process = Process.Start(info))
+                {
+                    if (process == null) throw new InvalidOperationException("Не удалось запустить upstream удаление service.bat.");
+                    try
+                    {
+                        var deadline = DateTime.UtcNow.AddSeconds(15);
+                        while (DateTime.UtcNow < deadline)
+                        {
+                            var state = ZapretRuntimeState.Read(_applicationRoot);
+                            if (!state.ZapretServiceExists && !state.BundledWinwsRunning)
+                            {
+                                RefreshRuntimeStatus();
+                                return;
+                            }
+                            if (process.HasExited)
+                                throw new InvalidOperationException("Upstream service.bat завершился до удаления службы. Код выхода: " + process.ExitCode);
+                            Thread.Sleep(200);
+                        }
+                        throw new TimeoutException("Upstream service.bat не удалил службу zapret вовремя.");
+                    }
+                    finally
+                    {
+                        try { if (!process.HasExited) process.Kill(); } catch { }
+                    }
+                }
+            }
+            finally
+            {
+                try { if (File.Exists(removeManager)) File.Delete(removeManager); } catch { }
+            }
+        }
+
+        private static string BuildDirectUpstreamRemoveManager(string service)
+        {
+            var source = File.ReadAllText(service);
+            const string rootPrompt = "set /p menu_choice=   Select option (0-12): ";
+            var rootFirst = source.IndexOf(rootPrompt, StringComparison.Ordinal);
+            if (rootFirst < 0 || source.IndexOf(rootPrompt, rootFirst + rootPrompt.Length, StringComparison.Ordinal) >= 0)
+                throw new InvalidDataException("Flowseal root menu prompt is missing or ambiguous.");
+
+            var newline = source.IndexOf("\r\n", StringComparison.Ordinal) >= 0 ? "\r\n" : "\n";
+            var rootReplacement = "if defined DPOP_REMOVE_ONCE exit /b" + newline
+                + "set \"DPOP_REMOVE_ONCE=1\"" + newline
+                + "set \"menu_choice=2\"";
+            var modified = source.Replace(rootPrompt, rootReplacement);
+            var directory = Path.GetDirectoryName(service);
+            if (string.IsNullOrWhiteSpace(directory)) throw new InvalidDataException("Flowseal service manager directory is invalid.");
+
+            var removeManager = Path.Combine(directory, "service-dpop-remove-" + Guid.NewGuid().ToString("N") + ".bat");
+            File.WriteAllText(removeManager, modified, new UTF8Encoding(false));
+            return removeManager;
         }
 
         private static int FindStrategyMenuIndex(string zapretRoot, string selected)
@@ -432,6 +533,7 @@ namespace DPopCleaner.SimpleUpdate
                 try
                 {
                     if (id == InstallServiceProxyButtonId) InstallSelectedStrategyUsingUpstreamManager();
+                    else if (id == RemoveServicesProxyButtonId) RemoveUsingUpstreamManager();
                     else if (id == RepairBroadcastButtonId) RepairBroadcast();
                     else if (id == RepairConnectionButtonId) RepairConnection();
                     else if (id == GameFilterButtonId) CycleGameFilter();
@@ -617,7 +719,11 @@ namespace DPopCleaner.SimpleUpdate
             {
                 try { NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_SHOW); } catch { }
             }
-            foreach (var handle in new[] { _actionToolbar, _updateToolbar, _installServiceToolbar })
+            if (_legacyRemoveServicesButton != IntPtr.Zero)
+            {
+                try { NativeBridge.ShowWindow(_legacyRemoveServicesButton, NativeBridge.SW_SHOW); } catch { }
+            }
+            foreach (var handle in new[] { _actionToolbar, _updateToolbar, _installServiceToolbar, _removeServicesToolbar })
             {
                 if (handle == IntPtr.Zero) continue;
                 lock (Sync) Hosts.Remove(handle);
@@ -626,6 +732,7 @@ namespace DPopCleaner.SimpleUpdate
             _actionToolbar = IntPtr.Zero;
             _updateToolbar = IntPtr.Zero;
             _installServiceToolbar = IntPtr.Zero;
+            _removeServicesToolbar = IntPtr.Zero;
         }
     }
 }
