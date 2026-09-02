@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#07111f" />
   <meta name="description" content="DPopCleaner — утилита для Windows: очистка системы, мониторинг оперативной памяти, Zapret Center, анализатор диска, восстановление, обновления и лицензия." />
-  <meta property="og:title" content="DPopCleaner 0.4.17 rev.15" />
+  <meta property="og:title" content="DPopCleaner 0.4.17 rev.16" />
   <meta property="og:description" content="Очистка Windows, контроль ОЗУ, Flowseal Zapret 1.10.2, анализатор диска и центр восстановления в одном приложении." />
   <meta property="og:type" content="website" />
-  <title>DPopCleaner 0.4.17 rev.15 — очистка и инструменты Windows</title>
+  <title>DPopCleaner 0.4.17 rev.16 — очистка и инструменты Windows</title>
   <link rel="icon" href="./dpopcleaner-icon.png" type="image/png" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="site-shell.css" />
@@ -21,7 +21,7 @@
       <a class="brand" href="#top" aria-label="DPopCleaner — главная">
         <img src="./dpopcleaner-icon.png" alt="" width="42" height="42" />
         <span>DPopCleaner</span>
-        <small>0.4.17 rev.15</small>
+        <small>0.4.17 rev.16</small>
       </a>
       <nav class="nav" aria-label="Основная навигация">
         <a href="#features">Возможности</a>
@@ -40,7 +40,7 @@
     <section class="hero product-hero">
       <div class="container hero-grid">
         <div class="hero-copy reveal">
-          <div class="eyebrow"><span class="dot"></span> Windows 10 / 11 · x64 · <span class="js-version">0.4.17</span> rev.15</div>
+          <div class="eyebrow"><span class="dot"></span> Windows 10 / 11 · x64 · <span class="js-version">0.4.17</span> rev.16</div>
           <h1>DPopCleaner.<br><span>Чище система. Больше контроля.</span></h1>
           <p class="lead">Очистка системы освобождает Windows от временных файлов, мониторинг оперативной памяти помогает следить за нагрузкой, а Zapret Center, анализатор диска и центр восстановления дают нужные инструменты в одном компактном приложении.</p>
           <div class="hero-actions">
@@ -60,7 +60,7 @@
 
     <section class="trust-strip">
       <div class="container trust-grid reveal">
-        <div><strong><span class="js-version">0.4.17</span> rev.15</strong><span>актуальная стабильная сборка</span></div>
+        <div><strong><span class="js-version">0.4.17</span> rev.16</strong><span>актуальная стабильная сборка</span></div>
         <div><strong>5–95%</strong><span>порог контроля ОЗУ</span></div>
         <div><strong>22 стратегии</strong><span>Flowseal Zapret 1.10.2</span></div>
         <div><strong>SHA-256</strong><button class="text-button" id="copyHash">Скопировать хеш</button></div>
@@ -114,7 +114,7 @@
         </div>
         <aside class="download-proof reveal delay-1">
           <div class="proof-icon"><img src="./dpopcleaner-icon.png" alt="" /></div>
-          <div class="proof-row"><span>Версия</span><b><span class="js-version">0.4.17</span> rev.15</b></div>
+          <div class="proof-row"><span>Версия</span><b><span class="js-version">0.4.17</span> rev.16</b></div>
           <div class="proof-row"><span>Архитектура</span><b>x86-64</b></div>
           <div class="proof-row"><span>Размер</span><b class="js-size">загрузка данных</b></div>
           <div class="proof-hash"><small>SHA-256</small><code id="hashValue">получаем из manifest</code><button id="copyHash2" class="copy-button" type="button">Копировать</button></div>
@@ -168,8 +168,8 @@
           <h2>Проверенная сборка и понятная загрузка</h2>
           <p>Сайт показывает данные стабильного релиза, размер файла и SHA‑256. В комплекте сохраняются Flowseal Zapret 1.10.2 со всеми 22 стратегиями, основные модули DPopCleaner и проверяемое ядро <code>DPopCleaner.Core.exe</code>.</p>
           <details class="tech-details">
-            <summary>Технические детали rev.15</summary>
-            <p>В rev.15 bridge переживает штатный перезапуск frozen core при смене языка: launcher подхватывает новый PID из того же пути, повторно создаёт enhanced Settings и восстанавливает цифровой RAM tray-host вместо возврата прежнего интерфейса и исчезновения цифр из трея.</p>
+            <summary>Технические детали rev.16</summary>
+            <p>В rev.16 bridge переживает штатный перезапуск frozen core при смене языка: launcher подхватывает новый PID из того же пути, повторно создаёт enhanced Settings и восстанавливает цифровой RAM tray-host вместо возврата прежнего интерфейса и исчезновения цифр из трея.</p>
             <p>В rev.14 исправлена синхронизация Settings с native Language ComboBox: bridge-owned элементы следуют выбранному языку. В rev.13 исправлен запуск после установки: launcher встроен как <code>asInvoker</code> и сам запрашивает UAC через <code>runas</code>, поэтому сценарий CreateProcessAsUser / code 740 больше не должен ломать первый запуск. Legacy-иконка frozen core и ghost-записи Explorer подавляются.</p>
             <p>Для rev.12 исправлена родная версия Zapret через <code>Zapret\utils\dpop_version.txt</code>: прежний fallback <strong>1.9.9d</strong> больше не должен отображаться. Bridge <strong>не переписывает родную версию через HWND</strong>. Исправления прокрутки и перерисовки Настроек сохранены.</p>
             <p class="tech-line">Также сохранены «Починка трансляции», «Починка подключения», «Игровой фильтр 1.10.2», «Менеджер 1.10.2» и исправление демонстрации экрана Zapret.</p>
@@ -201,7 +201,7 @@
 
   <footer class="footer">
     <div class="container footer-grid">
-      <div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · <span class="js-version">0.4.17</span> rev.15</span></div></div>
+      <div class="footer-brand"><img src="./dpopcleaner-icon.png" alt="" /><div><strong>DPopCleaner</strong><span>Windows utility · <span class="js-version">0.4.17</span> rev.16</span></div></div>
       <div class="footer-links"><a href="#features">Возможности</a><a href="#download">Скачать</a><a href="#license">Лицензия</a><a href="#support">Поддержка</a><a href="#faq">FAQ</a><a href="#top">Наверх ↑</a></div>
       <p>© 2026 DPopCleaner.</p>
     </div>
