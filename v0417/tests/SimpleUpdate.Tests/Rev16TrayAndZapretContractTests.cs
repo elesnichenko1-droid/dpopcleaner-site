@@ -129,7 +129,9 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(source, "set /p \"choice=Input option (0-!count!, default: 0): \"");
             StringAssert.Contains(source, "DPOP_INSTALL_ONCE");
             StringAssert.Contains(source, "set \"menu_choice=1\"");
-            StringAssert.Contains(source, "set \"choice=\" + menuIndex.ToString()");
+            StringAssert.Contains(source, "var strategyReplacement");
+            StringAssert.Contains(source, "menuIndex.ToString()");
+            StringAssert.Contains(source, "Replace(strategyPrompt, strategyReplacement)");
             StringAssert.Contains(source, "service-dpop-install-");
             Assert.IsFalse(source.Contains("goto service_install"),
                 "Jumping directly to :service_install skips Flowseal root-menu initialization, including GameFilterTCP/GameFilterUDP fallback values, and produces a service that exits with 1067.");
