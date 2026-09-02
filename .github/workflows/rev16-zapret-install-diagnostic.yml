@@ -21,7 +21,7 @@ jobs:
         shell: pwsh
         run: ./tools/dpop0417_prepare_zapret.ps1
 
-      - name: Locate where upstream manager consumes stdin
+      - name: Isolate root menu SET P behavior
         shell: pwsh
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
@@ -29,57 +29,55 @@ jobs:
           $root = (Resolve-Path '_release/0.4.17/third-party/Zapret').Path
           $service = Join-Path $root 'service.bat'
           $source = (Get-Content -Raw -LiteralPath $service) -replace "`r`n", "`n"
+          $exactPrompt = 'set /p menu_choice=   Select option (0-12): '
+          $quotedPrompt = 'set /p "menu_choice=   Select option (0-12): "'
 
-          $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-          $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-          $admin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-          @(
-            "user=$($identity.Name)"
-            "admin=$admin"
-            "root=$root"
-            "service_sha256=$((Get-FileHash -LiteralPath $service -Algorithm SHA256).Hash)"
-          ) | Set-Content -Encoding UTF8 (Join-Path $diag 'environment.txt')
+          $occurrences = ([regex]::Matches($source, [regex]::Escape($exactPrompt))).Count
+          if ($occurrences -ne 1) { throw "Expected exactly one upstream root menu prompt, found $occurrences." }
 
-          function New-ProbeSnippet([string]$ResultPath) {
-            return (@(
-              'setlocal EnableDelayedExpansion',
-              'set "DPOP_PROBE=EMPTY"',
-              'set /p "DPOP_PROBE=PROBE:"',
-              ('> "' + $ResultPath + '" echo !DPOP_PROBE!'),
-              'exit /b'
-            ) -join "`n")
+          function Write-AsciiLines([string]$Path, [string[]]$Lines) {
+            [IO.File]::WriteAllText($Path, (($Lines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
           }
 
-          function Invoke-FlowsealProbe([string]$Name, [string]$Needle) {
-            $result = Join-Path $diag ("probe-$Name.txt")
-            $variant = Join-Path $root ("service-dpop-probe-$Name.bat")
-            $driver = Join-Path $diag ("driver-$Name.cmd")
-            $stdout = Join-Path $diag ("stdout-$Name.txt")
-            $stderr = Join-Path $diag ("stderr-$Name.txt")
-
-            $index = $source.IndexOf($Needle, [StringComparison]::Ordinal)
-            if ($index -lt 0) {
-              "MARKER_NOT_FOUND" | Set-Content -Encoding UTF8 $result
-              return 'MARKER_NOT_FOUND'
-            }
-            $second = $source.IndexOf($Needle, $index + $Needle.Length, [StringComparison]::Ordinal)
-            if ($second -ge 0) {
-              "MARKER_NOT_UNIQUE" | Set-Content -Encoding UTF8 $result
-              return 'MARKER_NOT_UNIQUE'
-            }
-
-            $snippet = New-ProbeSnippet $result
-            $modified = $source.Substring(0, $index + $Needle.Length) + "`n" + $snippet + $source.Substring($index + $Needle.Length)
-            [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.Encoding]::UTF8)
-
-            $driverLines = @(
+          function Invoke-MinimalSetP([string]$Name, [string]$SetPLine) {
+            $cmd = Join-Path $diag ("minimal-$Name.cmd")
+            $input = Join-Path $diag ("minimal-$Name-input.txt")
+            $stdout = Join-Path $diag ("minimal-$Name-stdout.txt")
+            $stderr = Join-Path $diag ("minimal-$Name-stderr.txt")
+            Write-AsciiLines $cmd @(
               '@echo off',
-              ('(echo MAGIC) | call "' + $variant + '" admin')
+              'setlocal EnableDelayedExpansion',
+              'set "menu_choice=null"',
+              $SetPLine,
+              'echo RESULT=[!menu_choice!]',
+              'exit /b 0'
             )
-            [IO.File]::WriteAllText($driver, (($driverLines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
-            $arg = '/d /c ""' + $driver + '""'
-            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -WorkingDirectory $root -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-            if (-not $p.WaitForExit(8000)) {
+            [IO.File]::WriteAllText($input, "MAGIC`r`n", [Text.Encoding]::ASCII)
+            $arg = '/d /c ""' + $cmd + '""'
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -RedirectStandardInput $input -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -Wait
+            $text = (Get-Content -Raw -LiteralPath $stdout).Trim()
+            return $text
+          }
+
+          function Invoke-InContextSetP([string]$Name, [string]$SetPLine) {
+            $variant = Join-Path $root ("service-dpop-setp-$Name.bat")
+            $result = Join-Path $diag ("context-$Name-result.txt")
+            $input = Join-Path $diag ("context-$Name-input.txt")
+            $stdout = Join-Path $diag ("context-$Name-stdout.txt")
+            $stderr = Join-Path $diag ("context-$Name-stderr.txt")
+
+            $replacement = @(
+              $SetPLine,
+              ('> "' + $result + '" echo !menu_choice!'),
+              'exit /b 0'
+            ) -join "`n"
+            $modified = $source.Replace($exactPrompt, $replacement)
+            [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($input, "MAGIC`r`n", [Text.Encoding]::ASCII)
+
+            $arg = '/d /c ""' + $variant + '" admin"'
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -WorkingDirectory $root -RedirectStandardInput $input -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            if (-not $p.WaitForExit(10000)) {
               Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
               if (-not (Test-Path -LiteralPath $result)) { 'TIMEOUT' | Set-Content -Encoding UTF8 $result }
             }
@@ -89,58 +87,102 @@ jobs:
             return $value
           }
 
-          # Control: redirected stdin itself works on this runner.
-          $control = Join-Path $diag 'control.cmd'
-          $controlInput = Join-Path $diag 'control-input.txt'
-          $controlOut = Join-Path $diag 'control-stdout.txt'
-          $controlErr = Join-Path $diag 'control-stderr.txt'
-          $controlLines = @(
-            '@echo off',
-            'set "DPOP_PROBE=EMPTY"',
-            'set /p "DPOP_PROBE=PROBE:"',
-            'echo %DPOP_PROBE%'
-          )
-          [IO.File]::WriteAllText($control, (($controlLines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
-          [IO.File]::WriteAllText($controlInput, "MAGIC`r`n", [Text.Encoding]::ASCII)
-          $controlArg = '/d /c ""' + $control + '""'
-          $cp = Start-Process -FilePath 'cmd.exe' -ArgumentList $controlArg -RedirectStandardInput $controlInput -RedirectStandardOutput $controlOut -RedirectStandardError $controlErr -PassThru -Wait
-          $controlValue = (Get-Content -Raw -LiteralPath $controlOut).Trim()
-
-          $probes = [ordered]@{}
-          $probes['control'] = $controlValue
-          $probes['admin-entry'] = Invoke-FlowsealProbe 'admin-entry' 'if "%1"=="admin" ('
-          $probes['after-check-chcp'] = Invoke-FlowsealProbe 'after-check-chcp' '    call :check_command chcp'
-          $probes['after-check-find'] = Invoke-FlowsealProbe 'after-check-find' "    call :check_command chcp`n    call :check_command find"
-          $probes['after-check-findstr'] = Invoke-FlowsealProbe 'after-check-findstr' "    call :check_command chcp`n    call :check_command find`n    call :check_command findstr"
-          $probes['after-check-netsh'] = Invoke-FlowsealProbe 'after-check-netsh' "    call :check_command chcp`n    call :check_command find`n    call :check_command findstr`n    call :check_command netsh"
-          $probes['after-load-user-lists'] = Invoke-FlowsealProbe 'after-load-user-lists' "    call :check_command netsh`n    `n    call :load_user_lists"
-          $probes['menu-before-status'] = Invoke-FlowsealProbe 'menu-before-status' ":menu`n`ncls"
-          $probes['after-ipset-status'] = Invoke-FlowsealProbe 'after-ipset-status' 'call :ipset_switch_status'
-          $probes['after-game-status'] = Invoke-FlowsealProbe 'after-game-status' "call :ipset_switch_status`ncall :game_switch_status"
-          $probes['after-update-status'] = Invoke-FlowsealProbe 'after-update-status' "call :ipset_switch_status`ncall :game_switch_status`ncall :check_updates_switch_status"
-          $probes['after-strategy-status'] = Invoke-FlowsealProbe 'after-strategy-status' "call :ipset_switch_status`ncall :game_switch_status`ncall :check_updates_switch_status`ncall :get_strategy_name"
-
-          $summary = foreach ($entry in $probes.GetEnumerator()) {
-            "$($entry.Key)=$($entry.Value)"
+          function Clear-ZapretState {
+            Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+              $arg = '/d /c "sc.exe stop ' + $name + ' >nul 2>&1 & sc.exe delete ' + $name + ' >nul 2>&1 & exit /b 0"'
+              Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -Wait -WindowStyle Hidden | Out-Null
+            }
+            Start-Sleep -Milliseconds 600
           }
-          $summary | Set-Content -Encoding UTF8 (Join-Path $diag 'probe-summary.txt')
-          $summary | ForEach-Object { Write-Host "REV16_STDIN_PROBE $_" }
 
-          if ($controlValue -ne 'MAGIC') {
-            throw "Control redirected-stdin probe failed: '$controlValue'"
+          function Test-ServiceRunning {
+            $out = Join-Path $diag 'sc-probe.txt'
+            $err = Join-Path $diag 'sc-probe-err.txt'
+            $p = Start-Process -FilePath 'sc.exe' -ArgumentList @('query','zapret') -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -Wait
+            if ($p.ExitCode -ne 0) { return $false }
+            return ((Get-Content -Raw -LiteralPath $out) -match 'RUNNING')
           }
+
+          function Invoke-PatchedRealInstall {
+            Clear-ZapretState
+            $variant = Join-Path $root 'service-dpop-quoted-menu.bat'
+            $input = Join-Path $diag 'patched-install-input.txt'
+            $stdout = Join-Path $diag 'patched-install-stdout.txt'
+            $stderr = Join-Path $diag 'patched-install-stderr.txt'
+            $modified = $source.Replace($exactPrompt, $quotedPrompt)
+            [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($input, "1`r`n1`r`nx`r`n0`r`n", [Text.Encoding]::ASCII)
+
+            $arg = '/d /c ""' + $variant + '" admin"'
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -WorkingDirectory $root -RedirectStandardInput $input -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            $state = 'TIMEOUT'
+            $deadline = [DateTime]::UtcNow.AddSeconds(30)
+            do {
+              if (Test-ServiceRunning) { $state = 'RUNNING'; break }
+              if ($p.HasExited) { $state = 'PROCESS_EXIT_' + $p.ExitCode; break }
+              Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+            $state | Set-Content -Encoding UTF8 (Join-Path $diag 'patched-install-state.txt')
+
+            $qcOut = Join-Path $diag 'patched-install-sc-qc.txt'
+            $qcErr = Join-Path $diag 'patched-install-sc-qc-err.txt'
+            $qc = Start-Process -FilePath 'sc.exe' -ArgumentList @('qc','zapret') -RedirectStandardOutput $qcOut -RedirectStandardError $qcErr -PassThru -Wait
+            "exit_code=$($qc.ExitCode)" | Add-Content -Encoding UTF8 $qcOut
+
+            $regOut = Join-Path $diag 'patched-install-reg.txt'
+            $regErr = Join-Path $diag 'patched-install-reg-err.txt'
+            $reg = Start-Process -FilePath 'reg.exe' -ArgumentList @('query','HKLM\System\CurrentControlSet\Services\zapret','/v','zapret-discord-youtube') -RedirectStandardOutput $regOut -RedirectStandardError $regErr -PassThru -Wait
+            "exit_code=$($reg.ExitCode)" | Add-Content -Encoding UTF8 $regOut
+
+            Remove-Item -Force -ErrorAction SilentlyContinue $variant
+            return $state
+          }
+
+          $minimalExact = Invoke-MinimalSetP 'exact' $exactPrompt
+          $minimalQuoted = Invoke-MinimalSetP 'quoted' $quotedPrompt
+          $minimalNoPrompt = Invoke-MinimalSetP 'noprompt' 'set /p menu_choice='
+          $contextExact = Invoke-InContextSetP 'exact' $exactPrompt
+          $contextQuoted = Invoke-InContextSetP 'quoted' $quotedPrompt
+          $contextNoPrompt = Invoke-InContextSetP 'noprompt' 'set /p menu_choice='
+          $patchedInstall = Invoke-PatchedRealInstall
+
+          @(
+            "minimal_exact=$minimalExact",
+            "minimal_quoted=$minimalQuoted",
+            "minimal_noprompt=$minimalNoPrompt",
+            "context_exact=$contextExact",
+            "context_quoted=$contextQuoted",
+            "context_noprompt=$contextNoPrompt",
+            "patched_real_install=$patchedInstall"
+          ) | Set-Content -Encoding UTF8 (Join-Path $diag 'setp-summary.txt')
+
+          Get-Content -Raw -LiteralPath (Join-Path $diag 'setp-summary.txt') | Write-Host
+          Clear-ZapretState
           exit 0
 
-      - name: Print probe summary
+      - name: Print diagnostic evidence
         if: always()
         shell: pwsh
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
-          foreach ($file in @('environment.txt','probe-summary.txt')) {
-            Write-Host "===== $file ====="
+          foreach ($file in @(
+            'setp-summary.txt',
+            'minimal-exact-stdout.txt','minimal-exact-stderr.txt',
+            'context-exact-stdout.txt','context-exact-stderr.txt',
+            'context-quoted-stdout.txt','context-quoted-stderr.txt',
+            'patched-install-state.txt','patched-install-sc-qc.txt','patched-install-sc-qc-err.txt',
+            'patched-install-reg.txt','patched-install-reg-err.txt','patched-install-stdout.txt','patched-install-stderr.txt'
+          )) {
             $path = Join-Path $diag $file
-            if (Test-Path -LiteralPath $path) { Get-Content -Raw -LiteralPath $path | Write-Host }
-            else { Write-Host '<missing>' }
+            Write-Host "===== $file ====="
+            if (Test-Path -LiteralPath $path) {
+              $text = Get-Content -Raw -LiteralPath $path
+              if ($text.Length -gt 16000) { $text = $text.Substring([Math]::Max(0, $text.Length - 16000)) }
+              Write-Host $text
+            } else { Write-Host '<missing>' }
           }
 
       - name: Upload diagnostic evidence
@@ -157,8 +199,8 @@ jobs:
         run: |
           Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           foreach ($name in @('zapret','WinDivert','WinDivert14')) {
-            & sc.exe stop $name *> $null
-            & sc.exe delete $name *> $null
+            $arg = '/d /c "sc.exe stop ' + $name + ' >nul 2>&1 & sc.exe delete ' + $name + ' >nul 2>&1 & exit /b 0"'
+            Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -Wait -WindowStyle Hidden | Out-Null
           }
-          Remove-Item -Force -ErrorAction SilentlyContinue '_release/0.4.17/third-party/Zapret/service-dpop-probe-*.bat'
+          Remove-Item -Force -ErrorAction SilentlyContinue '_release/0.4.17/third-party/Zapret/service-dpop-*.bat'
           exit 0
