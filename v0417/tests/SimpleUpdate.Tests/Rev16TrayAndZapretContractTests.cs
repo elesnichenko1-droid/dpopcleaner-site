@@ -90,7 +90,11 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(runtime, "internal bool BundledWinwsRunning");
             StringAssert.Contains(runtime, "internal bool ZapretServiceExists");
             StringAssert.Contains(runtime, "internal bool ZapretServiceRunning");
+            StringAssert.Contains(runtime, "internal bool WinDivertServiceExists");
+            StringAssert.Contains(runtime, "internal bool WinDivert14ServiceExists");
             StringAssert.Contains(runtime, "internal string BundledWinwsCommandLine");
+            StringAssert.Contains(runtime, "QueryService(\"WinDivert\")");
+            StringAssert.Contains(runtime, "QueryService(\"WinDivert14\")");
             StringAssert.Contains(ReadSource("ZapretEnhancementHost.cs"), "RefreshRuntimeStatus()");
         }
 
@@ -162,6 +166,8 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(remove, "ZapretRuntimeState.Read(_applicationRoot)");
             StringAssert.Contains(remove, "!state.ZapretServiceExists");
             StringAssert.Contains(remove, "!state.BundledWinwsRunning");
+            StringAssert.Contains(remove, "!state.WinDivertServiceExists");
+            StringAssert.Contains(remove, "!state.WinDivert14ServiceExists");
             StringAssert.Contains(remove, "File.Delete(removeManager)");
         }
     }
