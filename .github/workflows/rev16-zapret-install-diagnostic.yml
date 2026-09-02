@@ -1,4 +1,4 @@
-name: Rev16 Zapret install diagnostic
+name: Rev16 apply proven Zapret install fix
 
 on:
   push:
@@ -8,212 +8,123 @@ on:
       - '.github/workflows/rev16-zapret-install-diagnostic.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  apply-and-verify:
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-
-      - name: Prepare pinned Flowseal Zapret 1.10.2
-        shell: pwsh
-        run: ./tools/dpop0417_prepare_zapret.ps1
-
-      - name: Compare upstream service_install across strategies
-        shell: pwsh
-        run: |
-          $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
-          New-Item -ItemType Directory -Force -Path $diag | Out-Null
-          $root = (Resolve-Path '_release/0.4.17/third-party/Zapret').Path
-          $service = Join-Path $root 'service.bat'
-          $variant = Join-Path $root 'service-dpop-direct-install.bat'
-          $source = (Get-Content -Raw -LiteralPath $service) -replace "`r`n", "`n"
-
-          $anchor = 'title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!'
-          if (([regex]::Matches($source, [regex]::Escape($anchor))).Count -ne 1) {
-            throw 'Flowseal manager title anchor is missing or ambiguous.'
-          }
-
-          # Keep all upstream initialization and :service_install logic, bypass only the root menu.
-          $modified = $source.Replace($anchor, ($anchor + "`ngoto service_install"))
-          [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.UTF8Encoding]::new($false))
-
-          $strategies = @(Get-ChildItem -LiteralPath $root -Filter '*.bat' -File | Where-Object {
-            $_.Name -notlike 'service*'
-          } | Sort-Object { [Regex]::Replace($_.Name, '(\d+)', { $args[0].Value.PadLeft(8, '0') }) })
-          if ($strategies.Count -ne 22) { throw "Expected 22 Flowseal strategies, found $($strategies.Count)." }
-
-          function Clear-ZapretState {
-            Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            foreach ($name in @('zapret','WinDivert','WinDivert14')) {
-              $arg = '/d /c "sc.exe stop ' + $name + ' >nul 2>&1 & sc.exe delete ' + $name + ' >nul 2>&1 & exit /b 0"'
-              Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -Wait -WindowStyle Hidden | Out-Null
-            }
-            Start-Sleep -Milliseconds 700
-          }
-
-          function Get-ServiceSnapshot {
-            $serviceObj = Get-CimInstance Win32_Service -Filter "Name='zapret'" -ErrorAction SilentlyContinue
-            $winws = @(Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue)
-            $imagePath = $null
-            try {
-              $imagePath = (Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\zapret' -Name ImagePath -ErrorAction Stop).ImagePath
-            } catch { }
-            [pscustomobject]@{
-              Utc = [DateTime]::UtcNow.ToString('O')
-              Exists = [bool]$serviceObj
-              State = if ($serviceObj) { [string]$serviceObj.State } else { 'Missing' }
-              ProcessId = if ($serviceObj) { [int]$serviceObj.ProcessId } else { 0 }
-              ExitCode = if ($serviceObj) { [int]$serviceObj.ExitCode } else { -1 }
-              WinwsCount = $winws.Count
-              ImagePathLength = if ($imagePath) { ([string]$imagePath).Length } else { 0 }
-            }
-          }
-
-          function Invoke-StrategyDiagnostic([int]$Index) {
-            Clear-ZapretState
-            $strategy = $strategies[$Index - 1]
-            $slug = ('{0:D2}-{1}' -f $Index, ($strategy.BaseName -replace '[^A-Za-z0-9]+','-')).Trim('-')
-            $dir = Join-Path $diag $slug
-            New-Item -ItemType Directory -Force -Path $dir | Out-Null
-
-            @(
-              "index=$Index"
-              "strategy=$($strategy.Name)"
-              "strategy_bytes=$($strategy.Length)"
-              "strategy_sha256=$((Get-FileHash -LiteralPath $strategy.FullName -Algorithm SHA256).Hash)"
-            ) | Set-Content -Encoding UTF8 (Join-Path $dir 'strategy.txt')
-
-            $info = [Diagnostics.ProcessStartInfo]::new()
-            $info.FileName = 'cmd.exe'
-            $info.Arguments = '/d /c ""' + $variant + '" admin"'
-            $info.WorkingDirectory = $root
-            $info.UseShellExecute = $false
-            $info.CreateNoWindow = $true
-            $info.RedirectStandardInput = $true
-            $info.RedirectStandardOutput = $true
-            $info.RedirectStandardError = $true
-
-            $process = [Diagnostics.Process]::new()
-            $process.StartInfo = $info
-            if (-not $process.Start()) { throw "Could not start Flowseal manager for strategy $Index." }
-            $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-            $stderrTask = $process.StandardError.ReadToEndAsync()
-            $process.StandardInput.WriteLine($Index.ToString())
-            $process.StandardInput.Flush()
-
-            $samples = [Collections.Generic.List[object]]::new()
-            $startedAt = [DateTime]::UtcNow
-            $firstRunningMs = -1
-            $firstExistsMs = -1
-            $deadline = $startedAt.AddSeconds(18)
-            do {
-              $snap = Get-ServiceSnapshot
-              $elapsed = [int]([DateTime]::UtcNow - $startedAt).TotalMilliseconds
-              $samples.Add([pscustomobject]@{
-                ElapsedMs=$elapsed; Utc=$snap.Utc; Exists=$snap.Exists; State=$snap.State;
-                ProcessId=$snap.ProcessId; ExitCode=$snap.ExitCode; WinwsCount=$snap.WinwsCount;
-                ImagePathLength=$snap.ImagePathLength
-              })
-              if ($snap.Exists -and $firstExistsMs -lt 0) { $firstExistsMs = $elapsed }
-              if ($snap.State -eq 'Running' -and $firstRunningMs -lt 0) { $firstRunningMs = $elapsed }
-              if ($process.HasExited -and $elapsed -gt 2500) { break }
-              Start-Sleep -Milliseconds 125
-            } while ([DateTime]::UtcNow -lt $deadline)
-
-            # Preserve a few seconds after first RUNNING when possible.
-            if ($firstRunningMs -ge 0) {
-              $keepUntil = $startedAt.AddMilliseconds($firstRunningMs + 10000)
-              while ([DateTime]::UtcNow -lt $keepUntil) {
-                $snap = Get-ServiceSnapshot
-                $elapsed = [int]([DateTime]::UtcNow - $startedAt).TotalMilliseconds
-                $samples.Add([pscustomobject]@{
-                  ElapsedMs=$elapsed; Utc=$snap.Utc; Exists=$snap.Exists; State=$snap.State;
-                  ProcessId=$snap.ProcessId; ExitCode=$snap.ExitCode; WinwsCount=$snap.WinwsCount;
-                  ImagePathLength=$snap.ImagePathLength
-                })
-                Start-Sleep -Milliseconds 250
-              }
-            }
-
-            $registryStrategy = ''
-            $imagePath = ''
-            try {
-              $props = Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\zapret' -ErrorAction Stop
-              $registryStrategy = [string]$props.'zapret-discord-youtube'
-              $imagePath = [string]$props.ImagePath
-            } catch { }
-
-            $samples | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $dir 'samples.json')
-            $samples | Export-Csv -NoTypeInformation -Encoding UTF8 (Join-Path $dir 'samples.csv')
-            $imagePath | Set-Content -Encoding UTF8 (Join-Path $dir 'image-path.txt')
-
-            $everRunning = @($samples | Where-Object State -eq 'Running').Count -gt 0
-            $last = $samples[$samples.Count - 1]
-            @(
-              "index=$Index"
-              "strategy=$($strategy.Name)"
-              "first_exists_ms=$firstExistsMs"
-              "first_running_ms=$firstRunningMs"
-              "ever_running=$everRunning"
-              "last_state=$($last.State)"
-              "last_pid=$($last.ProcessId)"
-              "last_exit_code=$($last.ExitCode)"
-              "last_winws_count=$($last.WinwsCount)"
-              "registry_strategy=$registryStrategy"
-              "image_path_length=$($imagePath.Length)"
-            ) | Set-Content -Encoding UTF8 (Join-Path $dir 'summary.txt')
-
-            Write-Host "REV16_STRATEGY_DIAG index=$Index strategy='$($strategy.Name)' first_running_ms=$firstRunningMs ever_running=$everRunning last=$($last.State) winws=$($last.WinwsCount) image_path_length=$($imagePath.Length) registry='$registryStrategy'"
-
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
-            try { $stdoutTask.Wait(2000) | Out-Null } catch { }
-            try { $stderrTask.Wait(2000) | Out-Null } catch { }
-            try { $stdoutTask.Result | Set-Content -Encoding UTF8 (Join-Path $dir 'manager-stdout.txt') } catch { }
-            try { $stderrTask.Result | Set-Content -Encoding UTF8 (Join-Path $dir 'manager-stderr.txt') } catch { }
-            Clear-ZapretState
-          }
-
-          # 1 = general (ALT), 21 = general (SIMPLE FAKE), 22 = general.bat in pinned 1.10.2 sort order.
-          foreach ($index in @(1,21,22)) { Invoke-StrategyDiagnostic $index }
-
-          $summaries = Get-ChildItem -LiteralPath $diag -Filter summary.txt -File -Recurse | Sort-Object FullName
-          foreach ($summary in $summaries) {
-            Write-Host "===== $($summary.Directory.Name) ====="
-            Get-Content -Raw -LiteralPath $summary.FullName | Write-Host
-          }
-
-          Remove-Item -Force -ErrorAction SilentlyContinue $variant
-          exit 0
-
-      - name: Print strategy diagnostic evidence
-        if: always()
-        shell: pwsh
-        run: |
-          $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
-          Get-ChildItem -LiteralPath $diag -Filter summary.txt -File -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object {
-            Write-Host "===== $($_.Directory.Name)/summary.txt ====="
-            Get-Content -Raw -LiteralPath $_.FullName | Write-Host
-          }
-
-      - name: Upload diagnostic evidence
-        if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: rev16-zapret-install-diagnostic-${{ github.run_id }}
-          path: ${{ runner.temp }}/rev16-zapret-install-diagnostic
-          if-no-files-found: error
+          fetch-depth: 0
 
-      - name: Cleanup diagnostic state
-        if: always()
+      - name: Apply minimal direct service_install implementation
         shell: pwsh
         run: |
-          Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          foreach ($name in @('zapret','WinDivert','WinDivert14')) {
-            $arg = '/d /c "sc.exe stop ' + $name + ' >nul 2>&1 & sc.exe delete ' + $name + ' >nul 2>&1 & exit /b 0"'
-            Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -Wait -WindowStyle Hidden | Out-Null
-          }
-          Remove-Item -Force -ErrorAction SilentlyContinue '_release/0.4.17/third-party/Zapret/service-dpop-*.bat'
-          exit 0
+          $path = 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs'
+          $source = Get-Content -Raw -LiteralPath $path
+          $pattern = '(?s)        private void InstallSelectedStrategyUsingUpstreamManager\(\).*?(?=        private static int FindStrategyMenuIndex)'
+          $matches = [regex]::Matches($source, $pattern)
+          if ($matches.Count -ne 1) { throw "Expected exactly one install method, found $($matches.Count)." }
+
+          $replacement = @'
+        private void InstallSelectedStrategyUsingUpstreamManager()
+        {
+            var selected = ReadSelectedStrategy();
+            if (string.IsNullOrWhiteSpace(selected)) throw new InvalidOperationException("Сначала выберите стратегию Zapret.");
+
+            var zapretRoot = GetZapretRoot();
+            var service = Path.Combine(zapretRoot, "service.bat");
+            if (!File.Exists(service)) throw new FileNotFoundException("service.bat Zapret 1.10.2 не найден.", service);
+            var menuIndex = FindStrategyMenuIndex(zapretRoot, selected);
+            if (menuIndex <= 0) throw new InvalidOperationException("Выбранная стратегия отсутствует в upstream manager: " + selected);
+
+            var directManager = BuildDirectUpstreamInstallManager(service);
+            try
+            {
+                var info = new ProcessStartInfo("cmd.exe")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardInput = true,
+                    Arguments = "/d /c \"\"" + directManager + "\" admin\"",
+                    WorkingDirectory = zapretRoot
+                };
+
+                using (var process = Process.Start(info))
+                {
+                    if (process == null) throw new InvalidOperationException("Не удалось запустить upstream service.bat.");
+                    try
+                    {
+                        process.StandardInput.WriteLine(menuIndex.ToString());
+                        process.StandardInput.Flush();
+
+                        var deadline = DateTime.UtcNow.AddSeconds(15);
+                        while (DateTime.UtcNow < deadline)
+                        {
+                            var state = ZapretRuntimeState.Read(_applicationRoot);
+                            if (state.ZapretServiceRunning)
+                            {
+                                RefreshRuntimeStatus();
+                                return;
+                            }
+                            if (process.HasExited)
+                                throw new InvalidOperationException("Upstream service.bat завершился до запуска службы. Стратегия: " + selected + ". Код выхода: " + process.ExitCode);
+                            Thread.Sleep(200);
+                        }
+                        throw new TimeoutException("Upstream service.bat не запустил службу zapret. Стратегия: " + selected + ".");
+                    }
+                    finally
+                    {
+                        try { if (!process.HasExited) process.Kill(); } catch { }
+                    }
+                }
+            }
+            finally
+            {
+                try { if (File.Exists(directManager)) File.Delete(directManager); } catch { }
+            }
+        }
+
+        private static string BuildDirectUpstreamInstallManager(string service)
+        {
+            var source = File.ReadAllText(service);
+            const string anchor = "title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!";
+            var first = source.IndexOf(anchor, StringComparison.Ordinal);
+            if (first < 0 || source.IndexOf(anchor, first + anchor.Length, StringComparison.Ordinal) >= 0)
+                throw new InvalidDataException("Flowseal service manager anchor is missing or ambiguous.");
+
+            var newline = source.IndexOf("\r\n", StringComparison.Ordinal) >= 0 ? "\r\n" : "\n";
+            var modified = source.Insert(first + anchor.Length, newline + "goto service_install");
+            var directory = Path.GetDirectoryName(service);
+            if (string.IsNullOrWhiteSpace(directory)) throw new InvalidDataException("Flowseal service manager directory is invalid.");
+
+            var directManager = Path.Combine(directory, "service-dpop-install-" + Guid.NewGuid().ToString("N") + ".bat");
+            File.WriteAllText(directManager, modified, new UTF8Encoding(false));
+            return directManager;
+        }
+
+'@
+
+          $updated = [regex]::Replace($source, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $replacement }, 1)
+          [IO.File]::WriteAllText((Resolve-Path $path), $updated, [Text.UTF8Encoding]::new($false))
+
+          if ($updated -match 'process\.StandardInput\.WriteLine\("1"\)') { throw 'Broken root-menu input is still present.' }
+          if ($updated -notmatch 'goto service_install') { throw 'Direct upstream service_install jump is missing.' }
+
+      - name: Run GREEN contract suite
+        shell: pwsh
+        run: dotnet test v0417/tests/SimpleUpdate.Tests/SimpleUpdate.Tests.csproj -c Release --nologo
+
+      - name: Commit verified implementation and retire temporary workflow
+        shell: pwsh
+        run: |
+          Remove-Item -Force '.github/workflows/rev16-zapret-install-diagnostic.yml'
+          git config user.name 'elesnichenko1-droid'
+          git config user.email 'elesnichenko1@gmail.com'
+          git add v0417/src/SimpleUpdate/ZapretEnhancementHost.cs .github/workflows/rev16-zapret-install-diagnostic.yml
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m 'fix(rev16): bypass broken Zapret root menu'
+          git push origin HEAD:feat/0.4.17-rev16-single-tray-zapret
