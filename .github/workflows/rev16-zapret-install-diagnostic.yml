@@ -21,7 +21,7 @@ jobs:
         shell: pwsh
         run: ./tools/dpop0417_prepare_zapret.ps1
 
-      - name: Exercise upstream service_install directly with bridge-style stdin
+      - name: Compare upstream service_install across strategies
         shell: pwsh
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
@@ -36,9 +36,14 @@ jobs:
             throw 'Flowseal manager title anchor is missing or ambiguous.'
           }
 
-          # Preserve all upstream initialization and installation logic. Only bypass the interactive root menu.
+          # Keep all upstream initialization and :service_install logic, bypass only the root menu.
           $modified = $source.Replace($anchor, ($anchor + "`ngoto service_install"))
           [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.UTF8Encoding]::new($false))
+
+          $strategies = @(Get-ChildItem -LiteralPath $root -Filter '*.bat' -File | Where-Object {
+            $_.Name -notlike 'service*'
+          } | Sort-Object { [Regex]::Replace($_.Name, '(\d+)', { $args[0].Value.PadLeft(8, '0') }) })
+          if ($strategies.Count -ne 22) { throw "Expected 22 Flowseal strategies, found $($strategies.Count)." }
 
           function Clear-ZapretState {
             Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -49,93 +54,148 @@ jobs:
             Start-Sleep -Milliseconds 700
           }
 
-          function Get-ZapretServiceState {
-            $out = Join-Path $diag 'sc-query-live.txt'
-            $err = Join-Path $diag 'sc-query-live-err.txt'
-            $p = Start-Process -FilePath 'sc.exe' -ArgumentList @('query','zapret') -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -Wait
-            if ($p.ExitCode -ne 0) { return 'MISSING' }
-            $text = Get-Content -Raw -LiteralPath $out
-            if ($text -match 'RUNNING') { return 'RUNNING' }
-            if ($text -match 'START_PENDING') { return 'START_PENDING' }
-            if ($text -match 'STOPPED') { return 'STOPPED' }
-            return 'EXISTS'
+          function Get-ServiceSnapshot {
+            $serviceObj = Get-CimInstance Win32_Service -Filter "Name='zapret'" -ErrorAction SilentlyContinue
+            $winws = @(Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue)
+            $imagePath = $null
+            try {
+              $imagePath = (Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\zapret' -Name ImagePath -ErrorAction Stop).ImagePath
+            } catch { }
+            [pscustomobject]@{
+              Utc = [DateTime]::UtcNow.ToString('O')
+              Exists = [bool]$serviceObj
+              State = if ($serviceObj) { [string]$serviceObj.State } else { 'Missing' }
+              ProcessId = if ($serviceObj) { [int]$serviceObj.ProcessId } else { 0 }
+              ExitCode = if ($serviceObj) { [int]$serviceObj.ExitCode } else { -1 }
+              WinwsCount = $winws.Count
+              ImagePathLength = if ($imagePath) { ([string]$imagePath).Length } else { 0 }
+            }
           }
 
-          Clear-ZapretState
+          function Invoke-StrategyDiagnostic([int]$Index) {
+            Clear-ZapretState
+            $strategy = $strategies[$Index - 1]
+            $slug = ('{0:D2}-{1}' -f $Index, ($strategy.BaseName -replace '[^A-Za-z0-9]+','-')).Trim('-')
+            $dir = Join-Path $diag $slug
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
-          $info = [Diagnostics.ProcessStartInfo]::new()
-          $info.FileName = 'cmd.exe'
-          $info.Arguments = '/d /c ""' + $variant + '" admin"'
-          $info.WorkingDirectory = $root
-          $info.UseShellExecute = $false
-          $info.CreateNoWindow = $true
-          $info.RedirectStandardInput = $true
+            @(
+              "index=$Index"
+              "strategy=$($strategy.Name)"
+              "strategy_bytes=$($strategy.Length)"
+              "strategy_sha256=$((Get-FileHash -LiteralPath $strategy.FullName -Algorithm SHA256).Hash)"
+            ) | Set-Content -Encoding UTF8 (Join-Path $dir 'strategy.txt')
 
-          $process = [Diagnostics.Process]::new()
-          $process.StartInfo = $info
-          if (-not $process.Start()) { throw 'Failed to start direct Flowseal manager process.' }
+            $info = [Diagnostics.ProcessStartInfo]::new()
+            $info.FileName = 'cmd.exe'
+            $info.Arguments = '/d /c ""' + $variant + '" admin"'
+            $info.WorkingDirectory = $root
+            $info.UseShellExecute = $false
+            $info.CreateNoWindow = $true
+            $info.RedirectStandardInput = $true
+            $info.RedirectStandardOutput = $true
+            $info.RedirectStandardError = $true
 
-          # Direct :service_install has only the strategy prompt before upstream creates/starts the service.
-          $process.StandardInput.WriteLine('1')
-          $process.StandardInput.Flush()
+            $process = [Diagnostics.Process]::new()
+            $process.StartInfo = $info
+            if (-not $process.Start()) { throw "Could not start Flowseal manager for strategy $Index." }
+            $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+            $stderrTask = $process.StandardError.ReadToEndAsync()
+            $process.StandardInput.WriteLine($Index.ToString())
+            $process.StandardInput.Flush()
 
-          $state = 'TIMEOUT'
-          $deadline = [DateTime]::UtcNow.AddSeconds(30)
-          do {
-            $stateNow = Get-ZapretServiceState
-            if ($stateNow -eq 'RUNNING') { $state = 'RUNNING'; break }
-            if ($process.HasExited) { $state = 'PROCESS_EXIT_' + $process.ExitCode; break }
-            Start-Sleep -Milliseconds 250
-          } while ([DateTime]::UtcNow -lt $deadline)
+            $samples = [Collections.Generic.List[object]]::new()
+            $startedAt = [DateTime]::UtcNow
+            $firstRunningMs = -1
+            $firstExistsMs = -1
+            $deadline = $startedAt.AddSeconds(18)
+            do {
+              $snap = Get-ServiceSnapshot
+              $elapsed = [int]([DateTime]::UtcNow - $startedAt).TotalMilliseconds
+              $samples.Add([pscustomobject]@{
+                ElapsedMs=$elapsed; Utc=$snap.Utc; Exists=$snap.Exists; State=$snap.State;
+                ProcessId=$snap.ProcessId; ExitCode=$snap.ExitCode; WinwsCount=$snap.WinwsCount;
+                ImagePathLength=$snap.ImagePathLength
+              })
+              if ($snap.Exists -and $firstExistsMs -lt 0) { $firstExistsMs = $elapsed }
+              if ($snap.State -eq 'Running' -and $firstRunningMs -lt 0) { $firstRunningMs = $elapsed }
+              if ($process.HasExited -and $elapsed -gt 2500) { break }
+              Start-Sleep -Milliseconds 125
+            } while ([DateTime]::UtcNow -lt $deadline)
 
-          $state | Set-Content -Encoding UTF8 (Join-Path $diag 'direct-install-state.txt')
-          "process_exited=$($process.HasExited)" | Set-Content -Encoding UTF8 (Join-Path $diag 'direct-install-process.txt')
-          if ($process.HasExited) { "process_exit_code=$($process.ExitCode)" | Add-Content -Encoding UTF8 (Join-Path $diag 'direct-install-process.txt') }
-          else { 'process_exit_code=NA' | Add-Content -Encoding UTF8 (Join-Path $diag 'direct-install-process.txt') }
+            # Preserve a few seconds after first RUNNING when possible.
+            if ($firstRunningMs -ge 0) {
+              $keepUntil = $startedAt.AddMilliseconds($firstRunningMs + 10000)
+              while ([DateTime]::UtcNow -lt $keepUntil) {
+                $snap = Get-ServiceSnapshot
+                $elapsed = [int]([DateTime]::UtcNow - $startedAt).TotalMilliseconds
+                $samples.Add([pscustomobject]@{
+                  ElapsedMs=$elapsed; Utc=$snap.Utc; Exists=$snap.Exists; State=$snap.State;
+                  ProcessId=$snap.ProcessId; ExitCode=$snap.ExitCode; WinwsCount=$snap.WinwsCount;
+                  ImagePathLength=$snap.ImagePathLength
+                })
+                Start-Sleep -Milliseconds 250
+              }
+            }
 
-          $qcOut = Join-Path $diag 'direct-install-sc-qc.txt'
-          $qcErr = Join-Path $diag 'direct-install-sc-qc-err.txt'
-          $qc = Start-Process -FilePath 'sc.exe' -ArgumentList @('qc','zapret') -RedirectStandardOutput $qcOut -RedirectStandardError $qcErr -PassThru -Wait
-          "exit_code=$($qc.ExitCode)" | Add-Content -Encoding UTF8 $qcOut
+            $registryStrategy = ''
+            $imagePath = ''
+            try {
+              $props = Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\zapret' -ErrorAction Stop
+              $registryStrategy = [string]$props.'zapret-discord-youtube'
+              $imagePath = [string]$props.ImagePath
+            } catch { }
 
-          $regOut = Join-Path $diag 'direct-install-reg.txt'
-          $regErr = Join-Path $diag 'direct-install-reg-err.txt'
-          $reg = Start-Process -FilePath 'reg.exe' -ArgumentList @('query','HKLM\System\CurrentControlSet\Services\zapret','/v','zapret-discord-youtube') -RedirectStandardOutput $regOut -RedirectStandardError $regErr -PassThru -Wait
-          "exit_code=$($reg.ExitCode)" | Add-Content -Encoding UTF8 $regOut
+            $samples | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $dir 'samples.json')
+            $samples | Export-Csv -NoTypeInformation -Encoding UTF8 (Join-Path $dir 'samples.csv')
+            $imagePath | Set-Content -Encoding UTF8 (Join-Path $dir 'image-path.txt')
 
-          Get-Process winws -ErrorAction SilentlyContinue |
-            Select-Object Id,ProcessName,Path |
-            Format-List |
-            Out-String |
-            Set-Content -Encoding UTF8 (Join-Path $diag 'direct-install-winws.txt')
+            $everRunning = @($samples | Where-Object State -eq 'Running').Count -gt 0
+            $last = $samples[$samples.Count - 1]
+            @(
+              "index=$Index"
+              "strategy=$($strategy.Name)"
+              "first_exists_ms=$firstExistsMs"
+              "first_running_ms=$firstRunningMs"
+              "ever_running=$everRunning"
+              "last_state=$($last.State)"
+              "last_pid=$($last.ProcessId)"
+              "last_exit_code=$($last.ExitCode)"
+              "last_winws_count=$($last.WinwsCount)"
+              "registry_strategy=$registryStrategy"
+              "image_path_length=$($imagePath.Length)"
+            ) | Set-Content -Encoding UTF8 (Join-Path $dir 'summary.txt')
 
-          Write-Host "REV16_DIRECT_UPSTREAM_INSTALL=$state"
-          if (-not $process.HasExited) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 300
+            Write-Host "REV16_STRATEGY_DIAG index=$Index strategy='$($strategy.Name)' first_running_ms=$firstRunningMs ever_running=$everRunning last=$($last.State) winws=$($last.WinwsCount) image_path_length=$($imagePath.Length) registry='$registryStrategy'"
+
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+            try { $stdoutTask.Wait(2000) | Out-Null } catch { }
+            try { $stderrTask.Wait(2000) | Out-Null } catch { }
+            try { $stdoutTask.Result | Set-Content -Encoding UTF8 (Join-Path $dir 'manager-stdout.txt') } catch { }
+            try { $stderrTask.Result | Set-Content -Encoding UTF8 (Join-Path $dir 'manager-stderr.txt') } catch { }
+            Clear-ZapretState
           }
 
-          Clear-ZapretState
+          # 1 = general (ALT), 21 = general (SIMPLE FAKE), 22 = general.bat in pinned 1.10.2 sort order.
+          foreach ($index in @(1,21,22)) { Invoke-StrategyDiagnostic $index }
+
+          $summaries = Get-ChildItem -LiteralPath $diag -Filter summary.txt -File -Recurse | Sort-Object FullName
+          foreach ($summary in $summaries) {
+            Write-Host "===== $($summary.Directory.Name) ====="
+            Get-Content -Raw -LiteralPath $summary.FullName | Write-Host
+          }
+
           Remove-Item -Force -ErrorAction SilentlyContinue $variant
+          exit 0
 
-          if ($state -ne 'RUNNING') {
-            throw "Direct upstream service_install did not reach RUNNING: $state"
-          }
-
-      - name: Print diagnostic evidence
+      - name: Print strategy diagnostic evidence
         if: always()
         shell: pwsh
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
-          foreach ($file in @(
-            'direct-install-state.txt','direct-install-process.txt',
-            'direct-install-sc-qc.txt','direct-install-sc-qc-err.txt',
-            'direct-install-reg.txt','direct-install-reg-err.txt','direct-install-winws.txt'
-          )) {
-            $path = Join-Path $diag $file
-            Write-Host "===== $file ====="
-            if (Test-Path -LiteralPath $path) { Get-Content -Raw -LiteralPath $path | Write-Host }
-            else { Write-Host '<missing>' }
+          Get-ChildItem -LiteralPath $diag -Filter summary.txt -File -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object {
+            Write-Host "===== $($_.Directory.Name)/summary.txt ====="
+            Get-Content -Raw -LiteralPath $_.FullName | Write-Host
           }
 
       - name: Upload diagnostic evidence
