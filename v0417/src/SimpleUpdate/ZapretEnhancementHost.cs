@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -22,10 +23,8 @@ namespace DPopCleaner.SimpleUpdate
         internal const int RemoveServicesProxyButtonId = 1702;
         internal const int StartStandaloneProxyButtonId = 1713;
 
-        private const int ToolbarButtonCount = 4;
         private const int ButtonGap = 8;
         private const int ToolbarHeight = 27;
-        private const int ToolbarWidth = 709;
         private const string UpstreamStatusCommand = "status_zapret";
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
@@ -42,7 +41,8 @@ namespace DPopCleaner.SimpleUpdate
         private static readonly object Sync = new object();
         private static readonly Dictionary<IntPtr, ZapretEnhancementHost> Hosts = new Dictionary<IntPtr, ZapretEnhancementHost>();
         private static readonly HostWndProc HostWndProcDelegate = StaticHostWndProc;
-        private static readonly IntPtr BackgroundBrush = CreateSolidBrush(Rgb(12, 17, 23));
+        private static readonly IntPtr DarkBackgroundBrush = CreateSolidBrush(Rgb(12, 17, 23));
+        private static readonly IntPtr LightBackgroundBrush = CreateSolidBrush(Rgb(247, 248, 250));
         private static bool _classRegistered;
 
         private readonly IntPtr _parent;
@@ -52,6 +52,10 @@ namespace DPopCleaner.SimpleUpdate
         private IntPtr _installServiceToolbar;
         private IntPtr _removeServicesToolbar;
         private IntPtr _startStandaloneToolbar;
+        private IntPtr _repairBroadcastButton;
+        private IntPtr _repairConnectionButton;
+        private IntPtr _gameFilterButton;
+        private IntPtr _managerButton;
         private IntPtr _legacyCheckVersionButton;
         private IntPtr _legacyDownloadButton;
         private IntPtr _legacyInstallServiceButton;
@@ -77,6 +81,9 @@ namespace DPopCleaner.SimpleUpdate
             public IntPtr hIconSm;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
         private delegate IntPtr HostWndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
@@ -98,11 +105,14 @@ namespace DPopCleaner.SimpleUpdate
         [DllImport("user32.dll")]
         private static extern bool DestroyWindow(IntPtr hwnd);
 
+        [DllImport("user32.dll")]
+        private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
+
+        [DllImport("user32.dll")]
+        private static extern int FillRect(IntPtr hdc, ref RECT rect, IntPtr brush);
+
         [DllImport("gdi32.dll")]
         private static extern IntPtr CreateSolidBrush(uint colorRef);
-
-        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
-        private static extern int SetWindowTheme(IntPtr hwnd, string subAppName, string subIdList);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")]
         private static extern IntPtr SendMessageBuffer(IntPtr hwnd, uint msg, IntPtr wParam, StringBuilder lParam);
@@ -166,25 +176,18 @@ namespace DPopCleaner.SimpleUpdate
                 ? NativeBridge.SendMessage(fontAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero)
                 : IntPtr.Zero;
 
-            _actionToolbar = CreateHost(ToolbarWidth, ToolbarHeight);
-
-            var x = 0;
-            CreateButton(_actionToolbar, "Починка трансляции", RepairBroadcastButtonId, x, 0, 165, ToolbarHeight, font);
-            x += 165 + ButtonGap;
-            CreateButton(_actionToolbar, "Починка подключения", RepairConnectionButtonId, x, 0, 175, ToolbarHeight, font);
-            x += 175 + ButtonGap;
-            CreateButton(_actionToolbar, "Игровой фильтр 1.10.2", GameFilterButtonId, x, 0, 185, ToolbarHeight, font);
-            x += 185 + ButtonGap;
-            CreateButton(_actionToolbar, "Менеджер 1.10.2", ManagerButtonId, x, 0, 160, ToolbarHeight, font);
-
-            GC.KeepAlive(ToolbarButtonCount);
+            _actionToolbar = CreateHost(1, ToolbarHeight);
+            _repairBroadcastButton = CreateButton(_actionToolbar, "Починка трансляции", RepairBroadcastButtonId, 0, 0, 1, ToolbarHeight, font);
+            _repairConnectionButton = CreateButton(_actionToolbar, "Починка подключения", RepairConnectionButtonId, 0, 0, 1, ToolbarHeight, font);
+            _gameFilterButton = CreateButton(_actionToolbar, "Игровой фильтр 1.10.2", GameFilterButtonId, 0, 0, 1, ToolbarHeight, font);
+            _managerButton = CreateButton(_actionToolbar, "Менеджер 1.10.2", ManagerButtonId, 0, 0, 1, ToolbarHeight, font);
             PositionActionToolbar();
         }
 
         private void CreateLegacyUpdateProxy()
         {
-            _legacyCheckVersionButton = NativeBridge.FindChildByText(_parent, "Проверить версию", "Button", true);
-            _legacyDownloadButton = NativeBridge.FindChildByText(_parent, "Скачать и установить", "Button", true);
+            _legacyCheckVersionButton = FindVisibleButtonByCaption("Проверить версию", "Check version");
+            _legacyDownloadButton = FindVisibleButtonByCaption("Скачать и установить", "Download and install");
             if (_legacyCheckVersionButton == IntPtr.Zero || _legacyDownloadButton == IntPtr.Zero) return;
 
             var check = NativeBridge.GetChildClientBounds(_parent, _legacyCheckVersionButton);
@@ -200,9 +203,9 @@ namespace DPopCleaner.SimpleUpdate
             var font = NativeBridge.SendMessage(_legacyCheckVersionButton, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
 
             _updateToolbar = CreateHost(width, height);
-            CreateButton(_updateToolbar, "Проверить версию", LegacyCheckVersionButtonId,
+            CreateButton(_updateToolbar, NativeBridge.ReadWindowText(_legacyCheckVersionButton), LegacyCheckVersionButtonId,
                 check.Left - left, check.Top - top, check.Width, check.Height, font);
-            CreateButton(_updateToolbar, "Скачать и установить", LegacyDownloadButtonId,
+            CreateButton(_updateToolbar, NativeBridge.ReadWindowText(_legacyDownloadButton), LegacyDownloadButtonId,
                 download.Left - left, download.Top - top, download.Width, download.Height, font);
 
             NativeBridge.ShowWindow(_legacyCheckVersionButton, NativeBridge.SW_HIDE);
@@ -535,45 +538,117 @@ namespace DPopCleaner.SimpleUpdate
         private IntPtr CreateHost(int width, int height)
         {
             var handle = CreateWindowEx(0, HostClassName, string.Empty, WS_CHILD | WS_VISIBLE,
-                0, 0, width, height, _parent, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
+                0, 0, Math.Max(1, width), Math.Max(1, height), _parent, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
             if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret bridge toolbar.");
             lock (Sync) Hosts[handle] = this;
             return handle;
         }
 
-        private static void CreateButton(IntPtr host, string text, int id, int x, int y, int width, int height, IntPtr font)
+        private static IntPtr CreateButton(IntPtr host, string text, int id, int x, int y, int width, int height, IntPtr font)
         {
             var button = CreateWindowEx(0, "Button", text,
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                x, y, width, height, host, new IntPtr(id), GetModuleHandle(null), IntPtr.Zero);
+                x, y, Math.Max(1, width), Math.Max(1, height), host, new IntPtr(id), GetModuleHandle(null), IntPtr.Zero);
             if (button == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret button id=" + id + ".");
             if (font != IntPtr.Zero) NativeBridge.SendMessage(button, WM_SETFONT, font, new IntPtr(1));
-            try { SetWindowTheme(button, "DarkMode_Explorer", null); } catch { }
+            return button;
         }
 
         private void PositionActionToolbar()
         {
-            var additional = NativeBridge.GetChildClientBounds(
-                _parent,
-                NativeBridge.FindChildByText(_parent, "Дополнительно", "Static", true));
-            var tests = NativeBridge.GetChildClientBounds(
-                _parent,
-                NativeBridge.FindChildByText(_parent, "Тесты", "Button", true));
-            if (additional == null || tests == null) return;
+            var additionalHandle = FindVisibleControlByCaption("Дополнительно", "Additional", "Static");
+            var testsHandle = FindVisibleControlByCaption("Тесты", "Tests", "Button");
+            var additional = NativeBridge.GetChildClientBounds(_parent, additionalHandle);
+            var tests = NativeBridge.GetChildClientBounds(_parent, testsHandle);
+            if (additional == null || tests == null || _actionToolbar == IntPtr.Zero) return;
 
             var right = tests.Right;
-            var left = right - ToolbarWidth;
             var minimumLeft = additional.Right + 12;
-            if (left < minimumLeft) left = minimumLeft;
+            var availableWidth = Math.Max(1, right - minimumLeft);
+            var usedWidth = LayoutActionButtons(availableWidth);
+            if (usedWidth <= 0) return;
+            var left = Math.Max(minimumLeft, right - usedWidth);
             var top = Math.Max(0, additional.Top - 4);
 
             NativeBridge.PositionChildWindow(_actionToolbar, new NativeBridge.ClientBounds
             {
                 Left = left,
                 Top = top,
-                Right = left + ToolbarWidth,
+                Right = Math.Min(right, left + usedWidth),
                 Bottom = top + ToolbarHeight
             });
+        }
+
+        private int LayoutActionButtons(int availableWidth)
+        {
+            var buttons = new[] { _repairBroadcastButton, _repairConnectionButton, _gameFilterButton, _managerButton };
+            if (availableWidth <= ButtonGap * (buttons.Length - 1)) return 0;
+
+            var desired = new int[buttons.Length];
+            var desiredTotal = 0;
+            for (var i = 0; i < buttons.Length; i++)
+            {
+                var caption = NativeBridge.ReadWindowText(buttons[i]);
+                var measured = TextRenderer.MeasureText(caption ?? string.Empty, SystemFonts.MessageBoxFont).Width;
+                desired[i] = Math.Max(72, measured + 24);
+                desiredTotal += desired[i];
+            }
+
+            var gaps = ButtonGap * (buttons.Length - 1);
+            var contentWidth = Math.Max(buttons.Length, availableWidth - gaps);
+            var widths = new int[buttons.Length];
+            if (desiredTotal <= contentWidth)
+            {
+                var extra = contentWidth - desiredTotal;
+                for (var i = 0; i < buttons.Length; i++)
+                {
+                    var share = extra / (buttons.Length - i);
+                    widths[i] = desired[i] + share;
+                    extra -= share;
+                }
+            }
+            else
+            {
+                var remaining = contentWidth;
+                var remainingDesired = desiredTotal;
+                for (var i = 0; i < buttons.Length; i++)
+                {
+                    var slotsLeft = buttons.Length - i;
+                    var width = i == buttons.Length - 1
+                        ? remaining
+                        : Math.Max(1, (int)Math.Floor((double)remaining * desired[i] / Math.Max(1, remainingDesired)));
+                    width = Math.Min(width, remaining - Math.Max(0, slotsLeft - 1));
+                    widths[i] = Math.Max(1, width);
+                    remaining -= widths[i];
+                    remainingDesired -= desired[i];
+                }
+            }
+
+            var x = 0;
+            for (var i = 0; i < buttons.Length; i++)
+            {
+                NativeBridge.PositionChildWindow(buttons[i], new NativeBridge.ClientBounds
+                {
+                    Left = x,
+                    Top = 0,
+                    Right = x + widths[i],
+                    Bottom = ToolbarHeight
+                });
+                x += widths[i];
+                if (i + 1 < buttons.Length) x += ButtonGap;
+            }
+            return Math.Min(availableWidth, x);
+        }
+
+        private IntPtr FindVisibleControlByCaption(string russian, string english, string className)
+        {
+            var handle = NativeBridge.FindChildByText(_parent, russian, className, true);
+            return handle != IntPtr.Zero ? handle : NativeBridge.FindChildByText(_parent, english, className, true);
+        }
+
+        private IntPtr FindVisibleButtonByCaption(string russian, string english)
+        {
+            return FindVisibleControlByCaption(russian, english, "Button");
         }
 
         private void PositionUpdateToolbar()
@@ -641,7 +716,16 @@ namespace DPopCleaner.SimpleUpdate
                 }
                 return IntPtr.Zero;
             }
-            if (msg == WM_ERASEBKGND) return new IntPtr(1);
+            if (msg == WM_ERASEBKGND)
+            {
+                RECT rect;
+                if (GetClientRect(hwnd, out rect))
+                {
+                    var brush = NativeBridge.IsDarkThemeSelected(_parent) ? DarkBackgroundBrush : LightBackgroundBrush;
+                    FillRect(wParam, ref rect, brush);
+                }
+                return new IntPtr(1);
+            }
             return DefWindowProc(hwnd, msg, wParam, lParam);
         }
 
@@ -776,7 +860,7 @@ namespace DPopCleaner.SimpleUpdate
                     lpfnWndProc = Marshal.GetFunctionPointerForDelegate(HostWndProcDelegate),
                     hInstance = GetModuleHandle(null),
                     hCursor = LoadCursor(IntPtr.Zero, new IntPtr(32512)),
-                    hbrBackground = BackgroundBrush,
+                    hbrBackground = IntPtr.Zero,
                     lpszClassName = HostClassName
                 };
                 var atom = RegisterClassEx(ref wc);
