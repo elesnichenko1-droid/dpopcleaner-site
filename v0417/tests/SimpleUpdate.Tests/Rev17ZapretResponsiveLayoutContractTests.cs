@@ -23,7 +23,7 @@ namespace SimpleUpdate.Tests
         [TestMethod]
         public void Zapret_page_uses_one_responsive_layout_pass_for_all_action_rows()
         {
-            var source = ReadSource("ZapretEnhancementHost.cs");
+            var source = ReadSource("ZapretResponsiveLayoutHost.cs");
 
             StringAssert.Contains(source, "ApplyResponsiveLayout()");
             StringAssert.Contains(source, "LayoutZapretRow");
@@ -34,29 +34,44 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void Responsive_layout_is_recomputed_from_current_client_width_and_not_legacy_button_bounds()
+        public void Responsive_layout_is_recomputed_from_current_client_width_and_native_dpi_height()
         {
-            var source = ReadSource("ZapretEnhancementHost.cs");
+            var source = ReadSource("ZapretResponsiveLayoutHost.cs");
 
             StringAssert.Contains(source, "GetClientRect(_parent");
             StringAssert.Contains(source, "TextRenderer.MeasureText");
             StringAssert.Contains(source, "clientWidth");
+            StringAssert.Contains(source, "nativeButtonHeight");
+            StringAssert.Contains(source, "scale");
             StringAssert.Contains(source, "Math.Max");
             StringAssert.Contains(source, "Math.Min");
-            Assert.IsFalse(source.Contains("PositionInstallServiceProxy()"), "Install-service proxy must participate in the common responsive grid, not shadow frozen bounds.");
-            Assert.IsFalse(source.Contains("PositionRemoveServicesProxy()"), "Remove-services proxy must participate in the common responsive grid, not shadow frozen bounds.");
-            Assert.IsFalse(source.Contains("PositionStartStandaloneProxy()"), "Standalone-start proxy must participate in the common responsive grid, not shadow frozen bounds.");
         }
 
         [TestMethod]
         public void Responsive_layout_has_explicit_row_spacing_and_minimum_button_width_rules()
         {
-            var source = ReadSource("ZapretEnhancementHost.cs");
+            var source = ReadSource("ZapretResponsiveLayoutHost.cs");
 
             StringAssert.Contains(source, "ResponsiveRowGap");
             StringAssert.Contains(source, "ResponsiveColumnGap");
             StringAssert.Contains(source, "ResponsiveButtonHeight");
             StringAssert.Contains(source, "ResponsiveMinimumButtonWidth");
+        }
+
+        [TestMethod]
+        public void Launcher_applies_responsive_layout_after_existing_Zapret_bridge_and_visual_polish()
+        {
+            var launcher = ReadSource("LauncherContext.cs");
+            StringAssert.Contains(launcher, "private ZapretResponsiveLayoutHost _zapretResponsiveHost;");
+            StringAssert.Contains(launcher, "new ZapretResponsiveLayoutHost(_mainWindow)");
+            StringAssert.Contains(launcher, "_zapretResponsiveHost.Show();");
+            StringAssert.Contains(launcher, "_zapretResponsiveHost.Dispose();");
+
+            var bridgeIndex = launcher.IndexOf("_zapretHost.Show();", StringComparison.Ordinal);
+            var visualIndex = launcher.IndexOf("_zapretVisualHost.Show();", StringComparison.Ordinal);
+            var responsiveIndex = launcher.IndexOf("_zapretResponsiveHost.Show();", StringComparison.Ordinal);
+            Assert.IsTrue(bridgeIndex >= 0 && visualIndex > bridgeIndex && responsiveIndex > visualIndex,
+                "Responsive geometry must run last so legacy/proxy positioning cannot overwrite rev.17 layout in the same 100ms tick.");
         }
     }
 }
