@@ -246,44 +246,69 @@ namespace DPopCleaner.SimpleUpdate
             var menuIndex = FindStrategyMenuIndex(zapretRoot, selected);
             if (menuIndex <= 0) throw new InvalidOperationException("Выбранная стратегия отсутствует в upstream manager: " + selected);
 
-            var info = new ProcessStartInfo("cmd.exe")
+            var directManager = BuildDirectUpstreamInstallManager(service);
+            try
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardInput = true,
-                Arguments = "/d /c \"\"" + service + "\" admin\"",
-                WorkingDirectory = zapretRoot
-            };
-
-            using (var process = Process.Start(info))
-            {
-                if (process == null) throw new InvalidOperationException("Не удалось запустить upstream service.bat.");
-                try
+                var info = new ProcessStartInfo("cmd.exe")
                 {
-                    process.StandardInput.WriteLine("1");
-                    process.StandardInput.WriteLine(menuIndex.ToString());
-                    process.StandardInput.Flush();
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardInput = true,
+                    Arguments = "/d /c \"\"" + directManager + "\" admin\"",
+                    WorkingDirectory = zapretRoot
+                };
 
-                    var deadline = DateTime.UtcNow.AddSeconds(15);
-                    while (DateTime.UtcNow < deadline)
+                using (var process = Process.Start(info))
+                {
+                    if (process == null) throw new InvalidOperationException("Не удалось запустить upstream service.bat.");
+                    try
                     {
-                        var state = ZapretRuntimeState.Read(_applicationRoot);
-                        if (state.ZapretServiceRunning)
+                        process.StandardInput.WriteLine(menuIndex.ToString());
+                        process.StandardInput.Flush();
+
+                        var deadline = DateTime.UtcNow.AddSeconds(15);
+                        while (DateTime.UtcNow < deadline)
                         {
-                            RefreshRuntimeStatus();
-                            return;
+                            var state = ZapretRuntimeState.Read(_applicationRoot);
+                            if (state.ZapretServiceRunning)
+                            {
+                                RefreshRuntimeStatus();
+                                return;
+                            }
+                            if (process.HasExited)
+                                throw new InvalidOperationException("Upstream service.bat завершился до запуска службы. Стратегия: " + selected + ". Код выхода: " + process.ExitCode);
+                            Thread.Sleep(200);
                         }
-                        if (process.HasExited)
-                            throw new InvalidOperationException("Upstream service.bat завершился до запуска службы. Стратегия: " + selected + ". Код выхода: " + process.ExitCode);
-                        Thread.Sleep(200);
+                        throw new TimeoutException("Upstream service.bat не запустил службу zapret. Стратегия: " + selected + ".");
                     }
-                    throw new TimeoutException("Upstream service.bat не запустил службу zapret. Стратегия: " + selected + ".");
-                }
-                finally
-                {
-                    try { if (!process.HasExited) process.Kill(); } catch { }
+                    finally
+                    {
+                        try { if (!process.HasExited) process.Kill(); } catch { }
+                    }
                 }
             }
+            finally
+            {
+                try { if (File.Exists(directManager)) File.Delete(directManager); } catch { }
+            }
+        }
+
+        private static string BuildDirectUpstreamInstallManager(string service)
+        {
+            var source = File.ReadAllText(service);
+            const string anchor = "title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!";
+            var first = source.IndexOf(anchor, StringComparison.Ordinal);
+            if (first < 0 || source.IndexOf(anchor, first + anchor.Length, StringComparison.Ordinal) >= 0)
+                throw new InvalidDataException("Flowseal service manager anchor is missing or ambiguous.");
+
+            var newline = source.IndexOf("\r\n", StringComparison.Ordinal) >= 0 ? "\r\n" : "\n";
+            var modified = source.Insert(first + anchor.Length, newline + "goto service_install");
+            var directory = Path.GetDirectoryName(service);
+            if (string.IsNullOrWhiteSpace(directory)) throw new InvalidDataException("Flowseal service manager directory is invalid.");
+
+            var directManager = Path.Combine(directory, "service-dpop-install-" + Guid.NewGuid().ToString("N") + ".bat");
+            File.WriteAllText(directManager, modified, new UTF8Encoding(false));
+            return directManager;
         }
 
         private static int FindStrategyMenuIndex(string zapretRoot, string selected)
