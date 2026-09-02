@@ -50,6 +50,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_dpop0417_release_contract.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_dpop0417_rev16_release_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_dpop0417_zapret_screen_fix_contract.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_dpop0417_zapret_bundle_contract.py -v
