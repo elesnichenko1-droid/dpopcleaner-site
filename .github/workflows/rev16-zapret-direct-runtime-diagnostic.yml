@@ -1,0 +1,81 @@
+name: Rev16 Zapret direct runtime diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/rev16-zapret-direct-runtime-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  direct-upstream-start:
+    runs-on: windows-2022
+    steps:
+      - name: Download published rev.15 installer
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/elesnichenko1-droid/dpopcleaner-site/releases/download/v0.4.17-rev15/DPopCleaner_Setup_0.4.17.exe'
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\DPopCleaner_Setup_0.4.17_rev15.exe"
+
+      - name: Prove pinned Flowseal strategy starts directly
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "$env:RUNNER_TEMP\DPopCleaner_Setup_0.4.17_rev15.exe"
+          $root = "$env:RUNNER_TEMP\dpop-rev16-direct-runtime"
+          Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+
+          foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+            & sc.exe stop $name *> $null
+            & sc.exe delete $name *> $null
+          }
+
+          $setup = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="' + $root + '"')) -PassThru -Wait
+          if ($setup.ExitCode -ne 0) { throw "Installer exit code $($setup.ExitCode)." }
+
+          $strategy = Join-Path $root 'Zapret\general (ALT).bat'
+          $winws = Join-Path $root 'Zapret\bin\winws.exe'
+          if (-not (Test-Path -LiteralPath $strategy -PathType Leaf)) { throw "Strategy missing: $strategy" }
+          if (-not (Test-Path -LiteralPath $winws -PathType Leaf)) { throw "winws missing: $winws" }
+
+          try {
+            $zapretRoot = Split-Path -Parent $strategy
+            $cmd = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/c',('""' + $strategy + '""')) -WorkingDirectory $zapretRoot -PassThru
+            if (-not $cmd.WaitForExit(10000)) {
+              try { $cmd.Kill() } catch { }
+              throw 'Direct upstream strategy batch did not return within 10 seconds.'
+            }
+
+            $expected = [IO.Path]::GetFullPath($winws)
+            $deadline = [DateTime]::UtcNow.AddSeconds(10)
+            $match = $null
+            do {
+              $match = Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue | Where-Object {
+                $_.ExecutablePath -and [IO.Path]::GetFullPath([string]$_.ExecutablePath).Equals($expected,[StringComparison]::OrdinalIgnoreCase)
+              } | Select-Object -First 1
+              if (-not $match) { Start-Sleep -Milliseconds 200 }
+            } while (-not $match -and [DateTime]::UtcNow -lt $deadline)
+
+            if (-not $match) { throw 'Pinned Flowseal general (ALT).bat did not start bundled winws.exe directly.' }
+            if ([string]::IsNullOrWhiteSpace([string]$match.CommandLine)) { throw 'Bundled winws.exe command line is empty.' }
+
+            Write-Host "REV16_DIRECT_UPSTREAM_STRATEGY_START_OK pid=$($match.ProcessId)"
+            Write-Host "REV16_DIRECT_UPSTREAM_COMMAND=$($match.CommandLine)"
+          }
+          finally {
+            Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue | Where-Object {
+              $_.ExecutablePath -and [IO.Path]::GetFullPath([string]$_.ExecutablePath).Equals([IO.Path]::GetFullPath($winws),[StringComparison]::OrdinalIgnoreCase)
+            } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+              & sc.exe stop $name *> $null
+              & sc.exe delete $name *> $null
+            }
+            $uninstaller = Join-Path $root 'unins000.exe'
+            if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
+              Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait | Out-Null
+            }
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+          }
