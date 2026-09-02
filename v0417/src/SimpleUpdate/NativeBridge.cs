@@ -411,8 +411,16 @@ namespace DPopCleaner.SimpleUpdate
                 if (!string.Equals(child.ClassName, "ComboBox", StringComparison.OrdinalIgnoreCase)) continue;
                 var bounds = GetChildClientBounds(parent, child.Handle);
                 if (bounds == null || bounds.Bottom > startupBounds.Top + 4) continue;
+
+                // The frozen Settings Language/Theme ComboBoxes live in the right-side
+                // settings column relative to the startup checkbox. Hidden Zapret
+                // ComboBoxes are closer vertically but sit much farther left, so a
+                // vertical-only locator can mistake a strategy selector for Theme.
+                var horizontalOffset = bounds.Left - startupBounds.Left;
+                if (horizontalOffset < 120 || horizontalOffset > 260) continue;
+
                 var distance = startupBounds.Top - bounds.Top;
-                if (distance < 12 || distance > 140 || distance >= bestDistance) continue;
+                if (distance < 12 || distance > 240 || distance >= bestDistance) continue;
                 best = child;
                 bestDistance = distance;
             }
