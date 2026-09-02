@@ -153,20 +153,18 @@ namespace DPopCleaner.SimpleUpdate
                 buttonHeight, columnGap, minimumButtonWidth, scale);
 
             var actionRowTop = updateRowTop + buttonHeight + rowGap;
-            LayoutSharedParentRow(actionButtons, contentLeft, actionRowTop, contentRight,
-                buttonHeight, columnGap, minimumButtonWidth, scale);
-
             var additionalHeading = FindStaticByCaption(children, "Дополнительно", "Additional");
             var additionalHeadingBounds = NativeBridge.GetChildClientBounds(_parent, additionalHeading);
             var additionalHeadingHeight = additionalHeadingBounds == null
                 ? Scale(23, scale)
                 : Math.Max(1, additionalHeadingBounds.Height);
-            var additionalHeadingTop = actionRowTop + buttonHeight + rowGap;
+            var headingWidth = additionalHeadingBounds == null
+                ? Scale(180, scale)
+                : Math.Max(additionalHeadingBounds.Width, Scale(150, scale));
+            headingWidth = Math.Min(headingWidth, Math.Max(Scale(150, scale), contentWidth / 4));
+            var additionalHeadingTop = actionRowTop + Math.Max(0, (buttonHeight - additionalHeadingHeight) / 2);
             if (additionalHeading != IntPtr.Zero)
             {
-                var headingWidth = additionalHeadingBounds == null
-                    ? Scale(180, scale)
-                    : Math.Max(additionalHeadingBounds.Width, Scale(150, scale));
                 NativeBridge.PositionChildWindow(additionalHeading, Bounds(
                     contentLeft,
                     additionalHeadingTop,
@@ -174,7 +172,11 @@ namespace DPopCleaner.SimpleUpdate
                     additionalHeadingTop + additionalHeadingHeight));
             }
 
-            var additionalRowTop = additionalHeadingTop + additionalHeadingHeight + Math.Max(2, rowGap / 2);
+            var actionLeft = Math.Min(contentRight - 1, contentLeft + headingWidth + columnGap);
+            LayoutSharedParentRow(actionButtons, actionLeft, actionRowTop, contentRight,
+                buttonHeight, columnGap, minimumButtonWidth, scale);
+
+            var additionalRowTop = actionRowTop + Math.Max(buttonHeight, additionalHeadingHeight) + rowGap;
             var filterBounds = NativeBridge.GetChildClientBounds(_parent, filterCombo);
             if (filterBounds == null) return;
             var filterHeight = Math.Max(1, filterBounds.Height);
