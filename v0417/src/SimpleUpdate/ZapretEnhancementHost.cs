@@ -20,6 +20,7 @@ namespace DPopCleaner.SimpleUpdate
         internal const int LegacyDownloadButtonId = 1725;
         internal const int InstallServiceProxyButtonId = 1701;
         internal const int RemoveServicesProxyButtonId = 1702;
+        internal const int StartStandaloneProxyButtonId = 1713;
 
         private const int ToolbarButtonCount = 4;
         private const int ButtonGap = 8;
@@ -50,10 +51,12 @@ namespace DPopCleaner.SimpleUpdate
         private IntPtr _updateToolbar;
         private IntPtr _installServiceToolbar;
         private IntPtr _removeServicesToolbar;
+        private IntPtr _startStandaloneToolbar;
         private IntPtr _legacyCheckVersionButton;
         private IntPtr _legacyDownloadButton;
         private IntPtr _legacyInstallServiceButton;
         private IntPtr _legacyRemoveServicesButton;
+        private IntPtr _legacyStartStandaloneButton;
         private DateTime _nextRuntimeRefreshUtc = DateTime.MinValue;
         private bool _disposed;
 
@@ -114,6 +117,7 @@ namespace DPopCleaner.SimpleUpdate
             CreateLegacyUpdateProxy();
             CreateInstallServiceProxy();
             CreateRemoveServicesProxy();
+            CreateStartStandaloneProxy();
             RefreshDisplayedZapretVersion();
             RefreshRuntimeStatus();
         }
@@ -125,6 +129,7 @@ namespace DPopCleaner.SimpleUpdate
             PositionUpdateToolbar();
             PositionInstallServiceProxy();
             PositionRemoveServicesProxy();
+            PositionStartStandaloneProxy();
             RefreshDisplayedZapretVersion();
             if (DateTime.UtcNow >= _nextRuntimeRefreshUtc) RefreshRuntimeStatus();
             if (_legacyCheckVersionButton != IntPtr.Zero)
@@ -135,10 +140,13 @@ namespace DPopCleaner.SimpleUpdate
                 NativeBridge.ShowWindow(_legacyInstallServiceButton, NativeBridge.SW_HIDE);
             if (_legacyRemoveServicesButton != IntPtr.Zero)
                 NativeBridge.ShowWindow(_legacyRemoveServicesButton, NativeBridge.SW_HIDE);
+            if (_legacyStartStandaloneButton != IntPtr.Zero)
+                NativeBridge.ShowWindow(_legacyStartStandaloneButton, NativeBridge.SW_HIDE);
             if (_actionToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_actionToolbar, NativeBridge.SW_SHOW);
             if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_SHOW);
             if (_installServiceToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_installServiceToolbar, NativeBridge.SW_SHOW);
             if (_removeServicesToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_removeServicesToolbar, NativeBridge.SW_SHOW);
+            if (_startStandaloneToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_startStandaloneToolbar, NativeBridge.SW_SHOW);
         }
 
         internal void Hide()
@@ -148,6 +156,7 @@ namespace DPopCleaner.SimpleUpdate
             if (_updateToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_updateToolbar, NativeBridge.SW_HIDE);
             if (_installServiceToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_installServiceToolbar, NativeBridge.SW_HIDE);
             if (_removeServicesToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_removeServicesToolbar, NativeBridge.SW_HIDE);
+            if (_startStandaloneToolbar != IntPtr.Zero) NativeBridge.ShowWindow(_startStandaloneToolbar, NativeBridge.SW_HIDE);
         }
 
         private void CreateToolbar()
@@ -245,6 +254,28 @@ namespace DPopCleaner.SimpleUpdate
             if (bounds != null) NativeBridge.PositionChildWindow(_removeServicesToolbar, bounds);
         }
 
+        private void CreateStartStandaloneProxy()
+        {
+            _legacyStartStandaloneButton = NativeBridge.FindChildById(_parent, StartStandaloneProxyButtonId);
+            if (_legacyStartStandaloneButton == IntPtr.Zero) return;
+            var bounds = NativeBridge.GetChildClientBounds(_parent, _legacyStartStandaloneButton);
+            if (bounds == null) return;
+
+            var font = NativeBridge.SendMessage(_legacyStartStandaloneButton, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
+            var caption = NativeBridge.ReadWindowText(_legacyStartStandaloneButton);
+            _startStandaloneToolbar = CreateHost(bounds.Width, bounds.Height);
+            CreateButton(_startStandaloneToolbar, caption, StartStandaloneProxyButtonId, 0, 0, bounds.Width, bounds.Height, font);
+            NativeBridge.ShowWindow(_legacyStartStandaloneButton, NativeBridge.SW_HIDE);
+            PositionStartStandaloneProxy();
+        }
+
+        private void PositionStartStandaloneProxy()
+        {
+            if (_startStandaloneToolbar == IntPtr.Zero || _legacyStartStandaloneButton == IntPtr.Zero) return;
+            var bounds = NativeBridge.GetChildClientBounds(_parent, _legacyStartStandaloneButton);
+            if (bounds != null) NativeBridge.PositionChildWindow(_startStandaloneToolbar, bounds);
+        }
+
         private string ReadSelectedStrategy()
         {
             NativeBridge.ChildInfo best = null;
@@ -262,6 +293,65 @@ namespace DPopCleaner.SimpleUpdate
             var value = new StringBuilder(length + 1);
             SendMessageBuffer(best.Handle, CB_GETLBTEXT, new IntPtr(index), value);
             return value.ToString().Trim();
+        }
+
+        private void StartSelectedStrategyUsingUpstreamBatch()
+        {
+            var selected = ReadSelectedStrategy();
+            if (string.IsNullOrWhiteSpace(selected)) throw new InvalidOperationException("Сначала выберите стратегию Zapret.");
+            if (!string.Equals(Path.GetFileName(selected), selected, StringComparison.Ordinal) ||
+                !selected.StartsWith("general", StringComparison.OrdinalIgnoreCase) ||
+                !selected.EndsWith(".bat", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Некорректное имя стратегии Zapret: " + selected);
+
+            var zapretRoot = Path.GetFullPath(GetZapretRoot());
+            var strategy = Path.GetFullPath(Path.Combine(zapretRoot, selected));
+            if (!string.Equals(Path.GetDirectoryName(strategy), zapretRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Стратегия находится вне bundled Zapret: " + selected);
+            if (!File.Exists(strategy)) throw new FileNotFoundException("Выбранная стратегия Zapret не найдена.", strategy);
+
+            var state = ZapretRuntimeState.Read(_applicationRoot);
+            if (state.ZapretServiceRunning)
+                throw new InvalidOperationException("Служба zapret уже запущена. Сначала остановите или удалите службу перед standalone-запуском.");
+            if (state.BundledWinwsRunning)
+            {
+                RefreshRuntimeStatus();
+                return;
+            }
+
+            var info = new ProcessStartInfo("cmd.exe")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                Arguments = "/d /c \"\"" + strategy + "\"\"",
+                WorkingDirectory = zapretRoot
+            };
+
+            using (var process = Process.Start(info))
+            {
+                if (process == null) throw new InvalidOperationException("Не удалось запустить выбранную стратегию Zapret: " + selected);
+                try
+                {
+                    var deadline = DateTime.UtcNow.AddSeconds(10);
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        state = ZapretRuntimeState.Read(_applicationRoot);
+                        if (state.BundledWinwsRunning)
+                        {
+                            RefreshRuntimeStatus();
+                            return;
+                        }
+                        if (process.HasExited)
+                            throw new InvalidOperationException("Стратегия Zapret завершилась до запуска bundled winws.exe. Стратегия: " + selected + ". Код выхода: " + process.ExitCode);
+                        Thread.Sleep(200);
+                    }
+                    throw new TimeoutException("Стратегия Zapret не запустила bundled winws.exe вовремя: " + selected);
+                }
+                finally
+                {
+                    try { if (!process.HasExited) process.Kill(); } catch { }
+                }
+            }
         }
 
         private void InstallSelectedStrategyUsingUpstreamManager()
@@ -531,7 +621,8 @@ namespace DPopCleaner.SimpleUpdate
                 var id = (int)(wParam.ToInt64() & 0xffff);
                 try
                 {
-                    if (id == InstallServiceProxyButtonId) InstallSelectedStrategyUsingUpstreamManager();
+                    if (id == StartStandaloneProxyButtonId) StartSelectedStrategyUsingUpstreamBatch();
+                    else if (id == InstallServiceProxyButtonId) InstallSelectedStrategyUsingUpstreamManager();
                     else if (id == RemoveServicesProxyButtonId) RemoveUsingUpstreamManager();
                     else if (id == RepairBroadcastButtonId) RepairBroadcast();
                     else if (id == RepairConnectionButtonId) RepairConnection();
@@ -722,7 +813,11 @@ namespace DPopCleaner.SimpleUpdate
             {
                 try { NativeBridge.ShowWindow(_legacyRemoveServicesButton, NativeBridge.SW_SHOW); } catch { }
             }
-            foreach (var handle in new[] { _actionToolbar, _updateToolbar, _installServiceToolbar, _removeServicesToolbar })
+            if (_legacyStartStandaloneButton != IntPtr.Zero)
+            {
+                try { NativeBridge.ShowWindow(_legacyStartStandaloneButton, NativeBridge.SW_SHOW); } catch { }
+            }
+            foreach (var handle in new[] { _actionToolbar, _updateToolbar, _installServiceToolbar, _removeServicesToolbar, _startStandaloneToolbar })
             {
                 if (handle == IntPtr.Zero) continue;
                 lock (Sync) Hosts.Remove(handle);
@@ -732,6 +827,7 @@ namespace DPopCleaner.SimpleUpdate
             _updateToolbar = IntPtr.Zero;
             _installServiceToolbar = IntPtr.Zero;
             _removeServicesToolbar = IntPtr.Zero;
+            _startStandaloneToolbar = IntPtr.Zero;
         }
     }
 }
