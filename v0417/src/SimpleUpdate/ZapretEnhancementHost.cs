@@ -246,14 +246,13 @@ namespace DPopCleaner.SimpleUpdate
             var menuIndex = FindStrategyMenuIndex(zapretRoot, selected);
             if (menuIndex <= 0) throw new InvalidOperationException("Выбранная стратегия отсутствует в upstream manager: " + selected);
 
-            var directManager = BuildDirectUpstreamInstallManager(service);
+            var directManager = BuildDirectUpstreamInstallManager(service, menuIndex);
             try
             {
                 var info = new ProcessStartInfo("cmd.exe")
                 {
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    RedirectStandardInput = true,
                     Arguments = "/d /c \"\"" + directManager + "\" admin\"",
                     WorkingDirectory = zapretRoot
                 };
@@ -263,9 +262,6 @@ namespace DPopCleaner.SimpleUpdate
                     if (process == null) throw new InvalidOperationException("Не удалось запустить upstream service.bat.");
                     try
                     {
-                        process.StandardInput.WriteLine(menuIndex.ToString());
-                        process.StandardInput.Flush();
-
                         var deadline = DateTime.UtcNow.AddSeconds(15);
                         while (DateTime.UtcNow < deadline)
                         {
@@ -293,16 +289,24 @@ namespace DPopCleaner.SimpleUpdate
             }
         }
 
-        private static string BuildDirectUpstreamInstallManager(string service)
+        private static string BuildDirectUpstreamInstallManager(string service, int menuIndex)
         {
             var source = File.ReadAllText(service);
-            const string anchor = "title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!";
-            var first = source.IndexOf(anchor, StringComparison.Ordinal);
-            if (first < 0 || source.IndexOf(anchor, first + anchor.Length, StringComparison.Ordinal) >= 0)
-                throw new InvalidDataException("Flowseal service manager anchor is missing or ambiguous.");
+            const string rootPrompt = "set /p menu_choice=   Select option (0-12): ";
+            const string strategyPrompt = "set /p \"choice=Input option (0-!count!, default: 0): \"";
+            var rootFirst = source.IndexOf(rootPrompt, StringComparison.Ordinal);
+            var strategyFirst = source.IndexOf(strategyPrompt, StringComparison.Ordinal);
+            if (rootFirst < 0 || source.IndexOf(rootPrompt, rootFirst + rootPrompt.Length, StringComparison.Ordinal) >= 0)
+                throw new InvalidDataException("Flowseal root menu prompt is missing or ambiguous.");
+            if (strategyFirst < 0 || source.IndexOf(strategyPrompt, strategyFirst + strategyPrompt.Length, StringComparison.Ordinal) >= 0)
+                throw new InvalidDataException("Flowseal strategy prompt is missing or ambiguous.");
 
             var newline = source.IndexOf("\r\n", StringComparison.Ordinal) >= 0 ? "\r\n" : "\n";
-            var modified = source.Insert(first + anchor.Length, newline + "goto service_install");
+            var rootReplacement = "if defined DPOP_INSTALL_ONCE exit /b" + newline
+                + "set \"DPOP_INSTALL_ONCE=1\"" + newline
+                + "set \"menu_choice=1\"";
+            var strategyReplacement = "set \"choice=" + menuIndex.ToString() + "\"";
+            var modified = source.Replace(rootPrompt, rootReplacement).Replace(strategyPrompt, strategyReplacement);
             var directory = Path.GetDirectoryName(service);
             if (string.IsNullOrWhiteSpace(directory)) throw new InvalidDataException("Flowseal service manager directory is invalid.");
 
