@@ -67,3 +67,4 @@ jobs:
           name: rev16-release-materialization-${{ github.run_id }}
           path: _rev16_release
           if-no-files-found: error
+          include-hidden-files: true
