@@ -1,0 +1,194 @@
+name: Rev16 Zapret runtime diagnostic
+
+on:
+  push:
+    branches:
+      - feat/0.4.17-rev16-single-tray-zapret
+    paths:
+      - '.github/workflows/rev16-zapret-runtime-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare pinned Flowseal Zapret 1.10.2
+        shell: pwsh
+        run: ./tools/dpop0417_prepare_zapret.ps1
+
+      - name: Diagnose service mode versus standalone strategy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path '_release/0.4.17/third-party/Zapret').Path
+          $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-runtime-diagnostic'
+          New-Item -ItemType Directory -Force -Path $diag | Out-Null
+          $service = Join-Path $root 'service.bat'
+          $strategy = Join-Path $root 'general.bat'
+          if (-not (Test-Path -LiteralPath $service -PathType Leaf)) { throw 'service.bat missing' }
+          if (-not (Test-Path -LiteralPath $strategy -PathType Leaf)) { throw 'general.bat missing' }
+
+          function Invoke-Cmd([string]$Command) {
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/c',$Command) -PassThru -Wait -WindowStyle Hidden
+            return $p.ExitCode
+          }
+
+          function Clear-ZapretState {
+            Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+              Invoke-Cmd ('sc.exe stop ' + $name + ' >nul 2>&1') | Out-Null
+              Invoke-Cmd ('sc.exe delete ' + $name + ' >nul 2>&1') | Out-Null
+            }
+            Start-Sleep -Milliseconds 800
+          }
+
+          function Snapshot([string]$Mode,[int]$ElapsedMs) {
+            $svc = Get-CimInstance Win32_Service -Filter "Name='zapret'" -ErrorAction SilentlyContinue
+            $winws = @(Get-CimInstance Win32_Process -Filter "Name='winws.exe'" -ErrorAction SilentlyContinue)
+            $drivers = @(Get-CimInstance Win32_SystemDriver -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^WinDivert' })
+            $image = ''
+            $selected = ''
+            try {
+              $props = Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\zapret' -ErrorAction Stop
+              $image = [string]$props.ImagePath
+              $selected = [string]$props.'zapret-discord-youtube'
+            } catch { }
+            [pscustomobject]@{
+              Mode=$Mode
+              ElapsedMs=$ElapsedMs
+              ServiceExists=[bool]$svc
+              ServiceState=if($svc){[string]$svc.State}else{'Missing'}
+              ServiceExitCode=if($svc){[int]$svc.ExitCode}else{-1}
+              ServiceProcessId=if($svc){[int]$svc.ProcessId}else{0}
+              WinwsCount=$winws.Count
+              WinwsPids=($winws | ForEach-Object ProcessId) -join ','
+              WinwsCommands=($winws | ForEach-Object CommandLine) -join ' || '
+              DriverStates=($drivers | ForEach-Object { $_.Name + '=' + $_.State }) -join ','
+              ImagePathLength=$image.Length
+              SelectedStrategy=$selected
+            }
+          }
+
+          Clear-ZapretState
+          $source = (Get-Content -Raw -LiteralPath $service) -replace "`r`n", "`n"
+          $anchor = 'title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!'
+          if (([regex]::Matches($source,[regex]::Escape($anchor))).Count -ne 1) { throw 'service manager anchor mismatch' }
+          $variant = Join-Path $root 'service-dpop-runtime-diagnostic.bat'
+          $modified = $source.Replace($anchor, ($anchor + "`ngoto service_install"))
+          [IO.File]::WriteAllText($variant, ($modified -replace "`n","`r`n"), [Text.UTF8Encoding]::new($false))
+
+          $serviceOut = Join-Path $diag 'service-manager-stdout.txt'
+          $serviceErr = Join-Path $diag 'service-manager-stderr.txt'
+          $psi = [Diagnostics.ProcessStartInfo]::new()
+          $psi.FileName = 'cmd.exe'
+          $psi.Arguments = '/d /c ""' + $variant + '" admin"'
+          $psi.WorkingDirectory = $root
+          $psi.UseShellExecute = $false
+          $psi.CreateNoWindow = $true
+          $psi.RedirectStandardInput = $true
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $p = [Diagnostics.Process]::new(); $p.StartInfo = $psi
+          if (-not $p.Start()) { throw 'could not start direct service manager' }
+          $outTask = $p.StandardOutput.ReadToEndAsync(); $errTask = $p.StandardError.ReadToEndAsync()
+          $p.StandardInput.WriteLine('22'); $p.StandardInput.Flush()
+
+          $samples = [Collections.Generic.List[object]]::new()
+          $start = [DateTime]::UtcNow
+          while (([DateTime]::UtcNow - $start).TotalSeconds -lt 15) {
+            $elapsed = [int]([DateTime]::UtcNow - $start).TotalMilliseconds
+            $samples.Add((Snapshot 'service' $elapsed))
+            Start-Sleep -Milliseconds 125
+          }
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          try { $outTask.Wait(2000) | Out-Null; $outTask.Result | Set-Content -Encoding UTF8 $serviceOut } catch { }
+          try { $errTask.Wait(2000) | Out-Null; $errTask.Result | Set-Content -Encoding UTF8 $serviceErr } catch { }
+          $samples | Export-Csv -NoTypeInformation -Encoding UTF8 (Join-Path $diag 'service-samples.csv')
+          $samples | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $diag 'service-samples.json')
+          $firstExists = $samples | Where-Object ServiceExists | Select-Object -First 1
+          $firstRunning = $samples | Where-Object ServiceState -eq 'Running' | Select-Object -First 1
+          $lastService = $samples[$samples.Count-1]
+          Write-Host "REV16_SERVICE_PROBE first_exists_ms=$($firstExists.ElapsedMs) first_running_ms=$(if($firstRunning){$firstRunning.ElapsedMs}else{-1}) last_state=$($lastService.ServiceState) exit=$($lastService.ServiceExitCode) strategy='$($lastService.SelectedStrategy)' image_len=$($lastService.ImagePathLength) drivers='$($lastService.DriverStates)'"
+
+          $systemEvents = Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=[DateTime]::Now.AddMinutes(-5)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -eq 'Service Control Manager' -and $_.Message -match '(?i)zapret|WinDivert|winws' } |
+            Select-Object TimeCreated,Id,LevelDisplayName,Message
+          $systemEvents | Format-List | Out-String -Width 400 | Set-Content -Encoding UTF8 (Join-Path $diag 'service-control-manager-events.txt')
+
+          Clear-ZapretState
+          $standOut = Join-Path $diag 'standalone-stdout.txt'
+          $standErr = Join-Path $diag 'standalone-stderr.txt'
+          $standPsi = [Diagnostics.ProcessStartInfo]::new()
+          $standPsi.FileName = 'cmd.exe'
+          $standPsi.Arguments = '/d /c ""' + $strategy + '""'
+          $standPsi.WorkingDirectory = $root
+          $standPsi.UseShellExecute = $false
+          $standPsi.CreateNoWindow = $true
+          $standPsi.RedirectStandardOutput = $true
+          $standPsi.RedirectStandardError = $true
+          $stand = [Diagnostics.Process]::new(); $stand.StartInfo = $standPsi
+          if (-not $stand.Start()) { throw 'could not start general.bat standalone' }
+          $standOutTask = $stand.StandardOutput.ReadToEndAsync(); $standErrTask = $stand.StandardError.ReadToEndAsync()
+          $standSamples = [Collections.Generic.List[object]]::new()
+          $standStart = [DateTime]::UtcNow
+          while (([DateTime]::UtcNow - $standStart).TotalSeconds -lt 12) {
+            $elapsed = [int]([DateTime]::UtcNow - $standStart).TotalMilliseconds
+            $snap = Snapshot 'standalone' $elapsed
+            $standSamples.Add($snap)
+            if ($stand.HasExited -and $elapsed -gt 2500) { break }
+            Start-Sleep -Milliseconds 125
+          }
+          $standExit = if($stand.HasExited){$stand.ExitCode}else{-999}
+          if (-not $stand.HasExited) { Stop-Process -Id $stand.Id -Force -ErrorAction SilentlyContinue }
+          try { $standOutTask.Wait(2000) | Out-Null; $standOutTask.Result | Set-Content -Encoding UTF8 $standOut } catch { }
+          try { $standErrTask.Wait(2000) | Out-Null; $standErrTask.Result | Set-Content -Encoding UTF8 $standErr } catch { }
+          $standSamples | Export-Csv -NoTypeInformation -Encoding UTF8 (Join-Path $diag 'standalone-samples.csv')
+          $standSamples | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $diag 'standalone-samples.json')
+          $firstWinws = $standSamples | Where-Object WinwsCount -gt 0 | Select-Object -First 1
+          $lastStand = $standSamples[$standSamples.Count-1]
+          Write-Host "REV16_STANDALONE_PROBE first_winws_ms=$(if($firstWinws){$firstWinws.ElapsedMs}else{-1}) cmd_exit=$standExit last_winws=$($lastStand.WinwsCount) drivers='$($lastStand.DriverStates)'"
+
+          $driverEvents = Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=[DateTime]::Now.AddMinutes(-5)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match '(?i)WinDivert|winws|zapret' } |
+            Select-Object TimeCreated,ProviderName,Id,LevelDisplayName,Message
+          $driverEvents | Format-List | Out-String -Width 400 | Set-Content -Encoding UTF8 (Join-Path $diag 'runtime-system-events.txt')
+
+          Write-Host '===== SERVICE MANAGER STDOUT TAIL ====='
+          if(Test-Path $serviceOut){Get-Content $serviceOut -Tail 80 | Write-Host}
+          Write-Host '===== SERVICE MANAGER STDERR ====='
+          if(Test-Path $serviceErr){Get-Content -Raw $serviceErr | Write-Host}
+          Write-Host '===== STANDALONE STDOUT TAIL ====='
+          if(Test-Path $standOut){Get-Content $standOut -Tail 80 | Write-Host}
+          Write-Host '===== STANDALONE STDERR ====='
+          if(Test-Path $standErr){Get-Content -Raw $standErr | Write-Host}
+          Write-Host '===== SCM EVENTS ====='
+          if(Test-Path (Join-Path $diag 'service-control-manager-events.txt')){Get-Content -Raw (Join-Path $diag 'service-control-manager-events.txt') | Write-Host}
+          Write-Host '===== RUNTIME SYSTEM EVENTS ====='
+          if(Test-Path (Join-Path $diag 'runtime-system-events.txt')){Get-Content -Raw (Join-Path $diag 'runtime-system-events.txt') | Write-Host}
+
+          Remove-Item -Force -ErrorAction SilentlyContinue $variant
+          Clear-ZapretState
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rev16-zapret-runtime-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/rev16-zapret-runtime-diagnostic
+          if-no-files-found: warn
+
+      - name: Cleanup runner state
+        if: always()
+        shell: pwsh
+        run: |
+          Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+            cmd.exe /d /c "sc.exe stop $name >nul 2>&1 & sc.exe delete $name >nul 2>&1" | Out-Null
+          }
+          Remove-Item -Force -ErrorAction SilentlyContinue '_release/0.4.17/third-party/Zapret/service-dpop-runtime-diagnostic.bat'
+          exit 0
