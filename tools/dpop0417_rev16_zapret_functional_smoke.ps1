@@ -277,3 +277,6 @@ finally {
         Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+Write-Host 'REV16_ZAPRET_FUNCTIONAL_SMOKE_OK'
+exit 0
