@@ -21,8 +21,7 @@ jobs:
         shell: pwsh
         run: ./tools/dpop0417_prepare_zapret.ps1
 
-      - name: Capture upstream manager diagnostic
-        id: exercise
+      - name: Compare redirected stdin and cmd-native pipe
         shell: pwsh
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
@@ -30,7 +29,6 @@ jobs:
 
           $root = (Resolve-Path '_release/0.4.17/third-party/Zapret').Path
           $service = Join-Path $root 'service.bat'
-          $winws = Join-Path $root 'bin\winws.exe'
           $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
           $principal = [Security.Principal.WindowsPrincipal]::new($identity)
           $admin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -42,81 +40,90 @@ jobs:
             "zapret_root=$root"
             "service_bat=$service"
             "service_bat_exists=$(Test-Path -LiteralPath $service)"
-            "winws=$winws"
-            "winws_exists=$(Test-Path -LiteralPath $winws)"
-            "stdin_choices=1,1,x,0"
           ) | Set-Content -Encoding UTF8 (Join-Path $diag 'environment.txt')
 
-          Write-Host "REV16_ZAPRET_DIAG_ADMIN=$admin user=$($identity.Name)"
-          Write-Host "REV16_ZAPRET_DIAG_CWD=$((Get-Location).Path)"
-          Write-Host "REV16_ZAPRET_DIAG_ROOT=$root"
-          Write-Host "REV16_ZAPRET_DIAG_SERVICE_EXISTS=$(Test-Path -LiteralPath $service) WINWS_EXISTS=$(Test-Path -LiteralPath $winws)"
-          Write-Host 'REV16_ZAPRET_DIAG_STDIN=1,1,x,0'
-
-          foreach ($name in @('zapret','WinDivert','WinDivert14')) {
-            & sc.exe stop $name *> $null
-            & sc.exe delete $name *> $null
-          }
-          Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Milliseconds 600
-
-          $input = Join-Path $diag 'stdin.txt'
-          $stdout = Join-Path $diag 'stdout.txt'
-          $stderr = Join-Path $diag 'stderr.txt'
-          [IO.File]::WriteAllText($input, "1`r`n1`r`nx`r`n0`r`n", [Text.Encoding]::ASCII)
-
-          $arg = '/d /c ""' + $service + '" admin"'
-          "cmd.exe $arg" | Set-Content -Encoding UTF8 (Join-Path $diag 'command.txt')
-          Write-Host "REV16_ZAPRET_DIAG_COMMAND=cmd.exe $arg"
-
-          $p = $null
-          $state = ''
-          $startException = ''
-          try {
-            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -WorkingDirectory $root -RedirectStandardInput $input -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-          }
-          catch {
-            $startException = $_ | Out-String
-            $state = 'START_FAILED'
-            $startException | Set-Content -Encoding UTF8 (Join-Path $diag 'start-exception.txt')
+          function Remove-ZapretState {
+            Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            foreach ($name in @('zapret','WinDivert','WinDivert14')) {
+              & sc.exe stop $name *> $null
+              & sc.exe delete $name *> $null
+            }
+            Start-Sleep -Milliseconds 700
           }
 
-          if ($p) {
-            $deadline = [DateTime]::UtcNow.AddSeconds(30)
+          function Wait-ZapretRunning([Diagnostics.Process]$Process, [int]$Seconds) {
+            $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
             do {
-              $queryNow = & sc.exe query zapret 2>&1 | Out-String
-              $queryCode = $LASTEXITCODE
-              if ($queryCode -eq 0 -and $queryNow -match 'RUNNING') {
-                $state = 'RUNNING'
-                break
-              }
-              if ($p.HasExited) {
-                $state = 'PROCESS_EXIT_' + $p.ExitCode
-                break
-              }
+              $query = & sc.exe query zapret 2>&1 | Out-String
+              $code = $LASTEXITCODE
+              if ($code -eq 0 -and $query -match 'RUNNING') { return 'RUNNING' }
+              if ($Process -and $Process.HasExited) { return 'PROCESS_EXIT_' + $Process.ExitCode }
               Start-Sleep -Milliseconds 250
             } while ([DateTime]::UtcNow -lt $deadline)
-            if (-not $state) { $state = 'TIMEOUT' }
-
-            if (-not $p.HasExited) {
-              Start-Sleep -Milliseconds 750
-            }
+            return 'TIMEOUT'
           }
 
-          $processExited = if ($p) { $p.HasExited } else { $true }
-          $processExitCode = if ($p -and $p.HasExited) { $p.ExitCode } else { 'NA' }
-          "state=$state" | Set-Content -Encoding UTF8 (Join-Path $diag 'state.txt')
-          "process_exited=$processExited`nprocess_exit_code=$processExitCode" | Set-Content -Encoding UTF8 (Join-Path $diag 'process.txt')
+          Remove-ZapretState
 
-          $queryFinal = & sc.exe query zapret 2>&1 | Out-String
-          $queryFinalCode = $LASTEXITCODE
-          $queryFinal | Set-Content -Encoding UTF8 (Join-Path $diag 'sc-query.txt')
-          "exit_code=$queryFinalCode" | Add-Content -Encoding UTF8 (Join-Path $diag 'sc-query.txt')
+          # Probe A: prove whether ordinary cmd SET /P accepts Start-Process redirected stdin.
+          $probeBat = Join-Path $diag 'setp-probe.cmd'
+          $probeInput = Join-Path $diag 'setp-probe-input.txt'
+          $probeOut = Join-Path $diag 'setp-probe-stdout.txt'
+          $probeErr = Join-Path $diag 'setp-probe-stderr.txt'
+          [IO.File]::WriteAllText($probeBat, "@echo off`r`nset \"probe=null\"`r`nset /p probe=PROBE:`r`necho RESULT=[%probe%]`r`nif \"%probe%\"==\"alpha\" exit /b 0`r`nexit /b 7`r`n", [Text.Encoding]::ASCII)
+          [IO.File]::WriteAllText($probeInput, "alpha`r`n", [Text.Encoding]::ASCII)
+          $probeArg = '/d /c ""' + $probeBat + '""'
+          $probe = Start-Process -FilePath 'cmd.exe' -ArgumentList $probeArg -RedirectStandardInput $probeInput -RedirectStandardOutput $probeOut -RedirectStandardError $probeErr -PassThru -Wait
+          $probeState = if ($probe.ExitCode -eq 0) { 'PASS' } else { 'FAIL_' + $probe.ExitCode }
+          "state=$probeState" | Set-Content -Encoding UTF8 (Join-Path $diag 'setp-probe-state.txt')
+          Write-Host "REV16_SET_P_REDIRECT_PROBE=$probeState"
 
-          $qcFinal = & sc.exe qc zapret 2>&1 | Out-String
-          $qcFinalCode = $LASTEXITCODE
-          $qcFinal | Set-Content -Encoding UTF8 (Join-Path $diag 'sc-qc.txt')
-          "exit_code=$qcFinalCode" | Add-Content -Encoding UTF8 (Join-Path $diag 'sc-qc.txt')
+          # Probe B: drive the real upstream interactive manager with a native cmd pipe.
+          Remove-ZapretState
+          $driver = Join-Path $diag 'flowseal-pipe-driver.cmd'
+          $pipeOut = Join-Path $diag 'flowseal-pipe-stdout.txt'
+          $pipeErr = Join-Path $diag 'flowseal-pipe-stderr.txt'
+          $driverText = @"
+@echo off
+(
+  echo 1
+  echo 1
+  echo x
+  echo 0
+) | call "$service" admin
+"@
+          [IO.File]::WriteAllText($driver, ($driverText -replace "`n", "`r`n"), [Text.Encoding]::ASCII)
+          $driverArg = '/d /c ""' + $driver + '""'
+          "cmd.exe $driverArg" | Set-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-command.txt')
+          Get-Content -Raw -LiteralPath $driver | Set-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-driver-copy.txt')
+
+          $pipeProcess = $null
+          $pipeState = 'START_FAILED'
+          try {
+            $pipeProcess = Start-Process -FilePath 'cmd.exe' -ArgumentList $driverArg -WorkingDirectory $root -RedirectStandardOutput $pipeOut -RedirectStandardError $pipeErr -PassThru
+            $pipeState = Wait-ZapretRunning $pipeProcess 30
+          }
+          catch {
+            ($_ | Out-String) | Set-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-start-exception.txt')
+          }
+
+          "state=$pipeState" | Set-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-state.txt')
+          if ($pipeProcess) {
+            "process_exited=$($pipeProcess.HasExited)" | Set-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-process.txt')
+            if ($pipeProcess.HasExited) { "process_exit_code=$($pipeProcess.ExitCode)" | Add-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-process.txt') }
+            else { 'process_exit_code=NA' | Add-Content -Encoding UTF8 (Join-Path $diag 'flowseal-pipe-process.txt') }
+          }
+          Write-Host "REV16_FLOWSEAL_CMD_PIPE=$pipeState"
+
+          $query = & sc.exe query zapret 2>&1 | Out-String
+          $queryCode = $LASTEXITCODE
+          $query | Set-Content -Encoding UTF8 (Join-Path $diag 'sc-query.txt')
+          "exit_code=$queryCode" | Add-Content -Encoding UTF8 (Join-Path $diag 'sc-query.txt')
+
+          $qc = & sc.exe qc zapret 2>&1 | Out-String
+          $qcCode = $LASTEXITCODE
+          $qc | Set-Content -Encoding UTF8 (Join-Path $diag 'sc-qc.txt')
+          "exit_code=$qcCode" | Add-Content -Encoding UTF8 (Join-Path $diag 'sc-qc.txt')
 
           $registry = & reg.exe query 'HKLM\System\CurrentControlSet\Services\zapret' 2>&1 | Out-String
           $registryCode = $LASTEXITCODE
@@ -129,42 +136,40 @@ jobs:
             Out-String |
             Set-Content -Encoding UTF8 (Join-Path $diag 'winws-processes.txt')
 
-          Write-Host "REV16_ZAPRET_DIAG_STATE=$state process_exited=$processExited process_exit_code=$processExitCode"
-          Write-Host "REV16_ZAPRET_DIAG_SC_QUERY_EXIT=$queryFinalCode SC_QC_EXIT=$qcFinalCode REG_EXIT=$registryCode"
-
-          if ($p -and -not $p.HasExited) {
-            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if ($pipeProcess -and -not $pipeProcess.HasExited) {
+            Stop-Process -Id $pipeProcess.Id -Force -ErrorAction SilentlyContinue
             Start-Sleep -Milliseconds 300
           }
-
-          "state=$state" >> $env:GITHUB_OUTPUT
 
       - name: Print preserved diagnostic evidence
         if: always()
         shell: pwsh
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
-          foreach ($file in @('environment.txt','command.txt','state.txt','process.txt','stdout.txt','stderr.txt','sc-query.txt','sc-qc.txt','service-registry.txt','winws-processes.txt','start-exception.txt')) {
+          foreach ($file in @(
+            'environment.txt',
+            'setp-probe-state.txt','setp-probe-stdout.txt','setp-probe-stderr.txt',
+            'flowseal-pipe-command.txt','flowseal-pipe-driver-copy.txt','flowseal-pipe-state.txt','flowseal-pipe-process.txt',
+            'flowseal-pipe-stdout.txt','flowseal-pipe-stderr.txt','flowseal-pipe-start-exception.txt',
+            'sc-query.txt','sc-qc.txt','service-registry.txt','winws-processes.txt'
+          )) {
             $path = Join-Path $diag $file
             Write-Host "===== $file ====="
             if (Test-Path -LiteralPath $path) {
-              Get-Content -Raw -LiteralPath $path | Write-Host
-            }
-            else {
+              $text = Get-Content -Raw -LiteralPath $path
+              if ($text.Length -gt 12000) { $text = $text.Substring([Math]::Max(0, $text.Length - 12000)) }
+              Write-Host $text
+            } else {
               Write-Host '<missing>'
             }
           }
 
-          Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY '## Rev16 Zapret install diagnostic'
-          foreach ($file in @('environment.txt','state.txt','process.txt','sc-query.txt','sc-qc.txt')) {
+          Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY '## Rev16 Zapret stdin A/B diagnostic'
+          foreach ($file in @('setp-probe-state.txt','flowseal-pipe-state.txt','sc-query.txt','sc-qc.txt')) {
             $path = Join-Path $diag $file
             Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY "`n### $file`n```text"
-            if (Test-Path -LiteralPath $path) {
-              Get-Content -Raw -LiteralPath $path | Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY
-            }
-            else {
-              Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY '<missing>'
-            }
+            if (Test-Path -LiteralPath $path) { Get-Content -Raw -LiteralPath $path | Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY }
+            else { Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY '<missing>' }
             Add-Content -Encoding UTF8 $env:GITHUB_STEP_SUMMARY '```'
           }
 
@@ -176,18 +181,14 @@ jobs:
           path: ${{ runner.temp }}/rev16-zapret-install-diagnostic
           if-no-files-found: error
 
-      - name: Assert upstream install reached RUNNING
+      - name: Assert cmd-native pipe reaches RUNNING
         shell: pwsh
         run: |
-          $stateFile = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic\state.txt'
-          if (-not (Test-Path -LiteralPath $stateFile)) {
-            throw 'Diagnostic state file is missing.'
-          }
-          $stateLine = (Get-Content -LiteralPath $stateFile | Select-Object -First 1).Trim()
-          Write-Host "REV16_ZAPRET_DIAG_ASSERT=$stateLine"
-          if ($stateLine -ne 'state=RUNNING') {
-            throw "Upstream redirected-stdin install did not reach RUNNING: $stateLine"
-          }
+          $stateFile = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic\flowseal-pipe-state.txt'
+          if (-not (Test-Path -LiteralPath $stateFile)) { throw 'Flowseal pipe state file is missing.' }
+          $state = (Get-Content -LiteralPath $stateFile | Select-Object -First 1).Trim()
+          Write-Host "REV16_FLOWSEAL_CMD_PIPE_ASSERT=$state"
+          if ($state -ne 'state=RUNNING') { throw "Cmd-native Flowseal pipe did not reach RUNNING: $state" }
 
       - name: Cleanup diagnostic services
         if: always()
