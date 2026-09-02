@@ -142,7 +142,8 @@ function Set-NativeTheme([IntPtr]$Window,[ValidateSet('light','dark')][string]$T
     if($combos.Count -lt 2){ throw "Expected Language + Theme ComboBox, found $($combos.Count)." }
     $combo=$combos[1]
     $items=@([Rev16PresentationNative]::ComboItems($combo.Handle))
-    $pattern=if($Theme -eq 'light'){'(?i)light|свет'}else{'(?i)dark|т[её]мн|темн'}
+    # Frozen 0.2.14 names its canonical dark palette "Midnight" rather than "Dark".
+    $pattern=if($Theme -eq 'light'){'(?i)^light$|свет'}else{'(?i)^midnight$|^dark$|т[её]мн|темн|полноч'}
     $index=-1
     for($i=0;$i -lt $items.Count;$i++){ if($items[$i] -match $pattern){ $index=$i; break } }
     if($index -lt 0){ throw "Could not resolve $Theme theme in native ComboBox: $($items -join ', ')" }
