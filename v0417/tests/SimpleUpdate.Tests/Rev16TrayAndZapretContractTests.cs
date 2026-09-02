@@ -109,7 +109,7 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void Proven_broken_install_action_preserves_upstream_parser_but_restores_uac_elevation()
+        public void Install_action_bypasses_only_the_broken_root_menu_and_keeps_upstream_service_install()
         {
             var source = ReadSource("ZapretEnhancementHost.cs");
             var install = SliceMethod(
@@ -117,12 +117,17 @@ namespace SimpleUpdate.Tests
                 "private void InstallSelectedStrategyUsingUpstreamManager()",
                 "private static int FindStrategyMenuIndex");
 
-            StringAssert.Contains(install, "Verb = \"runas\"");
-            StringAssert.Contains(install, "UseShellExecute = true");
-            StringAssert.Contains(install, "service.bat");
-            StringAssert.Contains(install, "BuildUpstreamInstallWrapper");
-            Assert.IsFalse(install.Contains("RedirectStandardInput = true"),
-                "An unelevated redirected-stdin service.bat admin process bypasses Flowseal's own UAC hop and cannot create the zapret service.");
+            StringAssert.Contains(install, "BuildDirectUpstreamInstallManager");
+            StringAssert.Contains(install, "RedirectStandardInput = true");
+            StringAssert.Contains(install, "process.StandardInput.WriteLine(menuIndex.ToString())");
+            Assert.IsFalse(install.Contains("process.StandardInput.WriteLine(\"1\")"),
+                "The Flowseal 1.10.2 root menu is the proven automation failure; the bridge must enter :service_install directly and write only the strategy index.");
+            StringAssert.Contains(install, "File.Delete(directManager)");
+
+            StringAssert.Contains(source, "private static string BuildDirectUpstreamInstallManager");
+            StringAssert.Contains(source, "title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!");
+            StringAssert.Contains(source, "goto service_install");
+            StringAssert.Contains(source, "service-dpop-install-");
         }
     }
 }
