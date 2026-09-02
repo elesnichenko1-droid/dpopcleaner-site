@@ -47,8 +47,13 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
     def test_existing_zapret_actions_use_one_compact_safe_toolbar(self):
         host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
         self.assertIn('private IntPtr _actionToolbar;', host)
-        self.assertIn('ToolbarButtonCount = 4', host)
+        for handle in ('_repairBroadcastButton', '_repairConnectionButton', '_gameFilterButton', '_managerButton'):
+            self.assertIn(handle, host)
         self.assertIn('PositionActionToolbar', host)
+        self.assertIn('LayoutActionButtons', host)
+        self.assertIn('TextRenderer.MeasureText', host)
+        self.assertIn('availableWidth', host)
+        self.assertNotIn('ToolbarWidth = 709', host)
         self.assertIn('Дополнительно', host)
         self.assertIn('Тесты', host)
         smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
@@ -72,28 +77,32 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertNotIn('zapretProxyTimer', program)
         self.assertNotIn('ZapretUpdateProxyHost zapretUpdateProxy', program)
 
-    def test_rev12_zapret_uses_frozen_core_native_version_source_and_keeps_dark_buttons(self):
+    def test_rev16_zapret_preserves_native_version_source_and_follows_selected_theme(self):
         visual_path = ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs'
         self.assertTrue(visual_path.is_file())
         visual = visual_path.read_text(encoding='utf-8')
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
+        native = (ROOT / 'v0417/src/SimpleUpdate/NativeBridge.cs').read_text(encoding='utf-8')
         prepare = (ROOT / 'tools/dpop0417_prepare_zapret.ps1').read_text(encoding='utf-8')
         stage = (ROOT / 'tools/dpop0417_stage.ps1').read_text(encoding='utf-8')
 
-        # Rev.12 must not create or rewrite a version HWND. The immutable core already
-        # owns the visible row and reads Zapret\\utils\\dpop_version.txt itself.
+        # The immutable core still owns the visible version row and reads
+        # Zapret\\utils\\dpop_version.txt itself. Rev.16 only unifies presentation.
         for forbidden in (
             'VersionStatusProxyId', 'CreateVersionStatusProxy', 'AttachToExistingVersionStatus',
             'SelectExistingStatusEdit', 'RefreshExistingVersionStatus', 'RewriteVersionStatusText',
             '_versionStatus', 'WriteWindowText(_versionStatus', 'SetWindowSubclass(_versionStatus'
         ):
             self.assertNotIn(forbidden, visual)
-        self.assertIn('EnsureDarkBridgeButtons();', visual)
+        self.assertIn('EnsureUnifiedZapretButtons();', visual)
+        self.assertIn('NativeBridge.IsDarkThemeSelected(_parent)', visual)
+        self.assertIn('DarkButtonBrush', visual)
+        self.assertIn('LightButtonBrush', visual)
         self.assertIn('BS_OWNERDRAW', visual)
         self.assertIn('WM_DRAWITEM', visual)
         self.assertIn('DrawOwnerButton', visual)
-        self.assertIn('"Игровой фильтр " + version', visual)
-        self.assertIn('"Менеджер " + version', visual)
+        self.assertIn('prefix + version', visual)
+        self.assertIn('ReadSettingsThemeSelection', native)
         self.assertIn('ZapretVisualPolishHost', launcher)
 
         self.assertIn("utils/dpop_version.txt", prepare)
