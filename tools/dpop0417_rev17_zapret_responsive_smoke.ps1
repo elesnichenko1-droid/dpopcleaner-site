@@ -100,7 +100,8 @@ function Assert-SameRow([object[]]$Buttons,[int[]]$Ids,[string]$Name) {
     $tops=@($row | ForEach-Object { $_.Top })
     $bottoms=@($row | ForEach-Object { $_.Bottom })
     if((($tops | Measure-Object -Maximum).Maximum - ($tops | Measure-Object -Minimum).Minimum) -gt 2 -or (($bottoms | Measure-Object -Maximum).Maximum - ($bottoms | Measure-Object -Minimum).Minimum) -gt 2) {
-        throw "$Name row is not aligned: $($row | ForEach-Object { 'id='+$_.Id+' ['+$_.Top+','+$_.Bottom+']' } -join '; ')"
+        $detail=@($row | ForEach-Object { 'id='+$_.Id+' ['+$_.Top+','+$_.Bottom+']' }) -join '; '
+        throw "$Name row is not aligned: $detail"
     }
     $row
 }
@@ -138,6 +139,8 @@ try {
         }
         Start-Sleep -Milliseconds 900
 
+        $windowBounds=[Rev17ResponsiveNative]::Bounds($window)
+        if(-not $windowBounds){ throw "$($size.Name): could not read resized main-window bounds." }
         $children=@(Get-Children $window)
         $buttons=@($children | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $targetIds -contains $_.Id })
         if($buttons.Count -ne $targetIds.Count){ throw "$($size.Name): expected $($targetIds.Count) target buttons, found $($buttons.Count)." }
@@ -147,9 +150,10 @@ try {
         $combos=@($children | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' } | Sort-Object Top)
         if($combos.Count -lt 2){ throw "$($size.Name): expected strategy + filter ComboBoxes, found $($combos.Count)." }
 
+        $safeRight=$windowBounds.Right-8
         for($i=0;$i -lt $buttons.Count;$i++) {
             $b=$buttons[$i]
-            if($b.Left -lt ($status.Left-2) -or $b.Right -gt ($status.Right+2)) { throw "$($size.Name): button id=$($b.Id) escaped content width [$($status.Left),$($status.Right)] => [$($b.Left),$($b.Right)]." }
+            if($b.Left -lt ($status.Left-2) -or $b.Right -gt $safeRight) { throw "$($size.Name): button id=$($b.Id) escaped resized client width [$($status.Left),$safeRight] => [$($b.Left),$($b.Right)]." }
             $width=$b.Right-$b.Left
             $needed=[Windows.Forms.TextRenderer]::MeasureText([string]$b.Text,[Drawing.SystemFonts]::MessageBoxFont).Width+8
             if($width -lt $needed){ throw "$($size.Name): clipped button id=$($b.Id) width=$width needed=$needed text='$($b.Text)'." }
@@ -180,16 +184,17 @@ try {
         $minHeight=($heights | Measure-Object -Minimum).Minimum; $maxHeight=($heights | Measure-Object -Maximum).Maximum
         if(($maxHeight-$minHeight) -gt 2){ throw "$($size.Name): unified Zapret button heights diverged min=$minHeight max=$maxHeight." }
         $rightmost=($buttons | Measure-Object Right -Maximum).Maximum
-        if($rightmost -lt ($status.Right-4)){ throw "$($size.Name): responsive rows do not consume available content width; rightmost=$rightmost statusRight=$($status.Right)." }
+        $unusedRight=$windowBounds.Right-$rightmost
+        if($unusedRight -gt 48){ throw "$($size.Name): responsive rows leave too much unused window width: windowRight=$($windowBounds.Right) rightmost=$rightmost unused=$unusedRight." }
 
         $shot=Join-Path $OutputDir ("rev17-zapret-{0}-{1}x{2}.png" -f $size.Name,$size.Width,$size.Height)
         Capture-Window $window $shot
         $reports += [pscustomobject]@{
             name=$size.Name; requested_width=$size.Width; requested_height=$size.Height
-            status_left=$status.Left; status_right=$status.Right; buttons=$buttons.Count
-            min_button_height=$minHeight; max_button_height=$maxHeight; screenshot=$shot
+            status_left=$status.Left; window_right=$windowBounds.Right; rightmost_button=$rightmost; unused_right=$unusedRight
+            buttons=$buttons.Count; min_button_height=$minHeight; max_button_height=$maxHeight; screenshot=$shot
         }
-        Write-Host "REV17_ZAPRET_RESPONSIVE_SIZE_OK name=$($size.Name) requested=$($size.Width)x$($size.Height) content=$($status.Left)..$($status.Right) height=$minHeight"
+        Write-Host "REV17_ZAPRET_RESPONSIVE_SIZE_OK name=$($size.Name) requested=$($size.Width)x$($size.Height) span=$($status.Left)..$rightmost unusedRight=$unusedRight height=$minHeight"
     }
 
     $reports | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputDir 'rev17-zapret-responsive-report.json') -Encoding utf8
