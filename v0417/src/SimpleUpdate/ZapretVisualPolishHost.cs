@@ -237,10 +237,24 @@ namespace DPopCleaner.SimpleUpdate
         private void RestoreJournal()
         {
             if (!_journalCaptured) return;
-            if (_journalHeading != IntPtr.Zero && _journalHeadingWasVisible)
-                NativeBridge.ShowWindow(_journalHeading, NativeBridge.SW_SHOW);
-            if (_journalList != IntPtr.Zero && _journalListWasVisible)
-                NativeBridge.ShowWindow(_journalList, NativeBridge.SW_SHOW);
+
+            // The frozen core owns page visibility. If Zapret is no longer active, do not
+            // resurrect its journal over another page; simply forget these page-specific HWNDs.
+            var zapretMarker = NativeBridge.FindChildById(_parent, NativeBridge.ZapretApplyButtonId);
+            var zapretStillVisible = zapretMarker != IntPtr.Zero && NativeBridge.IsWindowVisible(zapretMarker);
+            if (zapretStillVisible)
+            {
+                if (_journalHeading != IntPtr.Zero && _journalHeadingWasVisible)
+                    NativeBridge.ShowWindow(_journalHeading, NativeBridge.SW_SHOW);
+                if (_journalList != IntPtr.Zero && _journalListWasVisible)
+                    NativeBridge.ShowWindow(_journalList, NativeBridge.SW_SHOW);
+            }
+
+            _journalHeading = IntPtr.Zero;
+            _journalList = IntPtr.Zero;
+            _journalHeadingWasVisible = false;
+            _journalListWasVisible = false;
+            _journalCaptured = false;
         }
 
         private void CaptureJournalControls()
