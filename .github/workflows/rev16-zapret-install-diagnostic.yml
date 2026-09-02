@@ -21,71 +21,24 @@ jobs:
         shell: pwsh
         run: ./tools/dpop0417_prepare_zapret.ps1
 
-      - name: Isolate root menu SET P behavior
+      - name: Exercise upstream service_install directly with bridge-style stdin
         shell: pwsh
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
           New-Item -ItemType Directory -Force -Path $diag | Out-Null
           $root = (Resolve-Path '_release/0.4.17/third-party/Zapret').Path
           $service = Join-Path $root 'service.bat'
+          $variant = Join-Path $root 'service-dpop-direct-install.bat'
           $source = (Get-Content -Raw -LiteralPath $service) -replace "`r`n", "`n"
-          $exactPrompt = 'set /p menu_choice=   Select option (0-12): '
-          $quotedPrompt = 'set /p "menu_choice=   Select option (0-12): "'
 
-          $occurrences = ([regex]::Matches($source, [regex]::Escape($exactPrompt))).Count
-          if ($occurrences -ne 1) { throw "Expected exactly one upstream root menu prompt, found $occurrences." }
-
-          function Write-AsciiLines([string]$Path, [string[]]$Lines) {
-            [IO.File]::WriteAllText($Path, (($Lines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
+          $anchor = 'title ZAPRET SERVICE MANAGER v!LOCAL_VERSION!'
+          if (([regex]::Matches($source, [regex]::Escape($anchor))).Count -ne 1) {
+            throw 'Flowseal manager title anchor is missing or ambiguous.'
           }
 
-          function Invoke-MinimalSetP([string]$Name, [string]$SetPLine) {
-            $cmd = Join-Path $diag ("minimal-$Name.cmd")
-            $input = Join-Path $diag ("minimal-$Name-input.txt")
-            $stdout = Join-Path $diag ("minimal-$Name-stdout.txt")
-            $stderr = Join-Path $diag ("minimal-$Name-stderr.txt")
-            Write-AsciiLines $cmd @(
-              '@echo off',
-              'setlocal EnableDelayedExpansion',
-              'set "menu_choice=null"',
-              $SetPLine,
-              'echo RESULT=[!menu_choice!]',
-              'exit /b 0'
-            )
-            [IO.File]::WriteAllText($input, "MAGIC`r`n", [Text.Encoding]::ASCII)
-            $arg = '/d /c ""' + $cmd + '""'
-            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -RedirectStandardInput $input -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -Wait
-            $text = (Get-Content -Raw -LiteralPath $stdout).Trim()
-            return $text
-          }
-
-          function Invoke-InContextSetP([string]$Name, [string]$SetPLine) {
-            $variant = Join-Path $root ("service-dpop-setp-$Name.bat")
-            $result = Join-Path $diag ("context-$Name-result.txt")
-            $input = Join-Path $diag ("context-$Name-input.txt")
-            $stdout = Join-Path $diag ("context-$Name-stdout.txt")
-            $stderr = Join-Path $diag ("context-$Name-stderr.txt")
-
-            $replacement = @(
-              $SetPLine,
-              ('> "' + $result + '" echo !menu_choice!'),
-              'exit /b 0'
-            ) -join "`n"
-            $modified = $source.Replace($exactPrompt, $replacement)
-            [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.UTF8Encoding]::new($false))
-            [IO.File]::WriteAllText($input, "MAGIC`r`n", [Text.Encoding]::ASCII)
-
-            $arg = '/d /c ""' + $variant + '" admin"'
-            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -WorkingDirectory $root -RedirectStandardInput $input -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-            if (-not $p.WaitForExit(10000)) {
-              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-              if (-not (Test-Path -LiteralPath $result)) { 'TIMEOUT' | Set-Content -Encoding UTF8 $result }
-            }
-            Start-Sleep -Milliseconds 100
-            $value = if (Test-Path -LiteralPath $result) { (Get-Content -Raw -LiteralPath $result).Trim() } else { 'NO_RESULT' }
-            Remove-Item -Force -ErrorAction SilentlyContinue $variant
-            return $value
-          }
+          # Preserve all upstream initialization and installation logic. Only bypass the interactive root menu.
+          $modified = $source.Replace($anchor, ($anchor + "`ngoto service_install"))
+          [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.UTF8Encoding]::new($false))
 
           function Clear-ZapretState {
             Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -93,75 +46,81 @@ jobs:
               $arg = '/d /c "sc.exe stop ' + $name + ' >nul 2>&1 & sc.exe delete ' + $name + ' >nul 2>&1 & exit /b 0"'
               Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -Wait -WindowStyle Hidden | Out-Null
             }
-            Start-Sleep -Milliseconds 600
+            Start-Sleep -Milliseconds 700
           }
 
-          function Test-ServiceRunning {
-            $out = Join-Path $diag 'sc-probe.txt'
-            $err = Join-Path $diag 'sc-probe-err.txt'
+          function Get-ZapretServiceState {
+            $out = Join-Path $diag 'sc-query-live.txt'
+            $err = Join-Path $diag 'sc-query-live-err.txt'
             $p = Start-Process -FilePath 'sc.exe' -ArgumentList @('query','zapret') -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -Wait
-            if ($p.ExitCode -ne 0) { return $false }
-            return ((Get-Content -Raw -LiteralPath $out) -match 'RUNNING')
+            if ($p.ExitCode -ne 0) { return 'MISSING' }
+            $text = Get-Content -Raw -LiteralPath $out
+            if ($text -match 'RUNNING') { return 'RUNNING' }
+            if ($text -match 'START_PENDING') { return 'START_PENDING' }
+            if ($text -match 'STOPPED') { return 'STOPPED' }
+            return 'EXISTS'
           }
 
-          function Invoke-PatchedRealInstall {
-            Clear-ZapretState
-            $variant = Join-Path $root 'service-dpop-quoted-menu.bat'
-            $input = Join-Path $diag 'patched-install-input.txt'
-            $stdout = Join-Path $diag 'patched-install-stdout.txt'
-            $stderr = Join-Path $diag 'patched-install-stderr.txt'
-            $modified = $source.Replace($exactPrompt, $quotedPrompt)
-            [IO.File]::WriteAllText($variant, ($modified -replace "`n", "`r`n"), [Text.UTF8Encoding]::new($false))
-            [IO.File]::WriteAllText($input, "1`r`n1`r`nx`r`n0`r`n", [Text.Encoding]::ASCII)
-
-            $arg = '/d /c ""' + $variant + '" admin"'
-            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList $arg -WorkingDirectory $root -RedirectStandardInput $input -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-            $state = 'TIMEOUT'
-            $deadline = [DateTime]::UtcNow.AddSeconds(30)
-            do {
-              if (Test-ServiceRunning) { $state = 'RUNNING'; break }
-              if ($p.HasExited) { $state = 'PROCESS_EXIT_' + $p.ExitCode; break }
-              Start-Sleep -Milliseconds 250
-            } while ([DateTime]::UtcNow -lt $deadline)
-
-            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
-            $state | Set-Content -Encoding UTF8 (Join-Path $diag 'patched-install-state.txt')
-
-            $qcOut = Join-Path $diag 'patched-install-sc-qc.txt'
-            $qcErr = Join-Path $diag 'patched-install-sc-qc-err.txt'
-            $qc = Start-Process -FilePath 'sc.exe' -ArgumentList @('qc','zapret') -RedirectStandardOutput $qcOut -RedirectStandardError $qcErr -PassThru -Wait
-            "exit_code=$($qc.ExitCode)" | Add-Content -Encoding UTF8 $qcOut
-
-            $regOut = Join-Path $diag 'patched-install-reg.txt'
-            $regErr = Join-Path $diag 'patched-install-reg-err.txt'
-            $reg = Start-Process -FilePath 'reg.exe' -ArgumentList @('query','HKLM\System\CurrentControlSet\Services\zapret','/v','zapret-discord-youtube') -RedirectStandardOutput $regOut -RedirectStandardError $regErr -PassThru -Wait
-            "exit_code=$($reg.ExitCode)" | Add-Content -Encoding UTF8 $regOut
-
-            Remove-Item -Force -ErrorAction SilentlyContinue $variant
-            return $state
-          }
-
-          $minimalExact = Invoke-MinimalSetP 'exact' $exactPrompt
-          $minimalQuoted = Invoke-MinimalSetP 'quoted' $quotedPrompt
-          $minimalNoPrompt = Invoke-MinimalSetP 'noprompt' 'set /p menu_choice='
-          $contextExact = Invoke-InContextSetP 'exact' $exactPrompt
-          $contextQuoted = Invoke-InContextSetP 'quoted' $quotedPrompt
-          $contextNoPrompt = Invoke-InContextSetP 'noprompt' 'set /p menu_choice='
-          $patchedInstall = Invoke-PatchedRealInstall
-
-          @(
-            "minimal_exact=$minimalExact",
-            "minimal_quoted=$minimalQuoted",
-            "minimal_noprompt=$minimalNoPrompt",
-            "context_exact=$contextExact",
-            "context_quoted=$contextQuoted",
-            "context_noprompt=$contextNoPrompt",
-            "patched_real_install=$patchedInstall"
-          ) | Set-Content -Encoding UTF8 (Join-Path $diag 'setp-summary.txt')
-
-          Get-Content -Raw -LiteralPath (Join-Path $diag 'setp-summary.txt') | Write-Host
           Clear-ZapretState
-          exit 0
+
+          $info = [Diagnostics.ProcessStartInfo]::new()
+          $info.FileName = 'cmd.exe'
+          $info.Arguments = '/d /c ""' + $variant + '" admin"'
+          $info.WorkingDirectory = $root
+          $info.UseShellExecute = $false
+          $info.CreateNoWindow = $true
+          $info.RedirectStandardInput = $true
+
+          $process = [Diagnostics.Process]::new()
+          $process.StartInfo = $info
+          if (-not $process.Start()) { throw 'Failed to start direct Flowseal manager process.' }
+
+          # Direct :service_install has only the strategy prompt before upstream creates/starts the service.
+          $process.StandardInput.WriteLine('1')
+          $process.StandardInput.Flush()
+
+          $state = 'TIMEOUT'
+          $deadline = [DateTime]::UtcNow.AddSeconds(30)
+          do {
+            $stateNow = Get-ZapretServiceState
+            if ($stateNow -eq 'RUNNING') { $state = 'RUNNING'; break }
+            if ($process.HasExited) { $state = 'PROCESS_EXIT_' + $process.ExitCode; break }
+            Start-Sleep -Milliseconds 250
+          } while ([DateTime]::UtcNow -lt $deadline)
+
+          $state | Set-Content -Encoding UTF8 (Join-Path $diag 'direct-install-state.txt')
+          "process_exited=$($process.HasExited)" | Set-Content -Encoding UTF8 (Join-Path $diag 'direct-install-process.txt')
+          if ($process.HasExited) { "process_exit_code=$($process.ExitCode)" | Add-Content -Encoding UTF8 (Join-Path $diag 'direct-install-process.txt') }
+          else { 'process_exit_code=NA' | Add-Content -Encoding UTF8 (Join-Path $diag 'direct-install-process.txt') }
+
+          $qcOut = Join-Path $diag 'direct-install-sc-qc.txt'
+          $qcErr = Join-Path $diag 'direct-install-sc-qc-err.txt'
+          $qc = Start-Process -FilePath 'sc.exe' -ArgumentList @('qc','zapret') -RedirectStandardOutput $qcOut -RedirectStandardError $qcErr -PassThru -Wait
+          "exit_code=$($qc.ExitCode)" | Add-Content -Encoding UTF8 $qcOut
+
+          $regOut = Join-Path $diag 'direct-install-reg.txt'
+          $regErr = Join-Path $diag 'direct-install-reg-err.txt'
+          $reg = Start-Process -FilePath 'reg.exe' -ArgumentList @('query','HKLM\System\CurrentControlSet\Services\zapret','/v','zapret-discord-youtube') -RedirectStandardOutput $regOut -RedirectStandardError $regErr -PassThru -Wait
+          "exit_code=$($reg.ExitCode)" | Add-Content -Encoding UTF8 $regOut
+
+          Get-Process winws -ErrorAction SilentlyContinue |
+            Select-Object Id,ProcessName,Path |
+            Format-List |
+            Out-String |
+            Set-Content -Encoding UTF8 (Join-Path $diag 'direct-install-winws.txt')
+
+          Write-Host "REV16_DIRECT_UPSTREAM_INSTALL=$state"
+          if (-not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 300
+          }
+
+          Clear-ZapretState
+          Remove-Item -Force -ErrorAction SilentlyContinue $variant
+
+          if ($state -ne 'RUNNING') {
+            throw "Direct upstream service_install did not reach RUNNING: $state"
+          }
 
       - name: Print diagnostic evidence
         if: always()
@@ -169,20 +128,14 @@ jobs:
         run: |
           $diag = Join-Path $env:RUNNER_TEMP 'rev16-zapret-install-diagnostic'
           foreach ($file in @(
-            'setp-summary.txt',
-            'minimal-exact-stdout.txt','minimal-exact-stderr.txt',
-            'context-exact-stdout.txt','context-exact-stderr.txt',
-            'context-quoted-stdout.txt','context-quoted-stderr.txt',
-            'patched-install-state.txt','patched-install-sc-qc.txt','patched-install-sc-qc-err.txt',
-            'patched-install-reg.txt','patched-install-reg-err.txt','patched-install-stdout.txt','patched-install-stderr.txt'
+            'direct-install-state.txt','direct-install-process.txt',
+            'direct-install-sc-qc.txt','direct-install-sc-qc-err.txt',
+            'direct-install-reg.txt','direct-install-reg-err.txt','direct-install-winws.txt'
           )) {
             $path = Join-Path $diag $file
             Write-Host "===== $file ====="
-            if (Test-Path -LiteralPath $path) {
-              $text = Get-Content -Raw -LiteralPath $path
-              if ($text.Length -gt 16000) { $text = $text.Substring([Math]::Max(0, $text.Length - 16000)) }
-              Write-Host $text
-            } else { Write-Host '<missing>' }
+            if (Test-Path -LiteralPath $path) { Get-Content -Raw -LiteralPath $path | Write-Host }
+            else { Write-Host '<missing>' }
           }
 
       - name: Upload diagnostic evidence
