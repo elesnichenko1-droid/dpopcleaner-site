@@ -222,6 +222,19 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
+        public void Zapret_action_toolbar_uses_measured_text_and_available_page_width_instead_of_a_fixed_709px_strip()
+        {
+            var enhancement = ReadSource("ZapretEnhancementHost.cs");
+
+            Assert.IsFalse(enhancement.Contains("ToolbarWidth = 709"),
+                "A fixed 709px action strip clips or protrudes when DPI, language, or available page width changes.");
+            StringAssert.Contains(enhancement, "LayoutActionButtons");
+            StringAssert.Contains(enhancement, "TextRenderer.MeasureText");
+            StringAssert.Contains(enhancement, "availableWidth");
+            StringAssert.Contains(enhancement, "NativeBridge.PositionChildWindow(_actionToolbar");
+        }
+
+        [TestMethod]
         public void Zapret_visual_layer_hides_only_native_journal_while_zapret_is_active_and_restores_it()
         {
             var visual = ReadSource("ZapretVisualPolishHost.cs");
