@@ -25,6 +25,7 @@ $settingsEvidence = Join-Path $OutputDir 'settings-installed'
 $rev7Evidence = Join-Path $OutputDir 'rev7-ui-installed'
 $rev12Evidence = Join-Path $OutputDir 'rev12-native-version'
 $rev13Evidence = Join-Path $OutputDir 'rev13-uac-tray'
+$rev17Evidence = Join-Path $OutputDir 'rev17-zapret-responsive'
 $reportPath = Join-Path $OutputDir 'install-smoke-report.json'
 $expectedCoreBlob = 'efd0eff1f4962319282363fa85595c25e0cebe11'
 $installed = $false
@@ -34,6 +35,7 @@ $installedSettingsBridgeSmoke = $false
 $rev7FunctionalSmoke = $false
 $rev12NativeVersionSmoke = $false
 $rev13UacTraySmoke = $false
+$rev17ResponsiveSmoke = $false
 $zapretScreenFixPresent = $false
 $zapretRuntimePresent = $false
 $zapretUiSmoke = $false
@@ -114,6 +116,11 @@ try {
     $rev7FunctionalSmoke = Test-Path -LiteralPath (Join-Path $rev7Evidence 'rev7-installed-ui-smoke-report.json') -PathType Leaf
     if (-not $rev7FunctionalSmoke) { throw 'rev.7 installed functional UI smoke report was not produced.' }
 
+    & (Join-Path $PSScriptRoot 'dpop0417_rev17_zapret_responsive_smoke.ps1') -RootPath $installRoot -OutputDir $rev17Evidence
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $rev17ResponsiveSmoke = Test-Path -LiteralPath (Join-Path $rev17Evidence 'rev17-zapret-responsive-report.json') -PathType Leaf
+    if (-not $rev17ResponsiveSmoke) { throw 'rev.17 installed multi-width Zapret responsive smoke report was not produced.' }
+
     & (Join-Path $PSScriptRoot 'dpop0417_zapret_ui_smoke.ps1') -RootPath $installRoot -OutputDir $zapretEvidence
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $zapretUiSmoke = Test-Path -LiteralPath (Join-Path $zapretEvidence 'zapret-ui-smoke-report.json') -PathType Leaf
@@ -156,6 +163,7 @@ try {
         rev7_functional_ui_smoke = [bool]$rev7FunctionalSmoke
         rev12_native_version_smoke = [bool]$rev12NativeVersionSmoke
         rev13_uac_tray_smoke = [bool]$rev13UacTraySmoke
+        rev17_zapret_responsive_smoke = [bool]$rev17ResponsiveSmoke
         zapret_runtime_present = [bool]$zapretRuntimePresent
         zapret_version = $zapretVersion
         zapret_native_version_source = $nativeZapretVersion
@@ -174,6 +182,7 @@ try {
     Write-Host 'Installed rev.7 hide/restore + RAM + Zapret + Settings functional smoke: PASS'
     Write-Host 'Installed rev.12 native Zapret version source + screenshot smoke: PASS'
     Write-Host 'Installed rev.13 UAC + single RAM tray icon smoke: PASS'
+    Write-Host 'Installed rev.17 multi-width/DPI-aware Zapret responsive layout smoke: PASS'
     Write-Host "Installed Flowseal Zapret ${zapretVersion}: PASS; native_source=$nativeZapretVersion; root=$zapretRoot; strategies=$($installedStrategies.Count)"
     Write-Host 'Authentic installed Zapret Center strategy discovery: PASS'
     Write-Host 'Installed ZapretScreenFix companion: PASS'
