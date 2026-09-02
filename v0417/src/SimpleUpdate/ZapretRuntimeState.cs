@@ -9,6 +9,8 @@ namespace DPopCleaner.SimpleUpdate
         internal bool BundledWinwsRunning { get; private set; }
         internal bool ZapretServiceExists { get; private set; }
         internal bool ZapretServiceRunning { get; private set; }
+        internal bool WinDivertServiceExists { get; private set; }
+        internal bool WinDivert14ServiceExists { get; private set; }
         internal string BundledWinwsCommandLine { get; private set; }
 
         private ZapretRuntimeState()
@@ -47,6 +49,8 @@ namespace DPopCleaner.SimpleUpdate
             var service = QueryService("zapret");
             state.ZapretServiceExists = service.Exists;
             state.ZapretServiceRunning = service.Running;
+            state.WinDivertServiceExists = QueryService("WinDivert").Exists;
+            state.WinDivert14ServiceExists = QueryService("WinDivert14").Exists;
             return state;
         }
 
