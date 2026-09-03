@@ -197,19 +197,22 @@ try {
     $deadline = [DateTime]::UtcNow.AddSeconds(7)
     $settingsChildren = @()
     $scrollHost = $null
+    $cleanupExclusions = $null
     do {
         Start-Sleep -Milliseconds 150
         $settingsChildren = Children $window
         $scrollHost = $settingsChildren | Where-Object { $_.Visible -and $_.Id -eq 1492 } | Select-Object -First 1
         $auto = $settingsChildren | Where-Object { $_.Visible -and $_.Id -eq 1490 -and $_.Text -eq 'Включить автообновление приложения' } | Select-Object -First 1
         $license = $settingsChildren | Where-Object { $_.Id -eq 1493 -and $_.Text -eq 'Лицензия' } | Select-Object -First 1
-    } while ((-not $scrollHost -or -not $auto -or -not $license) -and [DateTime]::UtcNow -lt $deadline)
+        $cleanupExclusions = $settingsChildren | Where-Object { $_.Visible -and $_.Text -eq 'Исключения очистки' } | Select-Object -First 1
+    } while ((-not $scrollHost -or -not $auto -or -not $license -or -not $cleanupExclusions) -and [DateTime]::UtcNow -lt $deadline)
     if (-not $scrollHost) { throw 'Settings scroll host id=1492 missing.' }
     if (-not $auto) { throw 'Автообновление приложения missing from Settings scroll list.' }
     foreach ($label in @('Фоновый контроль мусора каждые 30 минут','Быстрый DPopGuard-скан при запуске','Проверять кэш Windows Update при запуске','Работать в трее и отслеживать новые установки','Автозапуск DPopCleaner вместе с Windows','Запускать приложение от имени администратора')) {
         if (-not ($settingsChildren | Where-Object { $_.Text -eq $label -and $_.Visible } | Select-Object -First 1)) { throw "Settings scroll proxy missing: $label" }
     }
-    if (-not ($settingsChildren | Where-Object { $_.Text -eq 'Исключения очистки' -and $_.Visible } | Select-Object -First 1)) { throw 'Right-side cleanup exclusions layout disappeared.' }
+    if (-not $cleanupExclusions) { throw 'Right-side cleanup exclusions layout disappeared.' }
+    if ($cleanupExclusions.Left -lt $scrollHost.Right) { throw "Right-side cleanup exclusions overlaps Settings scroll host: exclusionsLeft=$($cleanupExclusions.Left) hostRight=$($scrollHost.Right)" }
     if ($settingsChildren | Where-Object { $_.Text -eq 'v0.2.11 BETA' -and $_.Visible } | Select-Object -First 1) { throw 'Legacy v0.2.11 BETA is visible.' }
 
     $beforeTop = $license.Top
