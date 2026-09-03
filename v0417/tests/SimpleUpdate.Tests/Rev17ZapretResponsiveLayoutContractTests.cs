@@ -59,6 +59,20 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
+        public void Vertical_grid_is_anchored_to_live_status_region_not_previous_responsive_positions()
+        {
+            var source = ReadSource("ZapretResponsiveLayoutHost.cs");
+
+            StringAssert.Contains(source, "FindStatusRegionBounds");
+            StringAssert.Contains(source, "statusBounds.Bottom + rowGap");
+            StringAssert.Contains(source, "updateHeadingTop");
+            Assert.IsFalse(source.Contains("legacyStrategyTop"),
+                "Strategy Y must not be inherited from the previous responsive tick; maximize/restore must be reversible.");
+            Assert.IsFalse(source.Contains("updateCurrentTop"),
+                "Update-row Y must not be inherited from the previous responsive tick; maximize/restore must be reversible.");
+        }
+
+        [TestMethod]
         public void Launcher_applies_responsive_layout_after_existing_Zapret_bridge_and_visual_polish()
         {
             var launcher = ReadSource("LauncherContext.cs");
