@@ -153,10 +153,16 @@ try {
         $buttons=@($children | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $targetIds -contains $_.Id })
         if($buttons.Count -ne $targetIds.Count){ throw "$($size.Name): expected $($targetIds.Count) target buttons, found $($buttons.Count)." }
 
-        $status=$children | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 1
-        if(-not $status){ throw "$($size.Name): upper Zapret status block not found." }
+        $edits=@($children | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top)
+        if($edits.Count -lt 2){ throw "$($size.Name): expected two Zapret status Edit blocks, found $($edits.Count)." }
+        $status=$edits[0]
         $combos=@($children | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' } | Sort-Object Top)
         if($combos.Count -lt 2){ throw "$($size.Name): expected strategy + filter ComboBoxes, found $($combos.Count)." }
+        $strategyCombo=$combos[0]
+        $strategyLabel=$children | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and $_.Text -eq 'Стратегия' } | Select-Object -First 1
+        if(-not $strategyLabel){ throw "$($size.Name): strategy label missing." }
+        $updateHeading=$children | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and $_.Text -eq 'Обновление Zapret' } | Select-Object -First 1
+        if(-not $updateHeading){ throw "$($size.Name): 'Обновление Zapret' heading missing." }
 
         $safeRight=$windowBounds.Right-8
         for($i=0;$i -lt $buttons.Count;$i++) {
@@ -171,9 +177,17 @@ try {
             foreach($combo in $combos) {
                 if(Test-Overlap $b $combo){ throw "$($size.Name): button id=$($b.Id) overlaps ComboBox [$($combo.Left),$($combo.Top),$($combo.Right),$($combo.Bottom)]." }
             }
+            foreach($edit in $edits) {
+                if(Test-Overlap $b $edit){ throw "$($size.Name): button id=$($b.Id) overlaps status Edit [$($edit.Left),$($edit.Top),$($edit.Right),$($edit.Bottom)]." }
+            }
         }
 
-        foreach($caption in @('Стратегия','Дополнительно')) {
+        foreach($edit in $edits) {
+            if(Test-Overlap $strategyCombo $edit){ throw "$($size.Name): strategy ComboBox overlaps status Edit [$($edit.Left),$($edit.Top),$($edit.Right),$($edit.Bottom)]." }
+            if(Test-Overlap $strategyLabel $edit){ throw "$($size.Name): strategy label overlaps status Edit [$($edit.Left),$($edit.Top),$($edit.Right),$($edit.Bottom)]." }
+        }
+
+        foreach($caption in @('Стратегия','Обновление Zapret','Дополнительно')) {
             $label=$children | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and $_.Text -eq $caption } | Select-Object -First 1
             if($label) {
                 foreach($b in $buttons) { if(Test-Overlap $b $label){ throw "$($size.Name): button id=$($b.Id) overlaps '$caption' heading." } }
@@ -184,6 +198,14 @@ try {
         $update=@(Assert-SameRow $buttons $updateIds 'update')
         $action=@(Assert-SameRow $buttons $actionIds 'bridge-action')
         $additional=@(Assert-SameRow $buttons $additionalIds 'additional')
+        $lastEditBottom=($edits | Measure-Object Bottom -Maximum).Maximum
+        $strategyTop=([Math]::Min(($strategy | Measure-Object Top -Minimum).Minimum,[Math]::Min($strategyCombo.Top,$strategyLabel.Top)))
+        $strategyBottom=([Math]::Max(($strategy | Measure-Object Bottom -Maximum).Maximum,[Math]::Max($strategyCombo.Bottom,$strategyLabel.Bottom)))
+        $updateTop=($update | Measure-Object Top -Minimum).Minimum
+        if($strategyTop -le $lastEditBottom){ throw "$($size.Name): vertical order broken: status ends at $lastEditBottom but strategy starts at $strategyTop." }
+        if($updateHeading.Top -le $strategyBottom -or $updateHeading.Bottom -ge $updateTop){
+            throw "$($size.Name): 'Обновление Zapret' must sit between strategy and update row; strategyBottom=$strategyBottom heading=$($updateHeading.Top)..$($updateHeading.Bottom) updateTop=$updateTop."
+        }
         if((($strategy | Measure-Object Bottom -Maximum).Maximum) -ge (($update | Measure-Object Top -Minimum).Minimum)) { throw "$($size.Name): strategy and update rows overlap vertically." }
         if((($update | Measure-Object Bottom -Maximum).Maximum) -ge (($action | Measure-Object Top -Minimum).Minimum)) { throw "$($size.Name): update and bridge-action rows overlap vertically." }
         if((($action | Measure-Object Bottom -Maximum).Maximum) -ge (($additional | Measure-Object Top -Minimum).Minimum)) { throw "$($size.Name): bridge-action and additional rows overlap vertically." }
@@ -203,7 +225,8 @@ try {
         $reports += [pscustomobject]@{
             name=$size.Name; requested_width=$size.Width; requested_height=$size.Height
             actual_width=$actualWidth; actual_height=$actualHeight
-            status_left=$status.Left; window_right=$windowBounds.Right; rightmost_button=$rightmost; unused_right=$unusedRight
+            status_left=$status.Left; last_status_bottom=$lastEditBottom; strategy_top=$strategyTop
+            window_right=$windowBounds.Right; rightmost_button=$rightmost; unused_right=$unusedRight
             buttons=$buttons.Count; min_button_height=$minHeight; max_button_height=$maxHeight; screenshot=$shot
         }
         Write-Host "REV17_ZAPRET_RESPONSIVE_SIZE_OK name=$($size.Name) requested=$($size.Width)x$($size.Height) actual=${actualWidth}x${actualHeight} span=$($status.Left)..$rightmost unusedRight=$unusedRight height=$minHeight"
