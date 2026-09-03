@@ -94,16 +94,16 @@ function Wait-ZapretPage([IntPtr]$Window) {
     throw 'Zapret page did not become visible.'
 }
 function Get-StrategyCombo([IntPtr]$Window) {
-    $matches=@()
+    $strategyCombos=@()
     foreach($combo in @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' })) {
         $items=@([Rev16ZapretNative]::ComboItems($combo.Handle))
         $strategyCount=@($items | Where-Object { $_ -match '(?i)^general.*\.bat$' }).Count
         if($strategyCount -ge 2) {
-            $matches += [pscustomobject]@{ Combo=$combo; StrategyCount=$strategyCount }
+            $strategyCombos += [pscustomobject]@{ Combo=$combo; StrategyCount=$strategyCount }
         }
     }
-    if($matches.Count -eq 0){ return $null }
-    ($matches | Sort-Object StrategyCount -Descending | Select-Object -First 1).Combo
+    if($strategyCombos.Count -eq 0){ return $null }
+    ($strategyCombos | Sort-Object StrategyCount -Descending | Select-Object -First 1).Combo
 }
 function Get-StatusSnapshot([IntPtr]$Window) {
     $edits=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 2)
