@@ -21,7 +21,7 @@ try {
     if ($install.ExitCode -ne 0) { throw "rev.18 silent install failed: $($install.ExitCode)" }
     $installed = $true
     & (Join-Path $PSScriptRoot 'dpop0417_rev18_user_report_smoke.ps1') -RootPath $installRoot -OutputDir $OutputDir
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if (-not $?) { throw 'rev.18 installed user-report smoke script failed.' }
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev18-user-report-smoke.json') -PathType Leaf)) {
         throw 'rev.18 installed user-report smoke report was not produced.'
     }
