@@ -77,7 +77,9 @@ namespace DPopCleaner.SimpleUpdate
             var buttons = CaptureResponsiveButtons(children);
             if (buttons.Count != ResponsiveZapretButtonIds.Length) return;
 
-            var statusBounds = FindTopStatusBounds(children);
+            // The frozen page has two visible Edit status blocks. Treat them as one protected
+            // upper region because their heights change independently when the window is widened.
+            var statusBounds = FindStatusRegionBounds(children);
             if (statusBounds == null || statusBounds.Width < 400) return;
 
             var applyBounds = NativeBridge.GetChildClientBounds(_parent, buttons[NativeBridge.ZapretApplyButtonId]);
@@ -110,8 +112,6 @@ namespace DPopCleaner.SimpleUpdate
             var additionalButtons = ResolveButtons(buttons, AdditionalRowButtonIds);
             if (strategyButtons == null || updateButtons == null || actionButtons == null || additionalButtons == null) return;
 
-            // The frozen 0.2.14 core can make the status Edit taller while widening the window.
-            // Never reuse an old strategy/combo Y that now sits inside that live status rectangle.
             var legacyStrategyTop = Math.Min(strategyComboBounds.Top, MinTop(strategyButtons));
             var strategyRowTop = Math.Max(statusBounds.Bottom + rowGap, legacyStrategyTop);
 
@@ -147,11 +147,33 @@ namespace DPopCleaner.SimpleUpdate
                 minimumButtonWidth,
                 scale);
 
-            var updateCurrentTop = MinTop(updateButtons);
-            var updateHeading = FindNearestStaticAbove(children, updateCurrentTop, strategyRowTop + buttonHeight);
+            // Do not leave the frozen "Обновление Zapret" caption at its old Y after strategy was
+            // pushed below a taller status region. It is part of the responsive vertical grid too.
+            var updateHeading = FindUpdateHeading(children);
             var updateHeadingBounds = NativeBridge.GetChildClientBounds(_parent, updateHeading);
-            var updateRowTop = Math.Max(strategyRowTop + buttonHeight + rowGap,
-                updateHeadingBounds == null ? updateCurrentTop : updateHeadingBounds.Bottom + Math.Max(2, rowGap / 2));
+            var updateHeadingHeight = updateHeadingBounds == null
+                ? Scale(23, scale)
+                : Math.Max(1, updateHeadingBounds.Height);
+            var updateHeadingWidth = updateHeadingBounds == null
+                ? Scale(210, scale)
+                : Math.Max(updateHeadingBounds.Width, Scale(180, scale));
+            var halfGap = Math.Max(2, rowGap / 2);
+            var updateHeadingTop = strategyRowTop + buttonHeight + halfGap;
+            if (updateHeading != IntPtr.Zero)
+            {
+                NativeBridge.PositionChildWindow(updateHeading, Bounds(
+                    contentLeft,
+                    updateHeadingTop,
+                    Math.Min(contentRight, contentLeft + updateHeadingWidth),
+                    updateHeadingTop + updateHeadingHeight));
+            }
+
+            var updateCurrentTop = MinTop(updateButtons);
+            var updateRowTop = Math.Max(
+                updateHeadingTop + updateHeadingHeight + halfGap,
+                strategyRowTop + buttonHeight + rowGap);
+            // Preserve a lower legacy position if it already has more vertical breathing room.
+            updateRowTop = Math.Max(updateRowTop, updateCurrentTop);
 
             LayoutZapretRow(updateButtons, contentLeft, updateRowTop, contentRight,
                 buttonHeight, columnGap, minimumButtonWidth, scale);
@@ -222,17 +244,25 @@ namespace DPopCleaner.SimpleUpdate
             return result;
         }
 
-        private NativeBridge.ClientBounds FindTopStatusBounds(NativeBridge.ChildInfo[] children)
+        private NativeBridge.ClientBounds FindStatusRegionBounds(NativeBridge.ChildInfo[] children)
         {
-            NativeBridge.ClientBounds best = null;
+            NativeBridge.ClientBounds region = null;
             foreach (var child in children)
             {
                 if (!child.Visible || !string.Equals(child.ClassName, "Edit", StringComparison.OrdinalIgnoreCase)) continue;
                 var bounds = NativeBridge.GetChildClientBounds(_parent, child.Handle);
                 if (bounds == null) continue;
-                if (best == null || bounds.Top < best.Top) best = bounds;
+                if (region == null)
+                {
+                    region = Bounds(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
+                    continue;
+                }
+                region.Left = Math.Min(region.Left, bounds.Left);
+                region.Top = Math.Min(region.Top, bounds.Top);
+                region.Right = Math.Max(region.Right, bounds.Right);
+                region.Bottom = Math.Max(region.Bottom, bounds.Bottom);
             }
-            return best;
+            return region;
         }
 
         private bool FindZapretCombos(NativeBridge.ChildInfo[] children, out IntPtr strategyCombo, out IntPtr filterCombo)
@@ -275,21 +305,18 @@ namespace DPopCleaner.SimpleUpdate
             return IntPtr.Zero;
         }
 
-        private IntPtr FindNearestStaticAbove(NativeBridge.ChildInfo[] children, int targetTop, int minimumTop)
+        private IntPtr FindUpdateHeading(NativeBridge.ChildInfo[] children)
         {
-            IntPtr best = IntPtr.Zero;
-            var bestDistance = int.MaxValue;
             foreach (var child in children)
             {
                 if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
-                var bounds = NativeBridge.GetChildClientBounds(_parent, child.Handle);
-                if (bounds == null || bounds.Top < minimumTop || bounds.Bottom > targetTop + 4) continue;
-                var distance = Math.Max(0, targetTop - bounds.Bottom);
-                if (distance >= bestDistance) continue;
-                bestDistance = distance;
-                best = child.Handle;
+                var text = child.Text ?? string.Empty;
+                var mentionsZapret = text.IndexOf("Zapret", StringComparison.OrdinalIgnoreCase) >= 0;
+                var mentionsUpdate = text.IndexOf("Обнов", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    text.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (mentionsZapret && mentionsUpdate) return child.Handle;
             }
-            return best;
+            return IntPtr.Zero;
         }
 
         private IntPtr[] ResolveButtons(Dictionary<int, IntPtr> buttons, int[] ids)
