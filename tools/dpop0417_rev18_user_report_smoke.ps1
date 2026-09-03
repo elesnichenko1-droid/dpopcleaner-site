@@ -132,6 +132,11 @@ function Find-FrozenTrayCheckbox([IntPtr]$Window) {
     foreach($candidate in $candidates){if([Math]::Abs($candidate.Top-$targetTop) -le [Math]::Max(4,[int]($rowStep/3)) -and [Math]::Abs($candidate.Left-$startup.Left) -le [Math]::Max(16,$rowStep)){return $candidate}}
     $null
 }
+function Find-TrayProxy([IntPtr]$Window) {
+    $host=Get-Children $Window|Where-Object{$_.Id -eq 1492}|Select-Object -First 1
+    if(-not $host){return $null}
+    Get-Children $host.Handle|Where-Object{$_.Id -eq 1503 -and $_.ClassName -eq 'Button'}|Select-Object -First 1
+}
 function Get-DPopEntries([Diagnostics.Process]$Launcher,[Diagnostics.Process]$Core) {
     @([Rev18Native]::Entries()|Where-Object{$_.OwnerPid -eq $Launcher.Id -or $_.OwnerPid -eq $Core.Id -or $_.Title -like '*DPopCleaner*' -or $_.ButtonText -like '*DPopCleaner*'})
 }
@@ -188,32 +193,33 @@ try {
     $gear=Get-Children $window|Where-Object{$_.Id -eq 906 -and $_.ClassName -eq 'Button'}|Select-Object -First 1
     if(-not $gear){throw 'Settings gear id=906 missing.'}
     [void][Rev18Native]::SendMessage($gear.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
-    Wait-Until 8 'rev.18 tray proxy' {@(Get-Children $window|Where-Object{$_.Id -eq 1503}).Count -ge 1}
-    $proxy=Get-Children $window|Where-Object{$_.Id -eq 1503}|Select-Object -First 1
-    if(-not $proxy){throw 'Tray proxy id=1503 missing.'}
+    Wait-Until 8 'rev.18 tray proxy' {$null -ne (Find-TrayProxy $window)}
+    $proxy=Find-TrayProxy $window
+    if(-not $proxy){throw 'Tray proxy id=1503 missing inside Settings host id=1492.'}
     $legacy=Find-FrozenTrayCheckbox $window
     if(-not $legacy){throw 'Could not identify frozen-core tray checkbox.'}
 
     if([Rev18Native]::SendMessage($proxy.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -ne 1){[void][Rev18Native]::SendMessage($proxy.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)}
     Wait-Until 5 'canonical tray preference ON with frozen tray OFF' {
-        $script:p=Get-Children $window|Where-Object{$_.Id -eq 1503}|Select-Object -First 1
+        $script:p=Find-TrayProxy $window
         $script:l=Find-FrozenTrayCheckbox $window
         $script:p -and $script:l -and [Rev18Native]::SendMessage($script:p.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -eq 1 -and [Rev18Native]::SendMessage($script:l.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -eq 0
     }
     Assert-TrayState $launcher $core 1 'ON'
 
-    $proxy=Get-Children $window|Where-Object{$_.Id -eq 1503}|Select-Object -First 1
+    $proxy=Find-TrayProxy $window
     [void][Rev18Native]::SendMessage($proxy.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
     Wait-Until 5 'canonical tray preference OFF' {
-        $script:p=Get-Children $window|Where-Object{$_.Id -eq 1503}|Select-Object -First 1
+        $script:p=Find-TrayProxy $window
         $script:l=Find-FrozenTrayCheckbox $window
         $script:p -and $script:l -and [Rev18Native]::SendMessage($script:p.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -eq 0 -and [Rev18Native]::SendMessage($script:l.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -eq 0
     }
     Assert-TrayState $launcher $core 0 'OFF'
 
+    $proxy=Find-TrayProxy $window
     [void][Rev18Native]::SendMessage($proxy.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
     Wait-Until 5 'canonical tray preference restored ON' {
-        $script:p=Get-Children $window|Where-Object{$_.Id -eq 1503}|Select-Object -First 1
+        $script:p=Find-TrayProxy $window
         $script:l=Find-FrozenTrayCheckbox $window
         $script:p -and $script:l -and [Rev18Native]::SendMessage($script:p.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -eq 1 -and [Rev18Native]::SendMessage($script:l.Handle,0x00F0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt32() -eq 0
     }
