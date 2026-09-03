@@ -115,9 +115,15 @@ namespace DPopCleaner.SimpleUpdate
             return value.ToString();
         }
 
+        private static IntPtr FindDescendantById(IntPtr host, int id)
+        {
+            if (host == IntPtr.Zero) return IntPtr.Zero;
+            return NativeBridge.FindChildById(host, id);
+        }
+
         private static void WriteIfDifferent(IntPtr host, int id, string text)
         {
-            var handle = NativeBridge.FindChildById(host, id);
+            var handle = FindDescendantById(host, id);
             if (handle == IntPtr.Zero)
             {
                 TraceWrite(id, handle, "<missing>", text, "<missing>");
