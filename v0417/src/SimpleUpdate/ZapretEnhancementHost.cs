@@ -33,6 +33,7 @@ namespace DPopCleaner.SimpleUpdate
         private const uint WM_COMMAND = 0x0111;
         private const uint WM_ERASEBKGND = 0x0014;
         private const uint WM_SETFONT = 0x0030;
+        private const uint CB_GETCOUNT = 0x0146;
         private const uint CB_GETCURSEL = 0x0147;
         private const uint CB_GETLBTEXT = 0x0148;
         private const uint CB_GETLBTEXTLEN = 0x0149;
@@ -280,21 +281,46 @@ namespace DPopCleaner.SimpleUpdate
 
         private string ReadSelectedStrategy()
         {
-            NativeBridge.ChildInfo best = null;
+            NativeBridge.ChildInfo strategyCombo = null;
+            var bestStrategyCount = 0;
             foreach (var child in NativeBridge.GetChildren(_parent))
             {
                 if (!child.Visible || !string.Equals(child.ClassName, "ComboBox", StringComparison.OrdinalIgnoreCase)) continue;
-                if (best == null || child.Top < best.Top) best = child;
-            }
-            if (best == null) return string.Empty;
+                var count = NativeBridge.SendMessage(child.Handle, CB_GETCOUNT, IntPtr.Zero, IntPtr.Zero).ToInt32();
+                if (count <= 0) continue;
 
-            var index = NativeBridge.SendMessage(best.Handle, CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero).ToInt32();
+                var strategyCount = 0;
+                for (var i = 0; i < count; i++)
+                {
+                    if (IsStrategyFileName(ReadComboItem(child.Handle, i))) strategyCount++;
+                }
+                if (strategyCount <= bestStrategyCount) continue;
+                strategyCombo = child;
+                bestStrategyCount = strategyCount;
+            }
+            if (strategyCombo == null || bestStrategyCount < 2) return string.Empty;
+
+            var index = NativeBridge.SendMessage(strategyCombo.Handle, CB_GETCURSEL, IntPtr.Zero, IntPtr.Zero).ToInt32();
             if (index < 0) return string.Empty;
-            var length = NativeBridge.SendMessage(best.Handle, CB_GETLBTEXTLEN, new IntPtr(index), IntPtr.Zero).ToInt32();
+            var selected = ReadComboItem(strategyCombo.Handle, index);
+            return IsStrategyFileName(selected) ? selected : string.Empty;
+        }
+
+        private static string ReadComboItem(IntPtr combo, int index)
+        {
+            var length = NativeBridge.SendMessage(combo, CB_GETLBTEXTLEN, new IntPtr(index), IntPtr.Zero).ToInt32();
             if (length < 0) return string.Empty;
             var value = new StringBuilder(length + 1);
-            SendMessageBuffer(best.Handle, CB_GETLBTEXT, new IntPtr(index), value);
+            SendMessageBuffer(combo, CB_GETLBTEXT, new IntPtr(index), value);
             return value.ToString().Trim();
+        }
+
+        private static bool IsStrategyFileName(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) &&
+                   string.Equals(Path.GetFileName(value), value, StringComparison.Ordinal) &&
+                   value.StartsWith("general", StringComparison.OrdinalIgnoreCase) &&
+                   value.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
         }
 
         private void StartSelectedStrategyUsingUpstreamBatch()
