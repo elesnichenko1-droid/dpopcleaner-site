@@ -141,6 +141,11 @@ try {
 
         $windowBounds=[Rev17ResponsiveNative]::Bounds($window)
         if(-not $windowBounds){ throw "$($size.Name): could not read resized main-window bounds." }
+        $actualWidth=$windowBounds.Right-$windowBounds.Left
+        $actualHeight=$windowBounds.Bottom-$windowBounds.Top
+        if($actualWidth -lt ($size.Width-16)) {
+            throw "$($size.Name): requested width $($size.Width) was not actually reached; actual=${actualWidth}x${actualHeight}. Wide-screen responsive evidence would be invalid."
+        }
         $children=@(Get-Children $window)
         $buttons=@($children | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $targetIds -contains $_.Id })
         if($buttons.Count -ne $targetIds.Count){ throw "$($size.Name): expected $($targetIds.Count) target buttons, found $($buttons.Count)." }
@@ -194,10 +199,11 @@ try {
         Capture-Window $window $shot
         $reports += [pscustomobject]@{
             name=$size.Name; requested_width=$size.Width; requested_height=$size.Height
+            actual_width=$actualWidth; actual_height=$actualHeight
             status_left=$status.Left; window_right=$windowBounds.Right; rightmost_button=$rightmost; unused_right=$unusedRight
             buttons=$buttons.Count; min_button_height=$minHeight; max_button_height=$maxHeight; screenshot=$shot
         }
-        Write-Host "REV17_ZAPRET_RESPONSIVE_SIZE_OK name=$($size.Name) requested=$($size.Width)x$($size.Height) span=$($status.Left)..$rightmost unusedRight=$unusedRight height=$minHeight"
+        Write-Host "REV17_ZAPRET_RESPONSIVE_SIZE_OK name=$($size.Name) requested=$($size.Width)x$($size.Height) actual=${actualWidth}x${actualHeight} span=$($status.Left)..$rightmost unusedRight=$unusedRight height=$minHeight"
     }
 
     $reports | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputDir 'rev17-zapret-responsive-report.json') -Encoding utf8
