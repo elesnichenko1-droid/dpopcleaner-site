@@ -73,6 +73,18 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
+        public void Update_heading_is_bound_to_exact_native_caption_not_a_fuzzy_Zapret_update_match()
+        {
+            var source = ReadSource("ZapretResponsiveLayoutHost.cs");
+
+            StringAssert.Contains(source, "FindStaticByCaption(children, \"Обновление Zapret\", \"Zapret Update\")");
+            Assert.IsFalse(source.Contains("mentionsZapret"),
+                "A fuzzy Zapret/update match can select another visible status label and leave the real heading on its frozen Y.");
+            Assert.IsFalse(source.Contains("mentionsUpdate"),
+                "The update heading must be identified by its exact native caption before it is repositioned.");
+        }
+
+        [TestMethod]
         public void Launcher_applies_responsive_layout_after_existing_Zapret_bridge_and_visual_polish()
         {
             var launcher = ReadSource("LauncherContext.cs");
