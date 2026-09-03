@@ -21,12 +21,16 @@ class DPop0417Rev18UserReportContractTests(unittest.TestCase):
     def test_single_tray_uses_separate_user_preference_and_keeps_core_tray_off(self):
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
         settings = (ROOT / 'v0417/src/SimpleUpdate/SettingsStore.cs').read_text(encoding='utf-8')
+        host = (ROOT / 'v0417/src/SimpleUpdate/AdditionalSettingsHost.cs').read_text(encoding='utf-8')
         self.assertIn('LoadTrayIconEnabled', settings)
         self.assertIn('SaveTrayIconEnabled', settings)
         self.assertIn('_trayPreference', launcher)
         self.assertIn('CaptureTrayPreferenceFromProxy', launcher)
         self.assertIn('EnsureLegacyTrayDisabled', launcher)
         self.assertIn('ReapplyCanonicalTrayProxy', launcher)
+        self.assertIn('CanonicalTrayProxyId = 1503', host)
+        self.assertIn('if (setting.Id != CanonicalTrayProxyId) SyncLegacySetting(setting);', host)
+        self.assertIn('if (setting.Id != CanonicalTrayProxyId)\n                    NativeBridge.SetChecked', host)
 
     def test_rev18_has_a_real_installed_gate_for_the_user_report(self):
         workflow_path = ROOT / '.github/workflows/DPopCleaner_0.4.17_REV18_USER_REPORT.yml'
