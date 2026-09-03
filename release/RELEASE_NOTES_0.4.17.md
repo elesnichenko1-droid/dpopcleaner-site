@@ -1,45 +1,54 @@
-# DPopCleaner 0.4.17 rev.16
+# DPopCleaner 0.4.17 rev.17
 
-DPopCleaner 0.4.17 rev.16 исправляет tray, реальный runtime Zapret и визуальную согласованность вкладки Zapret, не меняя frozen core 0.2.14. Оригинальное ядро остаётся byte-identical как `{app}\DPopCleaner.Core.exe` с Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`.
+DPopCleaner 0.4.17 rev.17 исправляет адаптацию вкладки **Zapret** к изменению размера окна и широким экранам. Frozen core 0.2.14 не переписывается: `{app}\DPopCleaner.Core.exe` остаётся byte-identical с Git blob `efd0eff1f4962319282363fa85595c25e0cebe11`.
 
-## Revision 16
+## Revision 17
 
-- В системном трее остаётся **одна** рабочая DPopCleaner tray-иконка с цифровым процентом ОЗУ. Tray reconciliation продолжает использовать `Shell_NotifyIcon`; после перезапуска core или Explorer canonical identity восстанавливается без второй ghost-иконки. Один canonical `(HWND,uID)` живёт весь lifetime launcher, сохраняется при self-restart frozen core, а stale/legacy Explorer tray-записи удаляются по фактической DPopCleaner tray identity, включая ghost-записи Explorer с уже уничтоженным owner HWND.
-- Сохранено исправление rev.15: смена языка может перезапустить `DPopCleaner.Core.exe`, launcher перепривязывается к successor PID, а Settings bridge и RAM tray продолжают работать без второго значка.
-- Zapret Center проверен реальным installed lifecycle: **Install service → Start winws → Status → Stop → смена стратегии → Start с другим command line → Remove**. Состояние определяется по реальным `zapret`, bundled `winws.exe`, `WinDivert` и `WinDivert14`, а не только по тексту интерфейса.
-- Кнопка **«Установить сервис»** сохраняет штатную инициализацию Flowseal `service.bat`, но bridge подменяет только два интерактивных выбора во временной копии manager: пункт установки и индекс выбранной стратегии. Благодаря этому сохраняются штатные `GameFilterTCP/GameFilterUDP` и корректный service `ImagePath`.
-- **«Запустить winws»** и **«Удалить сервисы»** получили same-bounds bridge proxy там, где frozen core 0.2.14 не совместим с текущим Flowseal 1.10.2. Исполнителем остаются bundled upstream `general*.bat`/`service.bat`.
-- Remove ждёт полного исчезновения `zapret`, bundled `winws.exe`, `WinDivert` и `WinDivert14`, поэтому cleanup не обрывается посередине.
-- Все видимые кнопки Zapret используют единый presentation-layer и следуют выбранной native теме. Installed pixel-smoke проверяет **Light** и **Midnight**, а native и bridge-кнопки больше не должны визуально выбиваться друг из друга. При смене темы Zapret-кнопки сразу перерисовываются в выбранной палитре.
-- Убраны hardcoded `DarkMode_Explorer` и фиксированная ширина toolbar `709 px`. Четыре дополнительные Zapret-кнопки рассчитывают ширину по доступной панели и фактическому тексту, не перекрываются и не выходят за границы.
-- **Журнал** скрывается только на вкладке Zapret; верхний блок статуса остаётся. При переходе на другие вкладки bridge не воскрешает Zapret HWND поверх чужой страницы и не меняет родной журнал/лог другой вкладки.
-- Сохраняются «Починка трансляции», «Починка подключения», «Игровой фильтр 1.10.2», «Менеджер 1.10.2», исправление демонстрации экрана Zapret, frozen-updater compatibility и `DPopUpdate.exe`.
+- Вся рабочая область Zapret переведена на единый **responsive layout**, а не только четыре дополнительные bridge-кнопки.
+- Строки стратегии, управления сервисом, обновления, дополнительных действий и нижних инструментов пересчитываются по фактической клиентской ширине окна.
+- Кнопки используют свободное место справа при расширении окна, сохраняют единые высоты и интервалы и не должны перекрывать `ComboBox`, заголовки или друг друга.
+- Layout учитывает реальные native размеры контролов и DPI. Вложенные native button-группы перемещаются как группы, а их дочерние кнопки раскладываются в локальных координатах родителя.
+- Финальный responsive pass выполняется после прежних Zapret enhancement/presentation слоёв, поэтому frozen core 0.2.14 и bridge-proxy больше не должны перетирать корректную геометрию после resize.
+- Добавлен installed multi-width smoke на **1024×768**, **1366×800** и пользовательский широкий сценарий **1680×840**. Он проверяет все 19 управляемых Zapret-кнопок: границы окна, текст, пересечения, одинаковую высоту строк и использование доступной ширины.
 
-## Сохранено
+## Сохранено из rev.16
 
-- Frozen core 0.2.14 остаётся byte-identical: `efd0eff1f4962319282363fa85595c25e0cebe11`.
-- Полный **Flowseal Zapret 1.10.2** и все **22 стратегии** остаются в комплекте; native версия читается через `Zapret\utils\dpop_version.txt`.
-- Rev.13 UAC/code 740 и `requestedExecutionLevel=asInvoker` + контролируемый `runas` сохранены.
-- Rev.14 Settings language bridge, rev.15 core restart recovery, RAM threshold 5–95%, ZapretScreenFix, Disk Analyzer, Restore Center и автообновление сохранены.
-- Основной интерфейс 0.2.14 не переписывается и не переносится на C++/0.4.18.
+- Одна рабочая RAM tray-иконка с цифровым процентом ОЗУ; восстановление canonical tray identity после restart frozen core и Explorer без ghost-иконки.
+- Перепривязка launcher к новому `DPopCleaner.Core.exe` после смены языка, Settings bridge и RAM tray после self-restart.
+- Реальный Zapret lifecycle: **Install service → Start winws → Status → Stop → смена стратегии → Start → Remove**.
+- Единое оформление Zapret-кнопок в **Light** и **Midnight**.
+- **Журнал** скрывается только на вкладке Zapret и остаётся без изменений на остальных вкладках.
+- «Починка трансляции», «Починка подключения», «Игровой фильтр 1.10.2», «Менеджер 1.10.2», frozen-updater compatibility и `DPopUpdate.exe`.
+- Исправление демонстрации экрана / screen share для ZapretScreenFix.
+- Автообновление приложения, Disk Analyzer, Restore Center, UAC/code 740 fix и RAM threshold 5–95%.
 
-## Проверка rev.16
+## Не меняется
 
-Production pipeline собирает настоящий Inno Setup installer и на **установленной** сборке требует:
+- Frozen core 0.2.14: `efd0eff1f4962319282363fa85595c25e0cebe11`.
+- Полный **Flowseal Zapret 1.10.2** и все **22 стратегии**.
+- Native версия Zapret читается через `Zapret\utils\dpop_version.txt`.
+- Основной интерфейс остаётся интерфейсом DPopCleaner 0.2.14; переход на C++/0.4.18 в rev.17 не выполняется.
 
-1. обычный installed package smoke;
-2. rev.15 language-restart smoke;
-3. rev.16 single-tray smoke с restart frozen core и Explorer;
-4. rev.16 Zapret functional lifecycle smoke;
-5. rev.16 Zapret presentation smoke для Light/Midnight, layout и Journal policy;
-6. существующие проверки native Zapret version/updater, Disk Analyzer, Restore Center и byte-identical frozen core.
+## Проверка rev.17
 
-Релиз блокируется при второй/пустой tray-иконке, если `zapret`/`winws` не достигают требуемого фактического состояния, если смена стратегии не меняет командную строку, если кнопки выходят за панель или если Журнал Zapret появляется на другой вкладке.
+Production pipeline собирает настоящий Inno Setup installer и блокирует публикацию, пока не пройдут:
+
+1. общие unit/contract/build проверки;
+2. установленный package smoke;
+3. rev.15 language-restart + RAM tray smoke;
+4. rev.16 single-tray regression smoke;
+5. rev.16 Zapret functional lifecycle regression smoke;
+6. rev.16 Light/Midnight presentation и Journal policy smoke;
+7. **rev.17 multi-width responsive smoke 1024 / 1366 / 1680**;
+8. Flowseal Zapret 1.10.2 / 22 strategies / native version проверки;
+9. byte-identical frozen-core check.
+
+Релиз не публикуется, если кнопки Zapret перекрываются, текст не помещается, строки имеют различающуюся высоту, широкое окно оставляет старую фиксированную область вместо использования доступной ширины или если ломается любой из сохранённых rev.15/rev.16 сценариев.
 
 ## Публикация
 
-Stable manifest для **revision 16** публикуется только после зелёных installed-проверок. Production publisher создаёт GitHub Release `v0.4.17-rev16`, публикует Pages и повторно скачивает живой installer для проверки SHA-256 и размера.
+Stable manifest публикуется как **revision 17** только после зелёных installed-проверок. Production publisher создаёт GitHub Release `v0.4.17-rev17`, публикует Pages и затем повторно проверяет live manifest, SHA-256 и размер скачанного installer.
 
 ## Установка
 
-Запустите `DPopCleaner_Setup_0.4.17.exe` поверх rev.15. После установки запускайте обычный `DPopCleaner.exe`.
+Запустите `DPopCleaner_Setup_0.4.17.exe` поверх предыдущей 0.4.17. После установки запускайте обычный `DPopCleaner.exe`.

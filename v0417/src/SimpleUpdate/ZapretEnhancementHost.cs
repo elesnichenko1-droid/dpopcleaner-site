@@ -135,11 +135,10 @@ namespace DPopCleaner.SimpleUpdate
         internal void Show()
         {
             if (_disposed) return;
-            PositionActionToolbar();
-            PositionUpdateToolbar();
-            PositionInstallServiceProxy();
-            PositionRemoveServicesProxy();
-            PositionStartStandaloneProxy();
+            // rev.17 has exactly one geometry owner: ZapretResponsiveLayoutHost. The proxy hosts
+            // receive their initial legacy placement from the Create* methods, but Show() must not
+            // copy hidden frozen-control coordinates every 100 ms. Doing so creates a second writer
+            // for the same HWNDs and exposes transient legacy positions during resize/maximize.
             RefreshDisplayedZapretVersion();
             if (DateTime.UtcNow >= _nextRuntimeRefreshUtc) RefreshRuntimeStatus();
             if (_legacyCheckVersionButton != IntPtr.Zero)
