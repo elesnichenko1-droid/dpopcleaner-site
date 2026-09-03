@@ -43,6 +43,8 @@ namespace DPopCleaner.SimpleUpdate
         private static extern IntPtr GetParent(IntPtr hwnd);
 
         private readonly IntPtr _parent;
+        private int _nativeButtonHeight;
+        private int _nativeStatusDetailHeight;
         private bool _disposed;
 
         internal ZapretResponsiveLayoutHost(IntPtr parent)
@@ -87,7 +89,14 @@ namespace DPopCleaner.SimpleUpdate
 
             var applyBounds = NativeBridge.GetChildClientBounds(_parent, buttons[NativeBridge.ZapretApplyButtonId]);
             if (applyBounds == null) return;
-            var nativeButtonHeight = Math.Max(ResponsiveButtonHeight, applyBounds.Height);
+
+            // Capture immutable native baselines before this host changes any vertical geometry.
+            // Reading apply/status-detail height again on later 100ms ticks would feed our previous
+            // responsive result back into DPI calculations and make the page grow on every pass.
+            if (_nativeButtonHeight <= 0) _nativeButtonHeight = Math.Max(1, applyBounds.Height);
+            if (_nativeStatusDetailHeight <= 0) _nativeStatusDetailHeight = Math.Max(1, statusDetailBounds.Height);
+
+            var nativeButtonHeight = Math.Max(ResponsiveButtonHeight, _nativeButtonHeight);
             var scale = Math.Max(0.75, Math.Min(2.50, (double)nativeButtonHeight / ResponsiveButtonHeight));
             var tallWindowExtra = Math.Max(0, clientHeight - 840);
             var buttonHeight = Math.Min(
@@ -146,7 +155,7 @@ namespace DPopCleaner.SimpleUpdate
 
             var halfGap = Math.Max(2, rowGap / 2);
             var statusDetailTop = Math.Max(statusSummaryBottom + halfGap, statusDetailBounds.Top);
-            var minimumStatusDetailHeight = Math.Max(statusDetailBounds.Height, Scale(56, scale));
+            var minimumStatusDetailHeight = Math.Max(_nativeStatusDetailHeight, Scale(56, scale));
             var availableVerticalSpace = Math.Max(0, contentBottom - statusDetailTop);
             var reservedGridHeight = buttonHeight * 4 + updateHeadingHeight + halfGap * 2 + rowGap * 4;
             var statusDetailBottom = Math.Max(
@@ -156,7 +165,8 @@ namespace DPopCleaner.SimpleUpdate
             NativeBridge.PositionChildWindow(statusDetail, Bounds(
                 contentLeft, statusDetailTop, contentRight, statusDetailBottom));
 
-            // Every tick is a pure function of current client/status geometry. No previous Y is reused.
+            // Every tick is a pure function of current client/status geometry plus immutable native
+            // size baselines. No previous responsive Y/height is reused.
             var strategyRowTop = statusDetailBottom + rowGap;
             var labelWidth = Math.Max(strategyLabelBounds.Width, Scale(82, scale));
             var minimumStrategyWidth = labelWidth + Scale(120, scale);
