@@ -134,7 +134,10 @@ try {
         [pscustomobject]@{Name='wide';Width=1366;Height=800},
         [pscustomobject]@{Name='user-like';Width=1680;Height=840}
     )) {
-        if(-not [Rev17ResponsiveNative]::SetWindowPos($window,[IntPtr]::Zero,0,0,$size.Width,$size.Height,0x0002 -bor 0x0004 -bor 0x0010)) {
+        # SWP_NOSENDCHANGING is intentional here: the frozen 0.2.14 core clamps
+        # WM_WINDOWPOSCHANGING to its historical max. The smoke must force the
+        # physical wide size so rev.17 layout is exercised at real 1366/1680 widths.
+        if(-not [Rev17ResponsiveNative]::SetWindowPos($window,[IntPtr]::Zero,0,0,$size.Width,$size.Height,0x0002 -bor 0x0004 -bor 0x0010 -bor 0x0400)) {
             throw "Could not resize frozen window for $($size.Name)."
         }
         Start-Sleep -Milliseconds 900
