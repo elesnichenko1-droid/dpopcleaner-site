@@ -28,6 +28,18 @@ class DPop0417Rev18UserReportContractTests(unittest.TestCase):
         self.assertIn('EnsureLegacyTrayDisabled', launcher)
         self.assertIn('ReapplyCanonicalTrayProxy', launcher)
 
+    def test_rev18_has_a_real_installed_gate_for_the_user_report(self):
+        workflow_path = ROOT / '.github/workflows/DPopCleaner_0.4.17_REV18_USER_REPORT.yml'
+        self.assertTrue(workflow_path.is_file(), 'rev.18 dedicated installed workflow is required')
+        workflow = workflow_path.read_text(encoding='utf-8')
+        self.assertIn('dpop0417_rev18_installed_user_report_smoke.ps1', workflow)
+        self.assertIn('DPopCleaner_Setup_0.4.17.exe', workflow)
+        smoke = (ROOT / 'tools/dpop0417_rev18_user_report_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('1908,950', smoke)
+        self.assertIn('GetWindowTheme', smoke)
+        self.assertIn("ExpectedCanonical", smoke)
+        self.assertIn('Find-FrozenTrayCheckbox', smoke)
+
 
 if __name__ == '__main__':
     unittest.main()
