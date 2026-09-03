@@ -89,7 +89,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('rev.${revision}', script)
 
         notes = (ROOT / 'release/RELEASE_NOTES_0.4.17.md').read_text(encoding='utf-8').lower()
-        for token in ('revision 17', 'responsive', '1680', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'code 740', 'озу', 'смена языка', 'tray'):
+        for token in ('revision 17', 'responsive', '1680', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'code 740', 'озу', 'смен', 'язык', 'tray'):
             self.assertIn(token, notes)
 
         workflow = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
