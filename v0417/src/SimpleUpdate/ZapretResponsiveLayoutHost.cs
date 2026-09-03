@@ -110,7 +110,11 @@ namespace DPopCleaner.SimpleUpdate
             var additionalButtons = ResolveButtons(buttons, AdditionalRowButtonIds);
             if (strategyButtons == null || updateButtons == null || actionButtons == null || additionalButtons == null) return;
 
-            var strategyRowTop = Math.Min(strategyComboBounds.Top, MinTop(strategyButtons));
+            // The frozen 0.2.14 core can make the status Edit taller while widening the window.
+            // Never reuse an old strategy/combo Y that now sits inside that live status rectangle.
+            var legacyStrategyTop = Math.Min(strategyComboBounds.Top, MinTop(strategyButtons));
+            var strategyRowTop = Math.Max(statusBounds.Bottom + rowGap, legacyStrategyTop);
+
             var existingStrategyWidth = Math.Max(strategyComboBounds.Right - contentLeft,
                 strategyLabelBounds.Width + columnGap + strategyComboBounds.Width);
             var desiredStrategyWidth = Math.Max(existingStrategyWidth, (int)Math.Round(contentWidth * 0.40));
@@ -149,7 +153,7 @@ namespace DPopCleaner.SimpleUpdate
             var updateRowTop = Math.Max(strategyRowTop + buttonHeight + rowGap,
                 updateHeadingBounds == null ? updateCurrentTop : updateHeadingBounds.Bottom + Math.Max(2, rowGap / 2));
 
-            LayoutUpdateRow(updateButtons, contentLeft, updateRowTop, contentRight,
+            LayoutZapretRow(updateButtons, contentLeft, updateRowTop, contentRight,
                 buttonHeight, columnGap, minimumButtonWidth, scale);
 
             var actionRowTop = updateRowTop + buttonHeight + rowGap;
@@ -173,7 +177,7 @@ namespace DPopCleaner.SimpleUpdate
             }
 
             var actionLeft = Math.Min(contentRight - 1, contentLeft + headingWidth + columnGap);
-            LayoutSharedParentRow(actionButtons, actionLeft, actionRowTop, contentRight,
+            LayoutZapretRow(actionButtons, actionLeft, actionRowTop, contentRight,
                 buttonHeight, columnGap, minimumButtonWidth, scale);
 
             var additionalRowTop = actionRowTop + Math.Max(buttonHeight, additionalHeadingHeight) + rowGap;
@@ -311,40 +315,6 @@ namespace DPopCleaner.SimpleUpdate
             return top == int.MaxValue ? 0 : top;
         }
 
-        private void LayoutUpdateRow(IntPtr[] buttons, int left, int top, int right, int height,
-            int gap, int minimumWidth, double scale)
-        {
-            var widths = ComputeWidths(buttons, Math.Max(1, right - left), gap, minimumWidth, scale);
-            var cells = BuildCells(left, top, height, gap, widths);
-            PlaceButtonCells(buttons, cells);
-        }
-
-        private void LayoutSharedParentRow(IntPtr[] buttons, int left, int top, int right, int height,
-            int gap, int minimumWidth, double scale)
-        {
-            if (buttons == null || buttons.Length == 0) return;
-            var parent = GetParent(buttons[0]);
-            var sameParent = parent != IntPtr.Zero && parent != _parent;
-            for (var i = 1; i < buttons.Length && sameParent; i++)
-                sameParent = GetParent(buttons[i]) == parent;
-
-            if (!sameParent)
-            {
-                LayoutZapretRow(buttons, left, top, right, height, gap, minimumWidth, scale);
-                return;
-            }
-
-            var availableWidth = Math.Max(1, right - left);
-            var widths = ComputeWidths(buttons, availableWidth, gap, minimumWidth, scale);
-            NativeBridge.PositionChildWindow(parent, Bounds(left, top, right, top + height));
-            var x = 0;
-            for (var i = 0; i < buttons.Length; i++)
-            {
-                NativeBridge.PositionChildWindow(buttons[i], Bounds(x, 0, x + widths[i], height));
-                x += widths[i] + (i + 1 < buttons.Length ? gap : 0);
-            }
-        }
-
         private void LayoutZapretRow(IntPtr[] buttons, int left, int top, int right, int height,
             int gap, int minimumWidth, double scale)
         {
@@ -466,20 +436,6 @@ namespace DPopCleaner.SimpleUpdate
                     placed[j] = true;
                 }
             }
-        }
-
-        private void PlaceButton(IntPtr button, NativeBridge.ClientBounds absoluteCell)
-        {
-            if (button == IntPtr.Zero || absoluteCell == null) return;
-            var parent = GetParent(button);
-            if (parent == IntPtr.Zero || parent == _parent)
-            {
-                NativeBridge.PositionChildWindow(button, absoluteCell);
-                return;
-            }
-
-            NativeBridge.PositionChildWindow(parent, absoluteCell);
-            NativeBridge.PositionChildWindow(button, Bounds(0, 0, absoluteCell.Width, absoluteCell.Height));
         }
 
         private static NativeBridge.ClientBounds Bounds(int left, int top, int right, int bottom)
