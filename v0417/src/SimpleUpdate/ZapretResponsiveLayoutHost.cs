@@ -146,7 +146,7 @@ namespace DPopCleaner.SimpleUpdate
                 scale);
 
             // "Обновление Zapret" is an explicit responsive row separator, not a frozen Y anchor.
-            var updateHeading = FindUpdateHeading(children);
+            var updateHeading = FindStaticByCaption(children, "Обновление Zapret", "Zapret Update");
             var updateHeadingBounds = NativeBridge.GetChildClientBounds(_parent, updateHeading);
             var updateHeadingHeight = updateHeadingBounds == null
                 ? Scale(23, scale)
@@ -293,20 +293,6 @@ namespace DPopCleaner.SimpleUpdate
                 if (string.Equals(child.Text, russian, StringComparison.Ordinal) ||
                     string.Equals(child.Text, english, StringComparison.OrdinalIgnoreCase))
                     return child.Handle;
-            }
-            return IntPtr.Zero;
-        }
-
-        private IntPtr FindUpdateHeading(NativeBridge.ChildInfo[] children)
-        {
-            foreach (var child in children)
-            {
-                if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
-                var text = child.Text ?? string.Empty;
-                var mentionsZapret = text.IndexOf("Zapret", StringComparison.OrdinalIgnoreCase) >= 0;
-                var mentionsUpdate = text.IndexOf("Обнов", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    text.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0;
-                if (mentionsZapret && mentionsUpdate) return child.Handle;
             }
             return IntPtr.Zero;
         }
