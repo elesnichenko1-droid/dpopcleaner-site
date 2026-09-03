@@ -125,6 +125,9 @@ namespace DPopCleaner.SimpleUpdate
         [DllImport("comctl32.dll")]
         private static extern bool RemoveWindowSubclass(IntPtr hwnd, SubclassProc proc, UIntPtr subclassId);
 
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hwnd, string subAppName, string subIdList);
+
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
         private static extern IntPtr GetWindowLongPtr64(IntPtr hwnd, int index);
 
@@ -177,6 +180,10 @@ namespace DPopCleaner.SimpleUpdate
                 var originalStyle = GetStyle(button);
                 _originalButtonStyles[button] = originalStyle;
                 SetOwnerDrawStyle(button, originalStyle);
+                // rev.18: BS_OWNERDRAW must be the only visual layer. Leaving the Windows 11
+                // theme attached paints a rounded themed frame under our rectangular owner-draw
+                // button, which is the "ghost button" visible in the user's screenshot.
+                SetWindowTheme(button, string.Empty, string.Empty);
                 var toolbar = GetParent(button);
                 if (toolbar != IntPtr.Zero && _toolbarParents.Add(toolbar))
                 {
@@ -392,7 +399,13 @@ namespace DPopCleaner.SimpleUpdate
             }
             foreach (var pair in _originalButtonStyles)
             {
-                try { SetStyle(pair.Key, pair.Value); InvalidateRect(pair.Key, IntPtr.Zero, true); } catch { }
+                try
+                {
+                    SetStyle(pair.Key, pair.Value);
+                    SetWindowTheme(pair.Key, null, null);
+                    InvalidateRect(pair.Key, IntPtr.Zero, true);
+                }
+                catch { }
             }
             _toolbarParents.Clear();
             _buttons.Clear();
