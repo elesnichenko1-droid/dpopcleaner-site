@@ -114,6 +114,7 @@ namespace DPopCleaner.SimpleUpdate
         private readonly List<ScrollItem> _items = new List<ScrollItem>();
         private readonly List<IntPtr> _wheelChildren = new List<IntPtr>();
         private readonly List<LegacySettingProxy> _legacySettings = new List<LegacySettingProxy>();
+        private readonly Action<bool> _trayPreferenceChanged;
         private readonly Action<bool> _autoUpdateChanged;
         private readonly Action _checkUpdatesRequested;
         private readonly IntPtr _parent;
@@ -216,6 +217,7 @@ namespace DPopCleaner.SimpleUpdate
             NativeBridge.ClientBounds bounds,
             IntPtr adminAnchor,
             bool autoUpdateEnabled,
+            Action<bool> trayPreferenceChanged,
             Action<bool> autoUpdateChanged,
             Action checkUpdatesRequested,
             IntPtr legacyKeyEdit,
@@ -227,6 +229,7 @@ namespace DPopCleaner.SimpleUpdate
             if (bounds == null) throw new ArgumentNullException("bounds");
 
             _parent = parent;
+            _trayPreferenceChanged = trayPreferenceChanged;
             _autoUpdateChanged = autoUpdateChanged;
             _checkUpdatesRequested = checkUpdatesRequested;
             _legacyKeyEdit = legacyKeyEdit;
@@ -375,9 +378,17 @@ namespace DPopCleaner.SimpleUpdate
                 {
                     if (id == setting.Id)
                     {
-                        // rev.18: tray proxy is bridge-owned. Its BS_AUTOCHECKBOX state is the
-                        // canonical user preference and must never toggle the frozen core tray.
-                        if (setting.Id != CanonicalTrayProxyId) SyncLegacySetting(setting);
+                        // rev.18: tray proxy is bridge-owned. Commit the BS_AUTOCHECKBOX state
+                        // synchronously on its UI thread so a timer tick cannot reapply stale state.
+                        if (setting.Id == CanonicalTrayProxyId)
+                        {
+                            if (_trayPreferenceChanged != null)
+                                _trayPreferenceChanged(NativeBridge.IsChecked(setting.ProxyHandle));
+                        }
+                        else
+                        {
+                            SyncLegacySetting(setting);
+                        }
                         return IntPtr.Zero;
                     }
                 }
@@ -459,8 +470,6 @@ namespace DPopCleaner.SimpleUpdate
                     setting.Text = caption;
                     NativeBridge.WriteWindowText(setting.ProxyHandle, caption);
                 }
-                // The canonical tray row deliberately does not mirror frozen state. LauncherContext
-                // reapplies the persisted preference while the frozen tray checkbox remains OFF.
                 if (setting.Id != CanonicalTrayProxyId)
                     NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
             }
