@@ -316,25 +316,7 @@ namespace DPopCleaner.SimpleUpdate
         {
             var widths = ComputeWidths(buttons, Math.Max(1, right - left), gap, minimumWidth, scale);
             var cells = BuildCells(left, top, height, gap, widths);
-
-            var firstParent = GetParent(buttons[0]);
-            var secondParent = GetParent(buttons[1]);
-            if (firstParent != IntPtr.Zero && firstParent == secondParent && firstParent != _parent)
-            {
-                var groupLeft = cells[0].Left;
-                var groupRight = cells[1].Right;
-                NativeBridge.PositionChildWindow(firstParent, Bounds(groupLeft, top, groupRight, top + height));
-                NativeBridge.PositionChildWindow(buttons[0], Bounds(0, 0, widths[0], height));
-                NativeBridge.PositionChildWindow(buttons[1], Bounds(widths[0] + gap, 0,
-                    widths[0] + gap + widths[1], height));
-            }
-            else
-            {
-                PlaceButton(buttons[0], cells[0]);
-                PlaceButton(buttons[1], cells[1]);
-            }
-
-            for (var i = 2; i < buttons.Length; i++) PlaceButton(buttons[i], cells[i]);
+            PlaceButtonCells(buttons, cells);
         }
 
         private void LayoutSharedParentRow(IntPtr[] buttons, int left, int top, int right, int height,
@@ -369,7 +351,7 @@ namespace DPopCleaner.SimpleUpdate
             if (buttons == null || buttons.Length == 0 || right <= left) return;
             var widths = ComputeWidths(buttons, right - left, gap, minimumWidth, scale);
             var cells = BuildCells(left, top, height, gap, widths);
-            for (var i = 0; i < buttons.Length; i++) PlaceButton(buttons[i], cells[i]);
+            PlaceButtonCells(buttons, cells);
         }
 
         private int[] ComputeWidths(IntPtr[] buttons, int availableWidth, int gap, int minimumWidth, double scale)
@@ -438,6 +420,52 @@ namespace DPopCleaner.SimpleUpdate
                 x += widths[i] + (i + 1 < widths.Length ? gap : 0);
             }
             return cells;
+        }
+
+        private void PlaceButtonCells(IntPtr[] buttons, NativeBridge.ClientBounds[] cells)
+        {
+            if (buttons == null || cells == null || buttons.Length != cells.Length) return;
+
+            var placed = new bool[buttons.Length];
+            for (var i = 0; i < buttons.Length; i++)
+            {
+                if (placed[i] || buttons[i] == IntPtr.Zero || cells[i] == null) continue;
+
+                var parent = GetParent(buttons[i]);
+                if (parent == IntPtr.Zero || parent == _parent)
+                {
+                    NativeBridge.PositionChildWindow(buttons[i], cells[i]);
+                    placed[i] = true;
+                    continue;
+                }
+
+                var groupLeft = cells[i].Left;
+                var groupTop = cells[i].Top;
+                var groupRight = cells[i].Right;
+                var groupBottom = cells[i].Bottom;
+                for (var j = i + 1; j < buttons.Length; j++)
+                {
+                    if (placed[j] || buttons[j] == IntPtr.Zero || cells[j] == null) continue;
+                    if (GetParent(buttons[j]) != parent) continue;
+                    groupLeft = Math.Min(groupLeft, cells[j].Left);
+                    groupTop = Math.Min(groupTop, cells[j].Top);
+                    groupRight = Math.Max(groupRight, cells[j].Right);
+                    groupBottom = Math.Max(groupBottom, cells[j].Bottom);
+                }
+
+                NativeBridge.PositionChildWindow(parent, Bounds(groupLeft, groupTop, groupRight, groupBottom));
+                for (var j = i; j < buttons.Length; j++)
+                {
+                    if (placed[j] || buttons[j] == IntPtr.Zero || cells[j] == null) continue;
+                    if (GetParent(buttons[j]) != parent) continue;
+                    NativeBridge.PositionChildWindow(buttons[j], Bounds(
+                        cells[j].Left - groupLeft,
+                        cells[j].Top - groupTop,
+                        cells[j].Right - groupLeft,
+                        cells[j].Bottom - groupTop));
+                    placed[j] = true;
+                }
+            }
         }
 
         private void PlaceButton(IntPtr button, NativeBridge.ClientBounds absoluteCell)
