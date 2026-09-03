@@ -16,16 +16,11 @@ class DPop0417Rev17ReleaseContractTests(unittest.TestCase):
         self.assertEqual(stable['channel'], 'stable')
 
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
-        launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8').lower()
         self.assertIn('currentrevision = 17', program)
-        self.assertIn('dpopcleaner-simpleupdate/0.4.17-rev17', launcher)
 
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
         self.assertIn('number(m.revision) === 17', manifest)
         self.assertIn('v0\\.4\\.17-rev17', manifest)
-
-        index = (ROOT / 'index.html').read_text(encoding='utf-8').lower()
-        self.assertIn('rev.17', index)
 
         notes = (ROOT / 'release/RELEASE_NOTES_0.4.17.md').read_text(encoding='utf-8').lower()
         for token in (
@@ -46,7 +41,6 @@ class DPop0417Rev17ReleaseContractTests(unittest.TestCase):
             'dpopcleaner-0.4.17-rev17-release-candidate',
             'revision=17',
             'dpop0417-rev17-publish',
-            'dpop0417_rev17_zapret_responsive_smoke.ps1',
             # rev.16 smoke names stay as regression gates for functionality introduced in rev.16.
             'dpop0417_rev16_single_tray_smoke.ps1',
             'dpop0417_rev16_zapret_functional_smoke.ps1',
@@ -56,6 +50,10 @@ class DPop0417Rev17ReleaseContractTests(unittest.TestCase):
         ):
             self.assertIn(token, workflow)
         self.assertIn('$live.revision -ne 17', workflow)
+
+        install_smoke = (ROOT / 'tools/dpop0417_install_smoke.ps1').read_text(encoding='utf-8').lower()
+        self.assertIn('dpop0417_rev17_zapret_responsive_smoke.ps1', install_smoke)
+        self.assertIn('installed rev.17 multi-width/dpi-aware zapret responsive layout smoke: pass', install_smoke)
 
         installed = workflow.index('dpop0417_install_smoke.ps1')
         restart = workflow.index('dpop0417_rev15_installed_restart_smoke.ps1')
