@@ -109,6 +109,18 @@ function Get-StatusSnapshot([IntPtr]$Window) {
     $edits=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 2)
     [pscustomobject]@{ Upper=if($edits.Count -gt 0){$edits[0].Text}else{''}; Runtime=if($edits.Count -gt 1){$edits[1].Text}else{''} }
 }
+function Get-LauncherDialogText($Launcher) {
+    try {
+        if (-not $Launcher) { return $null }
+        $Launcher.Refresh()
+        if ($Launcher.HasExited -or $Launcher.MainWindowHandle -eq [IntPtr]::Zero) { return $null }
+        $title=[string]$Launcher.MainWindowTitle
+        if ($title -notmatch '(?i)Zapret') { return $null }
+        $parts=@(Get-Children $Launcher.MainWindowHandle | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and -not [string]::IsNullOrWhiteSpace($_.Text) } | ForEach-Object { $_.Text.Trim() })
+        if ($parts.Count -gt 0) { return ($title + ' :: ' + ($parts -join ' | ')) }
+        return $title
+    } catch { return $null }
+}
 
 $script:WinwsPath=''
 function Get-BundledWinws {
@@ -179,12 +191,20 @@ try {
 
     $phase='install-service'
     Click-Id -Window $window -Id 1701
-    Wait-Until -Seconds 12 -Description 'zapret service to exist and run after Install Service UI action' -Condition {
+    $installDeadline=[DateTime]::UtcNow.AddSeconds(20)
+    do {
         $service=Get-ZapretService
-        $service -and $service.State -eq 'Running'
-    }
+        if ($service -and $service.State -eq 'Running') { break }
+        $dialog=Get-LauncherDialogText $launcherStub
+        if ($dialog) { throw "Install Service UI error: $dialog" }
+        Start-Sleep -Milliseconds 200
+    } while([DateTime]::UtcNow -lt $installDeadline)
     $service=Get-ZapretService
-    if (-not $service -or $service.State -ne 'Running') { throw 'Install Service UI action did not create a running zapret service.' }
+    if (-not $service -or $service.State -ne 'Running') {
+        $managerFiles=@(Get-ChildItem -LiteralPath (Join-Path $installRoot 'Zapret') -Filter 'service-dpop-install-*.bat' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+        $managerCmds=@(Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine -like ('*' + $installRoot + '*') } | ForEach-Object { $_.CommandLine })
+        throw "Timed out waiting for zapret service after production timeout; managers=$($managerFiles -join ','); cmd=$($managerCmds -join ' || ')"
+    }
     Write-Host "REV16_ZAPRET_INSTALL_OK strategy=$firstStrategy state=$($service.State)"
 
     $phase='service-status'
