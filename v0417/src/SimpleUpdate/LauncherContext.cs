@@ -387,6 +387,7 @@ namespace DPopCleaner.SimpleUpdate
                     _settingsHostBounds,
                     admin,
                     _lastSetting,
+                    OnTrayPreferenceChanged,
                     OnAutoUpdateSettingChanged,
                     delegate { BeginUpdateCheck(true); },
                     legacyKey,
@@ -404,6 +405,13 @@ namespace DPopCleaner.SimpleUpdate
             SettingsProxyLocalization.Apply(_mainWindow);
             NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds);
             ReapplyCanonicalTrayProxy();
+        }
+
+        private void OnTrayPreferenceChanged(bool enabled)
+        {
+            if (_trayPreference.HasValue && _trayPreference.Value == enabled) return;
+            _trayPreference = enabled;
+            _settings.SaveTrayIconEnabled(enabled);
         }
 
         private void OnAutoUpdateSettingChanged(bool enabled)
