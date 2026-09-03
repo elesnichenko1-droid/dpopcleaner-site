@@ -11,6 +11,7 @@ namespace DPopCleaner.SimpleUpdate
     internal sealed class LauncherContext : ApplicationContext
     {
         private const int CoreRestartGraceMilliseconds = 1200;
+        private const int TraySettingsProxyId = 1503;
 
         private Process _core;
         private readonly string _corePath;
@@ -28,8 +29,7 @@ namespace DPopCleaner.SimpleUpdate
         private ZapretVisualPolishHost _zapretVisualHost;
         private ZapretResponsiveLayoutHost _zapretResponsiveHost;
         private TrayRamBadgeHost _trayRamHost;
-        private bool _traySettingKnown;
-        private bool _trayEnabled;
+        private bool? _trayPreference;
         private bool _lastSetting;
         private bool _iconApplied;
         private bool _automaticCheckStarted;
@@ -46,9 +46,10 @@ namespace DPopCleaner.SimpleUpdate
             _options = options ?? LauncherOptions.Parse(new string[0]);
             _settings = new SettingsStore(settingsPath);
             _lastSetting = _settings.LoadAutoUpdateEnabled();
+            _trayPreference = _settings.LoadTrayIconEnabled();
             _updateCancellation = new CancellationTokenSource();
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev16");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "DPopCleaner-SimpleUpdate/0.4.17-rev18");
             _updateClient = new UpdateClient(_http);
 
             _core = StartCoreProcess();
@@ -238,12 +239,10 @@ namespace DPopCleaner.SimpleUpdate
             _zapretHost = null;
             _settingsHostBounds = null;
             _mainWindow = IntPtr.Zero;
-            _traySettingKnown = false;
-            _trayEnabled = false;
             _iconApplied = false;
 
-            // The notification identity belongs to the launcher, not to a frozen-core PID.
-            // Keep its stable HWND/uID alive while the successor core creates a new main HWND.
+            // The canonical notification identity and its persisted user preference belong to the
+            // launcher, not to a frozen-core PID. Keep both across language/core restarts.
             if (_trayRamHost != null) _trayRamHost.ReattachMainWindow(IntPtr.Zero);
         }
 
@@ -252,16 +251,51 @@ namespace DPopCleaner.SimpleUpdate
             var admin = NativeBridge.FindChildById(_mainWindow, NativeBridge.AdminCheckboxId);
             var settings = NativeBridge.FindSettingsCheckboxes(_mainWindow, admin);
             var traySetting = settings.Length == 6 ? settings[3] : IntPtr.Zero;
-            if (traySetting != IntPtr.Zero)
-            {
-                _trayEnabled = NativeBridge.IsChecked(traySetting);
-                _traySettingKnown = true;
-            }
-            if (!_traySettingKnown) return;
+
+            CaptureTrayPreferenceFromProxy(traySetting);
+            EnsureLegacyTrayDisabled(traySetting);
+            if (!_trayPreference.HasValue) return;
 
             if (_trayRamHost == null)
                 _trayRamHost = new TrayRamBadgeHost(_mainWindow);
-            _trayRamHost.Update(_core.Id, _mainWindow, _trayEnabled);
+            _trayRamHost.Update(_core.Id, _mainWindow, _trayPreference.Value);
+        }
+
+        private void CaptureTrayPreferenceFromProxy(IntPtr traySetting)
+        {
+            var proxy = NativeBridge.FindChildById(_mainWindow, TraySettingsProxyId);
+            if (proxy != IntPtr.Zero && NativeBridge.IsWindowVisible(proxy))
+            {
+                var requested = NativeBridge.IsChecked(proxy);
+                if (!_trayPreference.HasValue || requested != _trayPreference.Value)
+                {
+                    _trayPreference = requested;
+                    _settings.SaveTrayIconEnabled(requested);
+                }
+                return;
+            }
+
+            // Migration from rev.17 and older: capture the old frozen-core setting once, then the
+            // bridge owns that preference permanently and the frozen-core tray checkbox stays OFF.
+            if (!_trayPreference.HasValue && traySetting != IntPtr.Zero)
+            {
+                _trayPreference = NativeBridge.IsChecked(traySetting);
+                _settings.SaveTrayIconEnabled(_trayPreference.Value);
+            }
+        }
+
+        private static void EnsureLegacyTrayDisabled(IntPtr traySetting)
+        {
+            if (traySetting != IntPtr.Zero && NativeBridge.IsChecked(traySetting))
+                NativeBridge.ClickButton(traySetting);
+        }
+
+        private void ReapplyCanonicalTrayProxy()
+        {
+            if (!_trayPreference.HasValue || _mainWindow == IntPtr.Zero) return;
+            var proxy = NativeBridge.FindChildById(_mainWindow, TraySettingsProxyId);
+            if (proxy != IntPtr.Zero)
+                NativeBridge.SetChecked(proxy, _trayPreference.Value);
         }
 
         private void UpdateZapretEnhancements()
@@ -288,9 +322,6 @@ namespace DPopCleaner.SimpleUpdate
             else
                 _zapretVisualHost.Show();
 
-            // rev.17 geometry intentionally runs after both previous layers. ZapretEnhancementHost
-            // may copy frozen proxy bounds every 100ms and visual polish may change owner-draw styles;
-            // the final pass must therefore own the authoritative responsive positions for this tick.
             if (_zapretResponsiveHost == null)
                 _zapretResponsiveHost = new ZapretResponsiveLayoutHost(_mainWindow);
             else
@@ -373,6 +404,10 @@ namespace DPopCleaner.SimpleUpdate
 
             SettingsProxyLocalization.Apply(_mainWindow);
             NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds);
+            // AdditionalSettingsHost still mirrors the six frozen settings. The tray row is special
+            // in rev.18: visually keep the persisted canonical preference while the hidden frozen
+            // tray checkbox remains OFF, preventing a second Shell_NotifyIcon from ever being owned.
+            ReapplyCanonicalTrayProxy();
         }
 
         private void OnAutoUpdateSettingChanged(bool enabled)
