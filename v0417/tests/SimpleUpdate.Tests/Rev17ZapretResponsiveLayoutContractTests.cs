@@ -41,6 +41,7 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(source, "GetClientRect(_parent");
             StringAssert.Contains(source, "TextRenderer.MeasureText");
             StringAssert.Contains(source, "clientWidth");
+            StringAssert.Contains(source, "clientHeight");
             StringAssert.Contains(source, "nativeButtonHeight");
             StringAssert.Contains(source, "scale");
             StringAssert.Contains(source, "Math.Max");
@@ -55,6 +56,7 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(source, "ResponsiveRowGap");
             StringAssert.Contains(source, "ResponsiveColumnGap");
             StringAssert.Contains(source, "ResponsiveButtonHeight");
+            StringAssert.Contains(source, "ResponsiveMaximumButtonHeight");
             StringAssert.Contains(source, "ResponsiveMinimumButtonWidth");
         }
 
@@ -63,8 +65,9 @@ namespace SimpleUpdate.Tests
         {
             var source = ReadSource("ZapretResponsiveLayoutHost.cs");
 
-            StringAssert.Contains(source, "FindStatusRegionBounds");
-            StringAssert.Contains(source, "statusBounds.Bottom + rowGap");
+            StringAssert.Contains(source, "FindStatusEdits");
+            StringAssert.Contains(source, "statusDetailBottom + rowGap");
+            StringAssert.Contains(source, "availableVerticalSpace");
             StringAssert.Contains(source, "updateHeadingTop");
             Assert.IsFalse(source.Contains("legacyStrategyTop"),
                 "Strategy Y must not be inherited from the previous responsive tick; maximize/restore must be reversible.");
@@ -97,7 +100,7 @@ namespace SimpleUpdate.Tests
             var visualIndex = launcher.IndexOf("_zapretVisualHost.Show();", StringComparison.Ordinal);
             var responsiveIndex = launcher.IndexOf("_zapretResponsiveHost.Show();", StringComparison.Ordinal);
             Assert.IsTrue(bridgeIndex >= 0 && visualIndex > bridgeIndex && responsiveIndex > visualIndex,
-                "Responsive geometry must run last so legacy/proxy positioning cannot overwrite rev.17 layout in the same 100ms tick.");
+                "Responsive geometry must run last so legacy/proxy positioning cannot overwrite the layout in the same 100ms tick.");
         }
     }
 }
