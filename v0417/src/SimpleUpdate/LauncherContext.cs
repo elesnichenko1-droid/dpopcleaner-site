@@ -110,6 +110,9 @@ namespace DPopCleaner.SimpleUpdate
 
                 UpdateTrayRamBadge();
 
+                // Temporary visibility changes are not exit signals. The frozen application can
+                // hide itself while minimizing/restoring or working in the tray; only a real exit
+                // without a same-path successor is allowed to terminate the launcher.
                 if (!NativeBridge.IsWindowVisible(_mainWindow))
                 {
                     if (_settingsHost != null) _settingsHost.Hide();
