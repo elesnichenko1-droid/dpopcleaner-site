@@ -28,8 +28,10 @@ class DPop0417Rev18UserReportContractTests(unittest.TestCase):
         self.assertIn('CaptureTrayPreferenceFromProxy', launcher)
         self.assertIn('EnsureLegacyTrayDisabled', launcher)
         self.assertIn('ReapplyCanonicalTrayProxy', launcher)
+        self.assertIn('OnTrayPreferenceChanged', launcher)
         self.assertIn('CanonicalTrayProxyId = 1503', host)
-        self.assertIn('if (setting.Id != CanonicalTrayProxyId) SyncLegacySetting(setting);', host)
+        self.assertIn('_trayPreferenceChanged', host)
+        self.assertIn('_trayPreferenceChanged(NativeBridge.IsChecked(setting.ProxyHandle))', host)
         self.assertIn('if (setting.Id != CanonicalTrayProxyId)\n                    NativeBridge.SetChecked', host)
 
     def test_rev18_has_a_real_installed_gate_for_the_user_report(self):
