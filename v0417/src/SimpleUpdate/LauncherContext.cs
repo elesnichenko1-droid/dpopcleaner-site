@@ -112,10 +112,6 @@ namespace DPopCleaner.SimpleUpdate
 
                 if (!NativeBridge.IsWindowVisible(_mainWindow))
                 {
-                    // Temporary visibility changes are not exit signals. The frozen application can
-                    // hide itself while minimizing/restoring or working in the tray; only a real exit
-                    // without a same-path successor is allowed to terminate the launcher. The RAM tray
-                    // host intentionally continues updating before this branch.
                     if (_settingsHost != null) _settingsHost.Hide();
                     if (_zapretHost != null) _zapretHost.Hide();
                     if (_zapretVisualHost != null) _zapretVisualHost.Hide();
@@ -142,7 +138,6 @@ namespace DPopCleaner.SimpleUpdate
             }
             catch (Exception ex)
             {
-                // UI bridge failures must never terminate the immutable authentic core.
                 BridgeDiagnostics.Record(ex);
             }
         }
@@ -241,8 +236,6 @@ namespace DPopCleaner.SimpleUpdate
             _mainWindow = IntPtr.Zero;
             _iconApplied = false;
 
-            // The canonical notification identity and its persisted user preference belong to the
-            // launcher, not to a frozen-core PID. Keep both across language/core restarts.
             if (_trayRamHost != null) _trayRamHost.ReattachMainWindow(IntPtr.Zero);
         }
 
@@ -261,9 +254,19 @@ namespace DPopCleaner.SimpleUpdate
             _trayRamHost.Update(_core.Id, _mainWindow, _trayPreference.Value);
         }
 
+        private IntPtr FindCanonicalTrayProxy()
+        {
+            var host = _settingsHost != null ? _settingsHost.Handle : IntPtr.Zero;
+            if (host == IntPtr.Zero && _mainWindow != IntPtr.Zero)
+                host = NativeBridge.FindChildById(_mainWindow, NativeBridge.SettingsScrollHostId);
+            return host == IntPtr.Zero ? IntPtr.Zero : NativeBridge.FindChildById(host, TraySettingsProxyId);
+        }
+
         private void CaptureTrayPreferenceFromProxy(IntPtr traySetting)
         {
-            var proxy = NativeBridge.FindChildById(_mainWindow, TraySettingsProxyId);
+            // IDs 1500-1505 collide with descendants in the frozen core. Never search 1503 from
+            // the main HWND; only the bridge settings host (1492) owns the canonical tray proxy.
+            var proxy = FindCanonicalTrayProxy();
             if (proxy != IntPtr.Zero && NativeBridge.IsWindowVisible(proxy))
             {
                 var requested = NativeBridge.IsChecked(proxy);
@@ -275,8 +278,6 @@ namespace DPopCleaner.SimpleUpdate
                 return;
             }
 
-            // Migration from rev.17 and older: capture the old frozen-core setting once, then the
-            // bridge owns that preference permanently and the frozen-core tray checkbox stays OFF.
             if (!_trayPreference.HasValue && traySetting != IntPtr.Zero)
             {
                 _trayPreference = NativeBridge.IsChecked(traySetting);
@@ -293,15 +294,13 @@ namespace DPopCleaner.SimpleUpdate
         private void ReapplyCanonicalTrayProxy()
         {
             if (!_trayPreference.HasValue || _mainWindow == IntPtr.Zero) return;
-            var proxy = NativeBridge.FindChildById(_mainWindow, TraySettingsProxyId);
+            var proxy = FindCanonicalTrayProxy();
             if (proxy != IntPtr.Zero)
                 NativeBridge.SetChecked(proxy, _trayPreference.Value);
         }
 
         private void UpdateZapretEnhancements()
         {
-            // Use the stable frozen control id instead of a localized caption. Language changes must
-            // never make the bridge conclude that the user left the Zapret page.
             var marker = NativeBridge.FindChildById(_mainWindow, NativeBridge.ZapretApplyButtonId);
             var zapretVisible = marker != IntPtr.Zero && NativeBridge.IsWindowVisible(marker);
             if (!zapretVisible)
@@ -396,17 +395,11 @@ namespace DPopCleaner.SimpleUpdate
             }
             else
             {
-                // Keep the bounds captured from the authentic page before proxy controls were created.
-                // Re-querying by label would recursively find our own proxy checkbox and feed its
-                // scrolled coordinates back into the host position, causing the pane to "fly away".
                 _settingsHost.Show(_settingsHostBounds);
             }
 
             SettingsProxyLocalization.Apply(_mainWindow);
             NativeBridge.HideLegacyOverflowControls(_mainWindow, _settingsHost.Handle, _settingsHostBounds);
-            // AdditionalSettingsHost still mirrors the six frozen settings. The tray row is special
-            // in rev.18: visually keep the persisted canonical preference while the hidden frozen
-            // tray checkbox remains OFF, preventing a second Shell_NotifyIcon from ever being owned.
             ReapplyCanonicalTrayProxy();
         }
 
