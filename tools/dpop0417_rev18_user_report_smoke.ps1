@@ -133,9 +133,9 @@ function Find-FrozenTrayCheckbox([IntPtr]$Window) {
     $null
 }
 function Find-TrayProxy([IntPtr]$Window) {
-    $host=Get-Children $Window|Where-Object{$_.Id -eq 1492}|Select-Object -First 1
-    if(-not $host){return $null}
-    Get-Children $host.Handle|Where-Object{$_.Id -eq 1503 -and $_.ClassName -eq 'Button'}|Select-Object -First 1
+    $settingsHost=Get-Children $Window|Where-Object{$_.Id -eq 1492}|Select-Object -First 1
+    if(-not $settingsHost){return $null}
+    Get-Children $settingsHost.Handle|Where-Object{$_.Id -eq 1503 -and $_.ClassName -eq 'Button'}|Select-Object -First 1
 }
 function Get-DPopEntries([Diagnostics.Process]$Launcher,[Diagnostics.Process]$Core) {
     @([Rev18Native]::Entries()|Where-Object{$_.OwnerPid -eq $Launcher.Id -or $_.OwnerPid -eq $Core.Id -or $_.Title -like '*DPopCleaner*' -or $_.ButtonText -like '*DPopCleaner*'})
