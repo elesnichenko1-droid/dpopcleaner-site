@@ -112,23 +112,21 @@ namespace DPopCleaner.SimpleUpdate
             var additionalButtons = ResolveButtons(buttons, AdditionalRowButtonIds);
             if (strategyButtons == null || updateButtons == null || actionButtons == null || additionalButtons == null) return;
 
-            var legacyStrategyTop = Math.Min(strategyComboBounds.Top, MinTop(strategyButtons));
-            var strategyRowTop = Math.Max(statusBounds.Bottom + rowGap, legacyStrategyTop);
-
-            var existingStrategyWidth = Math.Max(strategyComboBounds.Right - contentLeft,
-                strategyLabelBounds.Width + columnGap + strategyComboBounds.Width);
-            var desiredStrategyWidth = Math.Max(existingStrategyWidth, (int)Math.Round(contentWidth * 0.40));
+            // Every tick is a pure function of the current status/client geometry. Do not inherit Y
+            // from a previous responsive pass: maximize -> restore must return to the compact grid.
+            var strategyRowTop = statusBounds.Bottom + rowGap;
+            var labelWidth = Math.Max(strategyLabelBounds.Width, Scale(82, scale));
+            var minimumStrategyWidth = labelWidth + Scale(120, scale);
+            var desiredStrategyWidth = Math.Max(minimumStrategyWidth, (int)Math.Round(contentWidth * 0.40));
             var strategyButtonsMinimum = minimumButtonWidth * strategyButtons.Length + columnGap * (strategyButtons.Length - 1);
             var maximumStrategyWidth = contentWidth - strategyButtonsMinimum - columnGap;
-            if (maximumStrategyWidth < strategyLabelBounds.Width + Scale(120, scale)) return;
-            var strategyWidth = Math.Max(strategyLabelBounds.Width + Scale(120, scale),
-                Math.Min(desiredStrategyWidth, maximumStrategyWidth));
+            if (maximumStrategyWidth < minimumStrategyWidth) return;
+            var strategyWidth = Math.Min(desiredStrategyWidth, maximumStrategyWidth);
 
             var labelHeight = Math.Max(1, strategyLabelBounds.Height);
             var comboHeight = Math.Max(1, strategyComboBounds.Height);
             var labelTop = strategyRowTop + Math.Max(0, (buttonHeight - labelHeight) / 2);
             var comboTop = strategyRowTop + Math.Max(0, (buttonHeight - comboHeight) / 2);
-            var labelWidth = Math.Max(strategyLabelBounds.Width, Scale(82, scale));
 
             NativeBridge.PositionChildWindow(strategyLabel, Bounds(
                 contentLeft, labelTop, contentLeft + labelWidth, labelTop + labelHeight));
@@ -147,8 +145,7 @@ namespace DPopCleaner.SimpleUpdate
                 minimumButtonWidth,
                 scale);
 
-            // Do not leave the frozen "Обновление Zapret" caption at its old Y after strategy was
-            // pushed below a taller status region. It is part of the responsive vertical grid too.
+            // "Обновление Zapret" is an explicit responsive row separator, not a frozen Y anchor.
             var updateHeading = FindUpdateHeading(children);
             var updateHeadingBounds = NativeBridge.GetChildClientBounds(_parent, updateHeading);
             var updateHeadingHeight = updateHeadingBounds == null
@@ -168,13 +165,9 @@ namespace DPopCleaner.SimpleUpdate
                     updateHeadingTop + updateHeadingHeight));
             }
 
-            var updateCurrentTop = MinTop(updateButtons);
             var updateRowTop = Math.Max(
                 updateHeadingTop + updateHeadingHeight + halfGap,
                 strategyRowTop + buttonHeight + rowGap);
-            // Preserve a lower legacy position if it already has more vertical breathing room.
-            updateRowTop = Math.Max(updateRowTop, updateCurrentTop);
-
             LayoutZapretRow(updateButtons, contentLeft, updateRowTop, contentRight,
                 buttonHeight, columnGap, minimumButtonWidth, scale);
 
@@ -207,8 +200,7 @@ namespace DPopCleaner.SimpleUpdate
             if (filterBounds == null) return;
             var filterHeight = Math.Max(1, filterBounds.Height);
             var filterTop = additionalRowTop + Math.Max(0, (buttonHeight - filterHeight) / 2);
-            var filterWidth = Math.Max(filterBounds.Width, (int)Math.Round(contentWidth * 0.16));
-            filterWidth = Math.Min(filterWidth, (int)Math.Round(contentWidth * 0.22));
+            var filterWidth = (int)Math.Round(contentWidth * 0.18);
             filterWidth = Math.Max(Scale(145, scale), filterWidth);
             filterWidth = Math.Min(filterWidth, Math.Max(1, contentWidth / 3));
 
@@ -329,17 +321,6 @@ namespace DPopCleaner.SimpleUpdate
                 result[i] = handle;
             }
             return result;
-        }
-
-        private int MinTop(IntPtr[] buttons)
-        {
-            var top = int.MaxValue;
-            foreach (var button in buttons)
-            {
-                var bounds = NativeBridge.GetChildClientBounds(_parent, button);
-                if (bounds != null && bounds.Top < top) top = bounds.Top;
-            }
-            return top == int.MaxValue ? 0 : top;
         }
 
         private void LayoutZapretRow(IntPtr[] buttons, int left, int top, int right, int height,
