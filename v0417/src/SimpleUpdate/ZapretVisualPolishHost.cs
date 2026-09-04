@@ -13,6 +13,7 @@ namespace DPopCleaner.SimpleUpdate
         private const long BS_TYPEMASK = 0x0000000F;
         private const long BS_OWNERDRAW = 0x0000000B;
         private const uint WM_DRAWITEM = 0x002B;
+        private const uint WM_CTLCOLORSTATIC = 0x0138;
         private const uint DT_CENTER = 0x0001;
         private const uint DT_VCENTER = 0x0004;
         private const uint DT_SINGLELINE = 0x0020;
@@ -21,6 +22,7 @@ namespace DPopCleaner.SimpleUpdate
         private const uint ODS_DISABLED = 0x0004;
         private const uint ODT_BUTTON = 4;
         private const uint ToolbarSubclassId = 0xD510;
+        private const uint ParentSubclassId = 0xD511;
 
         private static readonly HashSet<int> UnifiedZapretButtonIds = new HashSet<int>
         {
@@ -47,7 +49,9 @@ namespace DPopCleaner.SimpleUpdate
 
         private static readonly object Sync = new object();
         private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> ToolbarOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
+        private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> ParentOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
         private static readonly SubclassProc ToolbarSubclassDelegate = StaticToolbarSubclassProc;
+        private static readonly SubclassProc ParentSubclassDelegate = StaticParentSubclassProc;
 
         private static readonly IntPtr DarkButtonBrush = CreateSolidBrush(Rgb(18, 27, 38));
         private static readonly IntPtr DarkPressedBrush = CreateSolidBrush(Rgb(27, 39, 53));
@@ -55,6 +59,8 @@ namespace DPopCleaner.SimpleUpdate
         private static readonly IntPtr LightButtonBrush = CreateSolidBrush(Rgb(244, 246, 249));
         private static readonly IntPtr LightPressedBrush = CreateSolidBrush(Rgb(226, 231, 237));
         private static readonly IntPtr LightBorderBrush = CreateSolidBrush(Rgb(176, 184, 194));
+        private static readonly IntPtr DarkPageBrush = CreateSolidBrush(Rgb(12, 17, 23));
+        private static readonly IntPtr LightPageBrush = CreateSolidBrush(Rgb(247, 248, 250));
 
         private readonly IntPtr _parent;
         private readonly string _applicationRoot;
@@ -68,6 +74,7 @@ namespace DPopCleaner.SimpleUpdate
         private bool _journalHeadingWasVisible;
         private bool _journalListWasVisible;
         private bool _journalCaptured;
+        private bool _parentSubclassed;
         private bool _disposed;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -114,6 +121,9 @@ namespace DPopCleaner.SimpleUpdate
         private static extern uint SetTextColor(IntPtr hdc, uint colorRef);
 
         [DllImport("gdi32.dll")]
+        private static extern uint SetBkColor(IntPtr hdc, uint colorRef);
+
+        [DllImport("gdi32.dll")]
         private static extern int SetBkMode(IntPtr hdc, int mode);
 
         [DllImport("comctl32.dll", SetLastError = true)]
@@ -145,6 +155,12 @@ namespace DPopCleaner.SimpleUpdate
             if (parent == IntPtr.Zero) throw new ArgumentException("Parent window is required.", "parent");
             _parent = parent;
             _applicationRoot = Path.GetFullPath(applicationRoot ?? string.Empty);
+            lock (Sync) ParentOwners[_parent] = this;
+            _parentSubclassed = SetWindowSubclass(_parent, ParentSubclassDelegate, new UIntPtr(ParentSubclassId), UIntPtr.Zero);
+            if (!_parentSubclassed)
+            {
+                lock (Sync) ParentOwners.Remove(_parent);
+            }
             Show();
         }
 
@@ -197,28 +213,56 @@ namespace DPopCleaner.SimpleUpdate
             {
                 foreach (var button in _buttons)
                     InvalidateRect(button, IntPtr.Zero, true);
+                var serviceHeading = NativeBridge.FindChildById(_parent, ZapretResponsiveLayoutHost.ServiceActionsHeadingId);
+                if (serviceHeading != IntPtr.Zero) InvalidateRect(serviceHeading, IntPtr.Zero, true);
             }
         }
 
         private void RefreshVersionCaptions()
         {
             var version = GetInstalledZapretVersion();
+            var english = IsEnglishZapretUi();
             foreach (var child in NativeBridge.GetChildren(_parent))
             {
                 if (!child.Visible || !string.Equals(child.ClassName, "Button", StringComparison.OrdinalIgnoreCase)) continue;
                 if (child.Id == ZapretEnhancementHost.GameFilterButtonId)
                 {
-                    var current = child.Text ?? string.Empty;
-                    var prefix = current.StartsWith("Game", StringComparison.OrdinalIgnoreCase) ? "Game filter " : "Игровой фильтр ";
-                    WriteCaptionIfDifferent(child.Handle, prefix + version);
+                    WriteCaptionIfDifferent(child.Handle, (english ? "Game filter " : "Игровой фильтр ") + version);
                 }
                 else if (child.Id == ZapretEnhancementHost.ManagerButtonId)
                 {
-                    var current = child.Text ?? string.Empty;
-                    var prefix = current.StartsWith("Manager", StringComparison.OrdinalIgnoreCase) ? "Manager " : "Менеджер ";
-                    WriteCaptionIfDifferent(child.Handle, prefix + version);
+                    WriteCaptionIfDifferent(child.Handle, (english ? "Manager " : "Менеджер ") + version);
+                }
+                else if (child.Id == 1716)
+                {
+                    WriteCaptionIfDifferent(child.Handle, english ? "Auto-update" : "Автообновление");
+                }
+                else if (child.Id == 1717)
+                {
+                    WriteCaptionIfDifferent(child.Handle, english ? "Zapret autostart" : "Автозапуск Zapret");
+                }
+                else if (child.Id == ZapretEnhancementHost.RemoveServicesProxyButtonId)
+                {
+                    WriteCaptionIfDifferent(child.Handle, english ? "Remove services" : "Удалить сервисы");
+                }
+                else if (child.Id == 1710)
+                {
+                    WriteCaptionIfDifferent(child.Handle, english ? "Diagnostics" : "Диагностика");
                 }
             }
+        }
+
+        private bool IsEnglishZapretUi()
+        {
+            foreach (var child in NativeBridge.GetChildren(_parent))
+            {
+                if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(child.Text, "Strategy", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(child.Text, "Zapret Update", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(child.Text, "Additional", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         private static void WriteCaptionIfDifferent(IntPtr button, string desired)
@@ -359,6 +403,31 @@ namespace DPopCleaner.SimpleUpdate
             return DefSubclassProc(hwnd, msg, wParam, lParam);
         }
 
+        private static IntPtr StaticParentSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr refData)
+        {
+            ZapretVisualPolishHost owner;
+            lock (Sync) ParentOwners.TryGetValue(hwnd, out owner);
+            if (owner != null && msg == WM_CTLCOLORSTATIC && lParam != IntPtr.Zero)
+            {
+                var brush = owner.DrawServiceHeading(wParam, lParam);
+                if (brush != IntPtr.Zero) return brush;
+            }
+            return DefSubclassProc(hwnd, msg, wParam, lParam);
+        }
+
+        private IntPtr DrawServiceHeading(IntPtr hdc, IntPtr control)
+        {
+            var heading = NativeBridge.FindChildById(_parent, ZapretResponsiveLayoutHost.ServiceActionsHeadingId);
+            if (heading == IntPtr.Zero || heading != control) return IntPtr.Zero;
+
+            var textColor = _darkTheme ? Rgb(242, 246, 250) : Rgb(28, 36, 46);
+            var pageColor = _darkTheme ? Rgb(12, 17, 23) : Rgb(247, 248, 250);
+            SetTextColor(hdc, textColor);
+            SetBkColor(hdc, pageColor);
+            SetBkMode(hdc, TRANSPARENT);
+            return _darkTheme ? DarkPageBrush : LightPageBrush;
+        }
+
         private void DrawOwnerButton(ref DRAWITEMSTRUCT item)
         {
             var selected = (item.itemState & ODS_SELECTED) != 0;
@@ -392,6 +461,12 @@ namespace DPopCleaner.SimpleUpdate
             RestoreJournal();
             _disposed = true;
 
+            if (_parentSubclassed)
+            {
+                try { RemoveWindowSubclass(_parent, ParentSubclassDelegate, new UIntPtr(ParentSubclassId)); } catch { }
+                lock (Sync) ParentOwners.Remove(_parent);
+                _parentSubclassed = false;
+            }
             foreach (var toolbar in _toolbarParents)
             {
                 try { RemoveWindowSubclass(toolbar, ToolbarSubclassDelegate, new UIntPtr(ToolbarSubclassId)); } catch { }
