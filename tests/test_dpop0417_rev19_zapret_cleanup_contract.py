@@ -51,13 +51,12 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('REV19_FIRST_PAINT_DIAG', probe)
         self.assertIn('Assert-FirstPaint $buttonPath', probe)
 
-    def test_primary_screenshot_composites_launcher_owned_proxy_buttons(self):
+    def test_primary_screenshot_composites_real_screen_remove_services(self):
         smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('Capture-CompositeWindow', smoke)
-        self.assertIn('Capture-ProxyBitmap', smoke)
-        self.assertIn('$ProxyButtonIds', smoke)
-        self.assertIn('$_.OwnerPid -eq $LauncherPid', smoke)
-        self.assertIn('[Rev19Native]::SendMessage($Child.Handle,0x0318', smoke)
+        self.assertIn('Capture-ScreenChildBitmap', smoke)
+        self.assertIn('CopyFromScreen', smoke)
+        self.assertIn('$_.Id -eq 1702', smoke)
         self.assertIn('DrawImageUnscaled', smoke)
         self.assertIn('REV19_PRIMARY_COMPOSITE_OK', smoke)
         self.assertIn('Capture-CompositeWindow $window $shot $children $launcher.Id', smoke)
