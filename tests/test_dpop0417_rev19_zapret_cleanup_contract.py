@@ -70,13 +70,14 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         polish_pos = method.index('new ZapretVisualPolishHost')
         self.assertLess(layout_pos, polish_pos, 'responsive geometry must be applied before bridge visual painting')
 
-    def test_bridge_buttons_repaint_only_when_geometry_actually_changes(self):
-        polish = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
-        self.assertIn('_buttonPaintRects', polish)
-        self.assertIn('GetWindowRect(button, out currentRect)', polish)
-        self.assertIn('RectEquals(previousRect, currentRect)', polish)
-        self.assertIn('geometryChanged', polish)
-        self.assertIn('RDW_UPDATENOW', polish)
+    def test_nested_bridge_hosts_repaint_only_after_real_geometry_change(self):
+        layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
+        self.assertIn('private static bool PositionIfChanged', layout)
+        self.assertIn('var groupChanged = PositionIfChanged', layout)
+        self.assertIn('groupChanged |= PositionIfChanged', layout)
+        self.assertIn('if (groupChanged)', layout)
+        self.assertIn('RedrawWindow(parent', layout)
+        self.assertIn('RDW_UPDATENOW', layout)
 
     def test_service_heading_uses_same_process_host_and_current_theme(self):
         layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
