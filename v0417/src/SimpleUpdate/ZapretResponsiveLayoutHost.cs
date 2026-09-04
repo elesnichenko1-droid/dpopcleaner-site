@@ -582,6 +582,16 @@ namespace DPopCleaner.SimpleUpdate
         {
             var caption = NativeBridge.ReadWindowText(button) ?? string.Empty;
             var measured = TextRenderer.MeasureText(caption, SystemFonts.MessageBoxFont).Width;
+            var fontHandle = NativeBridge.SendMessage(button, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
+            if (fontHandle != IntPtr.Zero)
+            {
+                try
+                {
+                    using (var actualFont = Font.FromHfont(fontHandle))
+                        measured = TextRenderer.MeasureText(caption, actualFont).Width;
+                }
+                catch { }
+            }
             return measured + Scale(ResponsiveTextPadding, scale);
         }
 
