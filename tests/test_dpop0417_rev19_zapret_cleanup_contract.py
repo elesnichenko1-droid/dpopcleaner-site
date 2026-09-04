@@ -35,6 +35,14 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('CompactUpdateToggleButtonIds', source)
         self.assertIn('Scale(170, scale)', source)
 
+    def test_compact_service_row_measures_actual_button_font_and_never_ellipsizes(self):
+        layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
+        polish = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('NativeBridge.WM_GETFONT', layout)
+        self.assertIn('Font.FromHfont', layout)
+        self.assertIn('MeasurePreferredWidth', layout)
+        self.assertNotIn('DT_END_ELLIPSIS', polish)
+
     def test_service_heading_uses_same_process_host_and_current_theme(self):
         layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
         polish = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
