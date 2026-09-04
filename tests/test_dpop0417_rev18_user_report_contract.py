@@ -13,11 +13,15 @@ class DPop0417Rev18UserReportContractTests(unittest.TestCase):
         self.assertIn('ResponsiveMaximumButtonHeight', source)
         self.assertIn('statusDetailBottom', source)
 
-    def test_ownerdraw_zapret_buttons_disable_native_windows_theme(self):
+    def test_bridge_buttons_disable_native_windows_theme_without_cross_process_ownerdraw(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('BridgeButtonIds', source)
         self.assertIn('SetWindowTheme', source)
         self.assertIn('SetWindowTheme(button, string.Empty, string.Empty)', source)
-        self.assertIn('SetWindowTheme(pair.Key, null, null)', source)
+        self.assertIn('SetWindowTheme(button, null, null)', source)
+        self.assertIn('ButtonSubclassDelegate', source)
+        self.assertNotIn('UnifiedZapretButtonIds', source)
+        self.assertNotIn('SetOwnerDrawStyle(button, originalStyle)', source)
 
     def test_single_tray_uses_separate_user_preference_and_keeps_core_tray_off(self):
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
