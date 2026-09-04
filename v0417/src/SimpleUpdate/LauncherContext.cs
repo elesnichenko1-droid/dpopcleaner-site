@@ -319,15 +319,15 @@ namespace DPopCleaner.SimpleUpdate
             else
                 _zapretHost.Show();
 
-            if (_zapretVisualHost == null)
-                _zapretVisualHost = new ZapretVisualPolishHost(_mainWindow, _applicationRoot);
-            else
-                _zapretVisualHost.Show();
-
             if (_zapretResponsiveHost == null)
                 _zapretResponsiveHost = new ZapretResponsiveLayoutHost(_mainWindow);
             else
                 _zapretResponsiveHost.Show();
+
+            if (_zapretVisualHost == null)
+                _zapretVisualHost = new ZapretVisualPolishHost(_mainWindow, _applicationRoot);
+            else
+                _zapretVisualHost.Show();
         }
 
         private void UpdateSettingsEnhancements()
