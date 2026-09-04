@@ -22,6 +22,10 @@ namespace DPopCleaner.SimpleUpdate
         private const int TRANSPARENT = 1;
         private const uint ButtonSubclassId = 0xD512;
         private const uint ServiceHeadingSubclassId = 0xD511;
+        private const uint RDW_INVALIDATE = 0x0001;
+        private const uint RDW_ERASE = 0x0004;
+        private const uint RDW_ALLCHILDREN = 0x0080;
+        private const uint RDW_UPDATENOW = 0x0100;
 
         private static readonly HashSet<int> BridgeButtonIds = new HashSet<int>
         {
@@ -91,6 +95,9 @@ namespace DPopCleaner.SimpleUpdate
 
         [DllImport("user32.dll")]
         private static extern bool InvalidateRect(IntPtr hwnd, IntPtr rect, bool erase);
+
+        [DllImport("user32.dll")]
+        private static extern bool RedrawWindow(IntPtr hwnd, IntPtr updateRect, IntPtr updateRegion, uint flags);
 
         [DllImport("user32.dll")]
         private static extern IntPtr BeginPaint(IntPtr hwnd, out PAINTSTRUCT paint);
@@ -200,8 +207,17 @@ namespace DPopCleaner.SimpleUpdate
 
             if (themeChanged || added)
             {
+                var bridgeHosts = new HashSet<IntPtr>();
                 foreach (var button in _buttons)
+                {
                     InvalidateRect(button, IntPtr.Zero, true);
+                    var host = GetParent(button);
+                    if (host != IntPtr.Zero && host != _parent) bridgeHosts.Add(host);
+                }
+                foreach (var host in bridgeHosts)
+                    RedrawWindow(host, IntPtr.Zero, IntPtr.Zero,
+                        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+
                 var serviceHeading = NativeBridge.FindChildById(_parent, ZapretResponsiveLayoutHost.ServiceActionsHeadingId);
                 if (serviceHeading != IntPtr.Zero) InvalidateRect(serviceHeading, IntPtr.Zero, true);
             }
