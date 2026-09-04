@@ -18,6 +18,7 @@ namespace DPopCleaner.SimpleUpdate
         private const uint DT_SINGLELINE = 0x0020;
         private const int TRANSPARENT = 1;
         private const int GWL_STYLE = -16;
+        private const int WS_CLIPCHILDREN = 0x02000000;
         private const int BS_TYPEMASK = 0x0000000F;
         private const int BS_OWNERDRAW = 0x0000000B;
         private const uint BridgeHostSubclassId = 0xD512;
@@ -58,6 +59,7 @@ namespace DPopCleaner.SimpleUpdate
         private readonly IntPtr _parent;
         private readonly string _applicationRoot;
         private readonly HashSet<IntPtr> _bridgeHosts = new HashSet<IntPtr>();
+        private readonly Dictionary<IntPtr, int> _originalBridgeHostStyles = new Dictionary<IntPtr, int>();
         private readonly Dictionary<IntPtr, int> _originalButtonStyles = new Dictionary<IntPtr, int>();
         private bool _darkTheme = true;
         private bool _themeKnown;
@@ -193,8 +195,9 @@ namespace DPopCleaner.SimpleUpdate
                 if (host == IntPtr.Zero || host == _parent) continue;
 
                 // Install the renderer on the launcher-owned parent first. Only after the host can
-                // answer WM_DRAWITEM do we switch its child Button to BS_OWNERDRAW. This removes the
-                // fragile per-button WM_PAINT subclass and leaves click/WM_COMMAND behavior untouched.
+                // answer WM_DRAWITEM do we switch its child Button to BS_OWNERDRAW. The host also
+                // clips child rectangles so its own WM_ERASEBKGND cannot paint over the owner-draw
+                // button after it was rendered.
                 if (!EnsureBridgeHostSubclass(host)) continue;
                 changed |= SetOwnerDrawStyle(button);
                 SetWindowTheme(button, string.Empty, string.Empty);
@@ -215,14 +218,29 @@ namespace DPopCleaner.SimpleUpdate
         private bool EnsureBridgeHostSubclass(IntPtr host)
         {
             if (_bridgeHosts.Contains(host)) return true;
+            SetClipChildrenStyle(host);
             lock (Sync) BridgeHostOwners[host] = this;
             if (!SetWindowSubclass(host, BridgeHostSubclassDelegate, new UIntPtr(BridgeHostSubclassId), UIntPtr.Zero))
             {
                 lock (Sync) BridgeHostOwners.Remove(host);
+                int original;
+                if (_originalBridgeHostStyles.TryGetValue(host, out original))
+                {
+                    try { SetWindowLong(host, GWL_STYLE, original); } catch { }
+                    _originalBridgeHostStyles.Remove(host);
+                }
                 return false;
             }
             _bridgeHosts.Add(host);
             return true;
+        }
+
+        private void SetClipChildrenStyle(IntPtr host)
+        {
+            var current = GetWindowLong(host, GWL_STYLE);
+            if (!_originalBridgeHostStyles.ContainsKey(host)) _originalBridgeHostStyles[host] = current;
+            var desired = current | WS_CLIPCHILDREN;
+            if (current != desired) SetWindowLong(host, GWL_STYLE, desired);
         }
 
         private bool SetOwnerDrawStyle(IntPtr button)
@@ -527,6 +545,18 @@ namespace DPopCleaner.SimpleUpdate
                 lock (Sync) BridgeHostOwners.Remove(host);
             }
             _bridgeHosts.Clear();
+
+            foreach (var pair in _originalBridgeHostStyles)
+            {
+                try
+                {
+                    SetWindowLong(pair.Key, GWL_STYLE, pair.Value);
+                    RedrawWindow(pair.Key, IntPtr.Zero, IntPtr.Zero,
+                        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+                }
+                catch { }
+            }
+            _originalBridgeHostStyles.Clear();
 
             foreach (var pair in _originalButtonStyles)
             {
