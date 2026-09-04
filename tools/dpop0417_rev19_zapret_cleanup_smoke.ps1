@@ -30,7 +30,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 public sealed class Rev19Child {
-    public IntPtr Handle; public int Id; public string Text; public string ClassName; public bool Visible;
+    public IntPtr Handle; public int Id; public string Text; public string ClassName; public bool Visible; public int OwnerPid;
     public int Left; public int Top; public int Right; public int Bottom;
 }
 public sealed class Rev19TrayEntry {
@@ -68,15 +68,15 @@ public static class Rev19Native {
 
     public static Rev19Child[] Children(IntPtr parent) {
         var list=new List<Rev19Child>(); EnumProc cb=delegate(IntPtr h,IntPtr _) {
-            var t=new StringBuilder(1024); var c=new StringBuilder(128); RECT r;
-            GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity); GetWindowRect(h,out r);
-            list.Add(new Rev19Child{Handle=h,Id=GetDlgCtrlID(h),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(h),Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom}); return true;
+            var t=new StringBuilder(1024); var c=new StringBuilder(128); RECT r; uint ownerPid=0;
+            GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity); GetWindowRect(h,out r); GetWindowThreadProcessId(h,out ownerPid);
+            list.Add(new Rev19Child{Handle=h,Id=GetDlgCtrlID(h),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(h),OwnerPid=(int)ownerPid,Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom}); return true;
         }; EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
     }
     public static Rev19Child Bounds(IntPtr hwnd) {
-        RECT r; if(!GetWindowRect(hwnd,out r))return null; var t=new StringBuilder(1024); var c=new StringBuilder(128);
-        GetWindowText(hwnd,t,t.Capacity); GetClassName(hwnd,c,c.Capacity);
-        return new Rev19Child{Handle=hwnd,Id=GetDlgCtrlID(hwnd),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(hwnd),Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom};
+        RECT r; if(!GetWindowRect(hwnd,out r))return null; var t=new StringBuilder(1024); var c=new StringBuilder(128); uint ownerPid=0;
+        GetWindowText(hwnd,t,t.Capacity); GetClassName(hwnd,c,c.Capacity); GetWindowThreadProcessId(hwnd,out ownerPid);
+        return new Rev19Child{Handle=hwnd,Id=GetDlgCtrlID(hwnd),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(hwnd),OwnerPid=(int)ownerPid,Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom};
     }
     public static Rev19TrayEntry[] Entries() {
         var result=new List<Rev19TrayEntry>(); foreach(var toolbar in Toolbars())Collect(toolbar,result); return result.ToArray();
@@ -122,6 +122,25 @@ function Capture-Window([IntPtr]$Window,[string]$Path) {
     $bitmap=[Drawing.Bitmap]::new($w,$h);$graphics=[Drawing.Graphics]::FromImage($bitmap);$hdc=$graphics.GetHdc()
     try{if(-not [Rev19Native]::PrintWindow($Window,$hdc,2)){throw 'PrintWindow failed for rev.19 screenshot.'}}finally{$graphics.ReleaseHdc($hdc);$graphics.Dispose()}
     try{$bitmap.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}
+}
+function Get-CropColorCount([string]$Path,$Child,$WindowBounds) {
+    if(-not(Test-Path -LiteralPath $Path -PathType Leaf)){throw "screenshot missing: $Path"}
+    $bitmap=[Drawing.Bitmap]::new($Path);$colors=[Collections.Generic.HashSet[int]]::new()
+    try{
+        $left=[Math]::Max(0,$Child.Left-$WindowBounds.Left);$top=[Math]::Max(0,$Child.Top-$WindowBounds.Top)
+        $right=[Math]::Min($bitmap.Width,$Child.Right-$WindowBounds.Left);$bottom=[Math]::Min($bitmap.Height,$Child.Bottom-$WindowBounds.Top)
+        if($right-le$left -or $bottom-le$top){throw "button crop is outside screenshot: $left,$top-$right,$bottom"}
+        for($y=$top;$y-lt$bottom;$y++){for($x=$left;$x-lt$right;$x++){[void]$colors.Add($bitmap.GetPixel($x,$y).ToArgb())}}
+    }finally{$bitmap.Dispose()}
+    $colors.Count
+}
+function Assert-RemoveServicesCaptured([string]$Path,[object[]]$Children,[int]$LauncherPid,$WindowBounds,[string]$Phase) {
+    $button=$Children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1702 -and $_.OwnerPid -eq $LauncherPid}|Select-Object -First 1
+    if(-not$button){throw "$Phase: launcher remove-services button 1702 missing at screenshot time."}
+    $colors=Get-CropColorCount $Path $button $WindowBounds
+    if($colors-lt4){throw "$Phase: remove-services is blank in primary screenshot: uniqueColors=$colors path=$Path"}
+    Write-Host "REV19_PRIMARY_SCREENSHOT_PAINT_OK name=$Phase uniqueColors=$colors"
+    $colors
 }
 function Assert-SameRow([object[]]$Buttons,[int[]]$Ids,[string]$Name) {
     $row=@($Buttons|Where-Object{$Ids -contains $_.Id})
@@ -177,6 +196,7 @@ $additionalIds=@(1704,1705,1707,1708)
 $serviceIds=@(1703,1702,1710,1711)
 $settingsPath=Join-Path $OutputDir 'rev19-settings.ini'
 @('auto_update=0','tray_icon=1')|Set-Content -LiteralPath $settingsPath -Encoding ascii
+
 $reports=@();$launcher=$null;$core=$null
 try{
     $launcher=Start-Process -FilePath $launcherPath -ArgumentList @('--no-update-check','--settings-path',('"'+$settingsPath+'"')) -WorkingDirectory $RootPath -PassThru
@@ -250,7 +270,8 @@ try{
 
         $shot=Join-Path $OutputDir ("rev19-zapret-{0}-{1}x{2}.png" -f $size.Name,$size.Width,$size.Height)
         Capture-Window $window $shot
-        $reports += [pscustomobject]@{name=$size.Name;width=$size.Width;height=$size.Height;detail_height=$detailHeight;strategy_top=$strategyTop;update_top=$updateTop;action_top=$actionTop;additional_top=$additionalTop;service_top=$serviceTop;service_bottom=$serviceBottom;unused_bottom=$unusedBottom;toggle_widths=$toggleWidths;primary_update_widths=$primaryWidths;service_widths=$serviceWidths;screenshot=$shot}
+        $removeColors=Assert-RemoveServicesCaptured $shot $children $launcher.Id $windowBounds $size.Name
+        $reports += [pscustomobject]@{name=$size.Name;width=$size.Width;height=$size.Height;detail_height=$detailHeight;strategy_top=$strategyTop;update_top=$updateTop;action_top=$actionTop;additional_top=$additionalTop;service_top=$serviceTop;service_bottom=$serviceBottom;unused_bottom=$unusedBottom;toggle_widths=$toggleWidths;primary_update_widths=$primaryWidths;service_widths=$serviceWidths;remove_services_colors=$removeColors;screenshot=$shot}
         Write-Host "REV19_SIZE_OK name=$($size.Name) size=$($size.Width)x$($size.Height) detail=$detailHeight rows=$strategyTop/$updateTop/$actionTop/$additionalTop/$serviceTop unusedBottom=$unusedBottom"
     }
 
