@@ -22,11 +22,10 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
 
     def test_service_actions_have_their_own_compact_heading_and_row(self):
         layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
-        enhancement = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
-        self.assertIn('ServiceActionsHeadingId', enhancement)
-        self.assertIn('Сервисные действия', enhancement)
-        self.assertIn('Service actions', enhancement)
         self.assertIn('ServiceActionsHeadingId', layout)
+        self.assertIn('Сервисные действия', layout)
+        self.assertIn('Service actions', layout)
+        self.assertIn('EnsureServiceActionsHeading', layout)
         self.assertIn('LayoutCompactServiceRow', layout)
 
     def test_auto_controls_use_text_sized_compact_cells_not_equal_flex_widths(self):
