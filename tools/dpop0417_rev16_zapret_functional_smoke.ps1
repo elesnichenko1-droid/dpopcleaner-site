@@ -26,26 +26,41 @@ public static class Rev16ZapretNative {
     private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left,Top,Right,Bottom; }
     [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc proc, IntPtr lParam);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd,StringBuilder text,int max);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd,StringBuilder text,int max);
     [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd,out RECT rect);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd,out uint processId);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd,uint msg,IntPtr wp,IntPtr lp);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd,uint msg,IntPtr wp,IntPtr lp);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr hwnd,uint msg,IntPtr wp,StringBuilder lp);
     [DllImport("user32.dll")] private static extern IntPtr GetParent(IntPtr hwnd);
 
+    private static Rev16ZapretChild Describe(IntPtr h) {
+        var t=new StringBuilder(1024); var c=new StringBuilder(128); RECT r;
+        GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity); GetWindowRect(h,out r);
+        return new Rev16ZapretChild{Handle=h,Id=GetDlgCtrlID(h),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(h),Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom};
+    }
     public static Rev16ZapretChild[] Children(IntPtr parent) {
         var result=new List<Rev16ZapretChild>();
-        EnumProc cb=delegate(IntPtr h,IntPtr _) {
-            var t=new StringBuilder(1024); var c=new StringBuilder(128); RECT r;
-            GetWindowText(h,t,t.Capacity); GetClassName(h,c,c.Capacity); GetWindowRect(h,out r);
-            result.Add(new Rev16ZapretChild{Handle=h,Id=GetDlgCtrlID(h),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(h),Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom});
-            return true;
-        };
+        EnumProc cb=delegate(IntPtr h,IntPtr _) { result.Add(Describe(h)); return true; };
         EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return result.ToArray();
     }
+    public static Rev16ZapretChild[] TopWindows(uint processId) {
+        var result=new List<Rev16ZapretChild>();
+        EnumProc cb=delegate(IntPtr h,IntPtr _) {
+            uint pid; GetWindowThreadProcessId(h,out pid);
+            if(pid==processId) result.Add(Describe(h));
+            return true;
+        };
+        EnumWindows(cb,IntPtr.Zero); GC.KeepAlive(cb); return result.ToArray();
+    }
+    public static IntPtr Parent(IntPtr hwnd) { return GetParent(hwnd); }
+    public static string WindowClass(IntPtr hwnd) { var b=new StringBuilder(128); GetClassName(hwnd,b,b.Capacity); return b.ToString(); }
+    public static string WindowText(IntPtr hwnd) { var b=new StringBuilder(1024); GetWindowText(hwnd,b,b.Capacity); return b.ToString(); }
+    public static int ComboIndex(IntPtr combo) { return SendMessage(combo,0x0147,IntPtr.Zero,IntPtr.Zero).ToInt32(); }
     public static string[] ComboItems(IntPtr combo) {
         const uint GETCOUNT=0x0146,GETTEXT=0x0148,GETLEN=0x0149;
         var values=new List<string>(); int count=SendMessage(combo,GETCOUNT,IntPtr.Zero,IntPtr.Zero).ToInt32();
@@ -64,9 +79,21 @@ public static class Rev16ZapretNative {
 Add-Type -TypeDefinition $native -Language CSharp
 
 function Get-Children([IntPtr]$Window){ @([Rev16ZapretNative]::Children($Window)) }
+function Format-Hwnd([IntPtr]$Handle){ '0x' + $Handle.ToInt64().ToString('X') }
+function Describe-Parent([IntPtr]$Handle) {
+    $parent=[Rev16ZapretNative]::Parent($Handle)
+    [pscustomobject]@{
+        Handle=$parent
+        Hwnd=(Format-Hwnd $parent)
+        Class=if($parent -ne [IntPtr]::Zero){[Rev16ZapretNative]::WindowClass($parent)}else{''}
+        Text=if($parent -ne [IntPtr]::Zero){[Rev16ZapretNative]::WindowText($parent)}else{''}
+    }
+}
 function Click-Id([IntPtr]$Window,[int]$Id) {
     $control=Get-Children $Window | Where-Object { $_.Visible -and $_.Id -eq $Id -and $_.ClassName -eq 'Button' } | Select-Object -First 1
     if(-not $control){ throw "Visible button id=$Id not found." }
+    $parent=Describe-Parent $control.Handle
+    Write-Host "REV16_ZAPRET_CLICK_TARGET id=$Id hwnd=$(Format-Hwnd $control.Handle) parent=$($parent.Hwnd) parent_class='$($parent.Class)' parent_text='$($parent.Text)' text='$($control.Text)' bounds=$($control.Left),$($control.Top),$($control.Right),$($control.Bottom)"
     if (-not [Rev16ZapretNative]::PostMessage($control.Handle,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)) { throw "Could not queue Zapret click id=$Id." }
     Start-Sleep -Milliseconds 250
 }
@@ -94,11 +121,45 @@ function Wait-ZapretPage([IntPtr]$Window) {
     throw 'Zapret page did not become visible.'
 }
 function Get-StrategyCombo([IntPtr]$Window) {
-    @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' } | Sort-Object Top | Select-Object -First 1) | Select-Object -First 1
+    $strategyCombos=@()
+    foreach($combo in @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'ComboBox' })) {
+        $items=@([Rev16ZapretNative]::ComboItems($combo.Handle))
+        $strategyCount=@($items | Where-Object { $_ -match '(?i)^general.*\.bat$' }).Count
+        if($strategyCount -ge 2) {
+            $strategyCombos += [pscustomobject]@{ Combo=$combo; StrategyCount=$strategyCount }
+        }
+    }
+    if($strategyCombos.Count -eq 0){ return $null }
+    ($strategyCombos | Sort-Object StrategyCount -Descending | Select-Object -First 1).Combo
 }
 function Get-StatusSnapshot([IntPtr]$Window) {
     $edits=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' } | Sort-Object Top | Select-Object -First 2)
     [pscustomobject]@{ Upper=if($edits.Count -gt 0){$edits[0].Text}else{''}; Runtime=if($edits.Count -gt 1){$edits[1].Text}else{''} }
+}
+function Get-LauncherWindows($Launcher) {
+    try {
+        if (-not $Launcher) { return @() }
+        $Launcher.Refresh()
+        if ($Launcher.HasExited) { return @() }
+        @([Rev16ZapretNative]::TopWindows([uint32]$Launcher.Id))
+    } catch { @() }
+}
+function Get-LauncherDialogText($Launcher) {
+    try {
+        foreach($top in @(Get-LauncherWindows $Launcher | Where-Object { $_.Visible })) {
+            if ($top.Text -notmatch '(?i)Zapret') { continue }
+            $parts=@(Get-Children $top.Handle | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and -not [string]::IsNullOrWhiteSpace($_.Text) } | ForEach-Object { $_.Text.Trim() })
+            if ($parts.Count -gt 0) { return ($top.Text + ' :: ' + ($parts -join ' | ')) }
+            return $top.Text
+        }
+    } catch { }
+    return $null
+}
+function Write-LauncherWindowDiagnostic($Launcher,[string]$Prefix) {
+    foreach($top in @(Get-LauncherWindows $Launcher)) {
+        $parts=@(Get-Children $top.Handle | Where-Object { $_.Visible -and $_.ClassName -eq 'Static' -and -not [string]::IsNullOrWhiteSpace($_.Text) } | ForEach-Object { $_.Text.Trim() })
+        Write-Host "$Prefix hwnd=$(Format-Hwnd $top.Handle) visible=$($top.Visible) class='$($top.ClassName)' text='$($top.Text)' static='$($parts -join ' | ')'"
+    }
 }
 
 $script:WinwsPath=''
@@ -123,6 +184,7 @@ function Stop-ZapretResidue {
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 $installRoot=$null; $installed=$false; $launcherStub=$null; $core=$null
 $phase='setup'; $failure=$null; $firstStrategy=$null; $secondStrategy=$null; $firstCommand=$null; $secondCommand=$null; $lastStatus=$null
+$seenManagerFiles=@(); $seenManagerCmds=@(); $seenDialogs=@()
 try {
     if($InstallerPath) {
         $installer=(Resolve-Path -LiteralPath $InstallerPath).Path
@@ -167,15 +229,45 @@ try {
     $firstStrategy=$items[$firstIndex]
     $secondStrategy=$items[$secondIndex]
     [Rev16ZapretNative]::SelectCombo($window,$combo.Handle,$firstIndex)
+    $selectedIndex=[Rev16ZapretNative]::ComboIndex($combo.Handle)
+    $selectedValue=if($selectedIndex -ge 0 -and $selectedIndex -lt $items.Count){$items[$selectedIndex]}else{''}
+    Write-Host "REV16_ZAPRET_STRATEGY_SELECTED hwnd=$(Format-Hwnd $combo.Handle) index=$selectedIndex value='$selectedValue' expected='$firstStrategy'"
+    if($selectedValue -ne $firstStrategy){ throw "Strategy selection did not stick before Install Service: expected='$firstStrategy' actual='$selectedValue'." }
 
     $phase='install-service'
-    Click-Id -Window $window -Id 1701
-    Wait-Until -Seconds 12 -Description 'zapret service to exist and run after Install Service UI action' -Condition {
-        $service=Get-ZapretService
-        $service -and $service.State -eq 'Running'
+    $installCandidates=@(Get-Children $window | Where-Object { $_.Visible -and $_.Id -eq 1701 -and $_.ClassName -eq 'Button' })
+    Write-Host "REV16_ZAPRET_1701_COUNT=$($installCandidates.Count)"
+    foreach($candidate in $installCandidates) {
+        $parent=Describe-Parent $candidate.Handle
+        Write-Host "REV16_ZAPRET_1701_CANDIDATE hwnd=$(Format-Hwnd $candidate.Handle) parent=$($parent.Hwnd) parent_class='$($parent.Class)' parent_text='$($parent.Text)' text='$($candidate.Text)' bounds=$($candidate.Left),$($candidate.Top),$($candidate.Right),$($candidate.Bottom)"
     }
+    Write-LauncherWindowDiagnostic $launcherStub 'REV16_ZAPRET_LAUNCHER_WINDOW_BEFORE_CLICK'
+    Click-Id -Window $window -Id 1701
+    $installDeadline=[DateTime]::UtcNow.AddSeconds(20)
+    do {
+        $service=Get-ZapretService
+        if ($service -and $service.State -eq 'Running') { break }
+
+        $managerFiles=@(Get-ChildItem -LiteralPath (Join-Path $installRoot 'Zapret') -Filter 'service-dpop-install-*.bat' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+        foreach($manager in $managerFiles) {
+            if($seenManagerFiles -notcontains $manager){ $seenManagerFiles += $manager; Write-Host "REV16_ZAPRET_MANAGER_SEEN=$manager" }
+        }
+        $managerCmds=@(Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine -like ('*' + $installRoot + '*') } | ForEach-Object { [string]$_.CommandLine })
+        foreach($managerCmd in $managerCmds) {
+            if($seenManagerCmds -notcontains $managerCmd){ $seenManagerCmds += $managerCmd; Write-Host "REV16_ZAPRET_MANAGER_CMD_SEEN=$managerCmd" }
+        }
+        $dialog=Get-LauncherDialogText $launcherStub
+        if ($dialog) {
+            if($seenDialogs -notcontains $dialog){ $seenDialogs += $dialog; Write-Host "REV16_ZAPRET_DIALOG_SEEN=$dialog" }
+            throw "Install Service UI error: $dialog"
+        }
+        Start-Sleep -Milliseconds 200
+    } while([DateTime]::UtcNow -lt $installDeadline)
     $service=Get-ZapretService
-    if (-not $service -or $service.State -ne 'Running') { throw 'Install Service UI action did not create a running zapret service.' }
+    if (-not $service -or $service.State -ne 'Running') {
+        Write-LauncherWindowDiagnostic $launcherStub 'REV16_ZAPRET_LAUNCHER_WINDOW_AFTER_TIMEOUT'
+        throw "Timed out waiting for zapret service after production timeout; seen_managers=$($seenManagerFiles -join ','); seen_cmd=$($seenManagerCmds -join ' || '); dialogs=$($seenDialogs -join ' || ')"
+    }
     Write-Host "REV16_ZAPRET_INSTALL_OK strategy=$firstStrategy state=$($service.State)"
 
     $phase='service-status'
@@ -254,6 +346,9 @@ finally {
         second_strategy=$secondStrategy
         first_command_line=$firstCommand
         second_command_line=$secondCommand
+        seen_manager_files=$seenManagerFiles
+        seen_manager_cmds=$seenManagerCmds
+        seen_dialogs=$seenDialogs
         upper_status=if($lastStatus){$lastStatus.Upper}else{''}
         runtime_status=if($lastStatus){$lastStatus.Runtime}else{''}
         zapret_service=if($serviceState){[pscustomobject]@{Name=$serviceState.Name;State=$serviceState.State;PathName=$serviceState.PathName}}else{$null}

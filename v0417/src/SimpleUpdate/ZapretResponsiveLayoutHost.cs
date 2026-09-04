@@ -11,6 +11,7 @@ namespace DPopCleaner.SimpleUpdate
         private const int ResponsiveRowGap = 8;
         private const int ResponsiveColumnGap = 8;
         private const int ResponsiveButtonHeight = 34;
+        private const int ResponsiveMaximumButtonHeight = 48;
         private const int ResponsiveMinimumButtonWidth = 76;
         private const int ResponsiveTextPadding = 28;
 
@@ -42,6 +43,8 @@ namespace DPopCleaner.SimpleUpdate
         private static extern IntPtr GetParent(IntPtr hwnd);
 
         private readonly IntPtr _parent;
+        private int _nativeButtonHeight;
+        private int _nativeStatusDetailHeight;
         private bool _disposed;
 
         internal ZapretResponsiveLayoutHost(IntPtr parent)
@@ -72,28 +75,42 @@ namespace DPopCleaner.SimpleUpdate
             RECT clientRect;
             if (!GetClientRect(_parent, out clientRect)) return;
             var clientWidth = Math.Max(1, clientRect.Right - clientRect.Left);
+            var clientHeight = Math.Max(1, clientRect.Bottom - clientRect.Top);
 
             var children = NativeBridge.GetChildren(_parent);
             var buttons = CaptureResponsiveButtons(children);
             if (buttons.Count != ResponsiveZapretButtonIds.Length) return;
 
-            // The frozen page has two visible Edit status blocks. Treat them as one protected
-            // upper region because their heights change independently when the window is widened.
-            var statusBounds = FindStatusRegionBounds(children);
-            if (statusBounds == null || statusBounds.Width < 400) return;
+            IntPtr statusSummary;
+            IntPtr statusDetail;
+            NativeBridge.ClientBounds statusSummaryBounds;
+            NativeBridge.ClientBounds statusDetailBounds;
+            if (!FindStatusEdits(children, out statusSummary, out statusDetail, out statusSummaryBounds, out statusDetailBounds)) return;
 
             var applyBounds = NativeBridge.GetChildClientBounds(_parent, buttons[NativeBridge.ZapretApplyButtonId]);
             if (applyBounds == null) return;
-            var nativeButtonHeight = Math.Max(ResponsiveButtonHeight, applyBounds.Height);
+
+            // Capture immutable native baselines before this host changes any vertical geometry.
+            // Reading apply/status-detail height again on later 100ms ticks would feed our previous
+            // responsive result back into DPI calculations and make the page grow on every pass.
+            if (_nativeButtonHeight <= 0) _nativeButtonHeight = Math.Max(1, applyBounds.Height);
+            if (_nativeStatusDetailHeight <= 0) _nativeStatusDetailHeight = Math.Max(1, statusDetailBounds.Height);
+
+            var nativeButtonHeight = Math.Max(ResponsiveButtonHeight, _nativeButtonHeight);
             var scale = Math.Max(0.75, Math.Min(2.50, (double)nativeButtonHeight / ResponsiveButtonHeight));
-            var buttonHeight = Math.Max(nativeButtonHeight, Scale(ResponsiveButtonHeight, scale));
-            var rowGap = Scale(ResponsiveRowGap, scale);
+            var tallWindowExtra = Math.Max(0, clientHeight - 840);
+            var buttonHeight = Math.Min(
+                Scale(ResponsiveMaximumButtonHeight, scale),
+                Math.Max(nativeButtonHeight, Scale(ResponsiveButtonHeight, scale) + tallWindowExtra / 8));
+            var rowGap = Math.Min(Scale(18, scale), Scale(ResponsiveRowGap, scale) + tallWindowExtra / 20);
             var columnGap = Scale(ResponsiveColumnGap, scale);
             var minimumButtonWidth = Scale(ResponsiveMinimumButtonWidth, scale);
 
-            var contentLeft = Math.Max(0, statusBounds.Left);
+            var contentLeft = Math.Max(0, Math.Min(statusSummaryBounds.Left, statusDetailBounds.Left));
             var rightMargin = Scale(24, scale);
+            var bottomMargin = Scale(24, scale);
             var contentRight = Math.Max(contentLeft + 1, clientWidth - rightMargin);
+            var contentBottom = Math.Max(1, clientHeight - bottomMargin);
             var contentWidth = contentRight - contentLeft;
             if (contentWidth < Scale(620, scale)) return;
 
@@ -106,15 +123,51 @@ namespace DPopCleaner.SimpleUpdate
             var strategyLabelBounds = NativeBridge.GetChildClientBounds(_parent, strategyLabel);
             if (strategyComboBounds == null || strategyLabelBounds == null) return;
 
+            var updateHeading = FindStaticByCaption(children, "Обновление Zapret", "Zapret Update");
+            var updateHeadingBounds = NativeBridge.GetChildClientBounds(_parent, updateHeading);
+            var updateHeadingHeight = updateHeadingBounds == null
+                ? Scale(23, scale)
+                : Math.Max(1, updateHeadingBounds.Height);
+            var updateHeadingWidth = updateHeadingBounds == null
+                ? Scale(210, scale)
+                : Math.Max(updateHeadingBounds.Width, Scale(180, scale));
+
+            var additionalHeading = FindStaticByCaption(children, "Дополнительно", "Additional");
+            var additionalHeadingBounds = NativeBridge.GetChildClientBounds(_parent, additionalHeading);
+            var additionalHeadingHeight = additionalHeadingBounds == null
+                ? Scale(23, scale)
+                : Math.Max(1, additionalHeadingBounds.Height);
+
             var strategyButtons = ResolveButtons(buttons, StrategyRowButtonIds);
             var updateButtons = ResolveButtons(buttons, UpdateRowButtonIds);
             var actionButtons = ResolveButtons(buttons, BridgeActionButtonIds);
             var additionalButtons = ResolveButtons(buttons, AdditionalRowButtonIds);
             if (strategyButtons == null || updateButtons == null || actionButtons == null || additionalButtons == null) return;
 
-            // Every tick is a pure function of the current status/client geometry. Do not inherit Y
-            // from a previous responsive pass: maximize -> restore must return to the compact grid.
-            var strategyRowTop = statusBounds.Bottom + rowGap;
+            // rev.18: both status controls consume the real current client width. The second
+            // status/detail control also consumes spare vertical space, so a 1908x950/maximized
+            // window no longer leaves the whole lower half unused.
+            var statusSummaryHeight = Math.Max(1, statusSummaryBounds.Height);
+            var statusSummaryTop = statusSummaryBounds.Top;
+            var statusSummaryBottom = statusSummaryTop + statusSummaryHeight;
+            NativeBridge.PositionChildWindow(statusSummary, Bounds(
+                contentLeft, statusSummaryTop, contentRight, statusSummaryBottom));
+
+            var halfGap = Math.Max(2, rowGap / 2);
+            var statusDetailTop = Math.Max(statusSummaryBottom + halfGap, statusDetailBounds.Top);
+            var minimumStatusDetailHeight = Math.Max(_nativeStatusDetailHeight, Scale(56, scale));
+            var availableVerticalSpace = Math.Max(0, contentBottom - statusDetailTop);
+            var reservedGridHeight = buttonHeight * 4 + updateHeadingHeight + halfGap * 2 + rowGap * 4;
+            var statusDetailBottom = Math.Max(
+                statusDetailTop + minimumStatusDetailHeight,
+                statusDetailTop + Math.Max(minimumStatusDetailHeight, availableVerticalSpace - reservedGridHeight));
+            statusDetailBottom = Math.Min(statusDetailBottom, Math.Max(statusDetailTop + 1, contentBottom - reservedGridHeight));
+            NativeBridge.PositionChildWindow(statusDetail, Bounds(
+                contentLeft, statusDetailTop, contentRight, statusDetailBottom));
+
+            // Every tick is a pure function of current client/status geometry plus immutable native
+            // size baselines. No previous responsive Y/height is reused.
+            var strategyRowTop = statusDetailBottom + rowGap;
             var labelWidth = Math.Max(strategyLabelBounds.Width, Scale(82, scale));
             var minimumStrategyWidth = labelWidth + Scale(120, scale);
             var desiredStrategyWidth = Math.Max(minimumStrategyWidth, (int)Math.Round(contentWidth * 0.40));
@@ -145,16 +198,6 @@ namespace DPopCleaner.SimpleUpdate
                 minimumButtonWidth,
                 scale);
 
-            // "Обновление Zapret" is an explicit responsive row separator, not a frozen Y anchor.
-            var updateHeading = FindStaticByCaption(children, "Обновление Zapret", "Zapret Update");
-            var updateHeadingBounds = NativeBridge.GetChildClientBounds(_parent, updateHeading);
-            var updateHeadingHeight = updateHeadingBounds == null
-                ? Scale(23, scale)
-                : Math.Max(1, updateHeadingBounds.Height);
-            var updateHeadingWidth = updateHeadingBounds == null
-                ? Scale(210, scale)
-                : Math.Max(updateHeadingBounds.Width, Scale(180, scale));
-            var halfGap = Math.Max(2, rowGap / 2);
             var updateHeadingTop = strategyRowTop + buttonHeight + halfGap;
             if (updateHeading != IntPtr.Zero)
             {
@@ -172,11 +215,6 @@ namespace DPopCleaner.SimpleUpdate
                 buttonHeight, columnGap, minimumButtonWidth, scale);
 
             var actionRowTop = updateRowTop + buttonHeight + rowGap;
-            var additionalHeading = FindStaticByCaption(children, "Дополнительно", "Additional");
-            var additionalHeadingBounds = NativeBridge.GetChildClientBounds(_parent, additionalHeading);
-            var additionalHeadingHeight = additionalHeadingBounds == null
-                ? Scale(23, scale)
-                : Math.Max(1, additionalHeadingBounds.Height);
             var headingWidth = additionalHeadingBounds == null
                 ? Scale(180, scale)
                 : Math.Max(additionalHeadingBounds.Width, Scale(150, scale));
@@ -236,25 +274,32 @@ namespace DPopCleaner.SimpleUpdate
             return result;
         }
 
-        private NativeBridge.ClientBounds FindStatusRegionBounds(NativeBridge.ChildInfo[] children)
+        private bool FindStatusEdits(NativeBridge.ChildInfo[] children, out IntPtr summary, out IntPtr detail,
+            out NativeBridge.ClientBounds summaryBounds, out NativeBridge.ClientBounds detailBounds)
         {
-            NativeBridge.ClientBounds region = null;
+            summary = IntPtr.Zero;
+            detail = IntPtr.Zero;
+            summaryBounds = null;
+            detailBounds = null;
             foreach (var child in children)
             {
                 if (!child.Visible || !string.Equals(child.ClassName, "Edit", StringComparison.OrdinalIgnoreCase)) continue;
                 var bounds = NativeBridge.GetChildClientBounds(_parent, child.Handle);
                 if (bounds == null) continue;
-                if (region == null)
+                if (summaryBounds == null || bounds.Top < summaryBounds.Top)
                 {
-                    region = Bounds(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
-                    continue;
+                    detail = summary;
+                    detailBounds = summaryBounds;
+                    summary = child.Handle;
+                    summaryBounds = bounds;
                 }
-                region.Left = Math.Min(region.Left, bounds.Left);
-                region.Top = Math.Min(region.Top, bounds.Top);
-                region.Right = Math.Max(region.Right, bounds.Right);
-                region.Bottom = Math.Max(region.Bottom, bounds.Bottom);
+                else if (detailBounds == null || bounds.Top < detailBounds.Top)
+                {
+                    detail = child.Handle;
+                    detailBounds = bounds;
+                }
             }
-            return region;
+            return summary != IntPtr.Zero && detail != IntPtr.Zero && summaryBounds != null && detailBounds != null;
         }
 
         private bool FindZapretCombos(NativeBridge.ChildInfo[] children, out IntPtr strategyCombo, out IntPtr filterCombo)

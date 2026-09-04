@@ -10,6 +10,7 @@ namespace DPopCleaner.SimpleUpdate
         private const int AutoScrollMinSize = 390;
         private const int ContentHeight = 410;
         private const int WheelStep = 48;
+        private const int CanonicalTrayProxyId = 1503;
 
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
@@ -113,6 +114,7 @@ namespace DPopCleaner.SimpleUpdate
         private readonly List<ScrollItem> _items = new List<ScrollItem>();
         private readonly List<IntPtr> _wheelChildren = new List<IntPtr>();
         private readonly List<LegacySettingProxy> _legacySettings = new List<LegacySettingProxy>();
+        private readonly Action<bool> _trayPreferenceChanged;
         private readonly Action<bool> _autoUpdateChanged;
         private readonly Action _checkUpdatesRequested;
         private readonly IntPtr _parent;
@@ -215,6 +217,7 @@ namespace DPopCleaner.SimpleUpdate
             NativeBridge.ClientBounds bounds,
             IntPtr adminAnchor,
             bool autoUpdateEnabled,
+            Action<bool> trayPreferenceChanged,
             Action<bool> autoUpdateChanged,
             Action checkUpdatesRequested,
             IntPtr legacyKeyEdit,
@@ -226,6 +229,7 @@ namespace DPopCleaner.SimpleUpdate
             if (bounds == null) throw new ArgumentNullException("bounds");
 
             _parent = parent;
+            _trayPreferenceChanged = trayPreferenceChanged;
             _autoUpdateChanged = autoUpdateChanged;
             _checkUpdatesRequested = checkUpdatesRequested;
             _legacyKeyEdit = legacyKeyEdit;
@@ -374,7 +378,17 @@ namespace DPopCleaner.SimpleUpdate
                 {
                     if (id == setting.Id)
                     {
-                        SyncLegacySetting(setting);
+                        // rev.18: tray proxy is bridge-owned. Commit the BS_AUTOCHECKBOX state
+                        // synchronously on its UI thread so a timer tick cannot reapply stale state.
+                        if (setting.Id == CanonicalTrayProxyId)
+                        {
+                            if (_trayPreferenceChanged != null)
+                                _trayPreferenceChanged(NativeBridge.IsChecked(setting.ProxyHandle));
+                        }
+                        else
+                        {
+                            SyncLegacySetting(setting);
+                        }
                         return IntPtr.Zero;
                     }
                 }
@@ -456,7 +470,8 @@ namespace DPopCleaner.SimpleUpdate
                     setting.Text = caption;
                     NativeBridge.WriteWindowText(setting.ProxyHandle, caption);
                 }
-                NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
+                if (setting.Id != CanonicalTrayProxyId)
+                    NativeBridge.SetChecked(setting.ProxyHandle, NativeBridge.IsChecked(setting.LegacyHandle));
             }
         }
 
