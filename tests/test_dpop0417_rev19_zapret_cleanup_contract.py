@@ -118,6 +118,13 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertNotIn('SetWindowSubclass(button, ButtonSubclassDelegate', source)
         self.assertNotIn('StaticButtonSubclassProc', source)
 
+    def test_bridge_ownerdraw_hosts_clip_children_from_parent_erase(self):
+        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('WS_CLIPCHILDREN', source)
+        self.assertIn('SetClipChildrenStyle', source)
+        self.assertIn('SetClipChildrenStyle(host)', source)
+        self.assertIn('_originalBridgeHostStyles', source)
+
     def test_rev19_has_real_installed_multisize_visual_and_tray_gate(self):
         workflow_path = ROOT / '.github/workflows/DPopCleaner_0.4.17_REV19_ZAPRET_CLEANUP.yml'
         self.assertTrue(workflow_path.is_file(), 'rev.19 dedicated installed workflow is required')
