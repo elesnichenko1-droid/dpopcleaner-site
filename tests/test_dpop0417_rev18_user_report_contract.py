@@ -8,7 +8,8 @@ class DPop0417Rev18UserReportContractTests(unittest.TestCase):
     def test_zapret_layout_uses_current_client_height_not_only_width(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
         self.assertIn('clientHeight', source)
-        self.assertIn('availableVerticalSpace', source)
+        self.assertIn('ComputeStatusDetailHeight', source)
+        self.assertIn('sectionGap', source)
         self.assertIn('ResponsiveMaximumButtonHeight', source)
         self.assertIn('statusDetailBottom', source)
 
