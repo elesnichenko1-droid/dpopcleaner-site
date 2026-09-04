@@ -56,7 +56,7 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('Capture-CompositeWindow', smoke)
         self.assertIn('Capture-ProxyBitmap', smoke)
         self.assertIn('$ProxyButtonIds', smoke)
-        self.assertIn('$child.OwnerPid -eq $LauncherPid', smoke)
+        self.assertIn('$_.OwnerPid -eq $LauncherPid', smoke)
         self.assertIn('DrawImageUnscaled', smoke)
         self.assertIn('REV19_PRIMARY_COMPOSITE_OK', smoke)
         self.assertIn('Capture-CompositeWindow $window $shot $children $launcher.Id', smoke)
