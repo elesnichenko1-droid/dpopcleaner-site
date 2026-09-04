@@ -1,0 +1,95 @@
+name: DPopCleaner 0.4.17 rev.19 Zapret cleanup gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/DPopCleaner_0.4.17_REV19_ZAPRET_CLEANUP.yml'
+      - 'release/DPopCleaner_0.4.17.iss'
+      - 'tools/dpop0417_*'
+      - 'tests/test_dpop0417_*'
+      - 'v0417/**'
+
+permissions:
+  contents: read
+
+jobs:
+  installed-zapret-cleanup:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run rev.19 source contract first
+        shell: pwsh
+        run: |
+          python tests/test_dpop0417_rev19_zapret_cleanup_contract.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build companions and SimpleUpdate
+        shell: pwsh
+        run: |
+          dotnet build v0417/src/DPop.Common/DPop.Common.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/DiskAnalyzer/DiskAnalyzer.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/RestoreCenter/RestoreCenter.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/ZapretScreenFix/ZapretScreenFix.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build v0417/src/SimpleUpdate/SimpleUpdate.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Prepare pinned Flowseal Zapret 1.10.2
+        shell: pwsh
+        run: ./tools/dpop0417_prepare_zapret.ps1
+
+      - name: Stage verified payload
+        shell: pwsh
+        run: ./tools/dpop0417_stage.ps1 -RequireCompanions
+
+      - name: Verify frozen core and Zapret payload
+        shell: pwsh
+        run: |
+          $expected = 'efd0eff1f4962319282363fa85595c25e0cebe11'
+          $blob = (& git hash-object -- '_release/0.4.17/stage/DPopCleaner.exe').Trim()
+          if ($LASTEXITCODE -ne 0 -or $blob -ne $expected) { throw "Original 0.2.14 core changed: $blob" }
+          if ((Get-Content -Raw '_release/0.4.17/stage/Zapret/.service/version.txt').Trim() -ne '1.10.2') { throw 'Flowseal Zapret is not 1.10.2.' }
+          $strategies = @(Get-ChildItem '_release/0.4.17/stage/Zapret' -Filter 'general*.bat' -File)
+          if ($strategies.Count -ne 22) { throw "Expected 22 Zapret strategies, found $($strategies.Count)." }
+
+      - name: Build DPopCleaner 0.4.17 installer
+        shell: pwsh
+        run: |
+          $candidates = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+          )
+          $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+          if (-not $iscc) { choco install innosetup --no-progress -y; $iscc = (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe') }
+          New-Item -ItemType Directory -Path '_release/0.4.17/installer' -Force | Out-Null
+          & $iscc 'release/DPopCleaner_0.4.17.iss'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' -PathType Leaf)) { throw 'DPopCleaner_Setup_0.4.17.exe missing.' }
+
+      - name: Run rev.19 installed 1024 1366 1680 1908 cleanup and tray smoke
+        shell: pwsh
+        run: |
+          ./tools/dpop0417_rev19_installed_zapret_cleanup_smoke.ps1 `
+            -InstallerPath '_release/0.4.17/installer/DPopCleaner_Setup_0.4.17.exe' `
+            -OutputDir '_release/0.4.17/evidence/rev19-zapret-cleanup'
+
+      - name: Upload rev.19 visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpopcleaner-0.4.17-rev19-zapret-cleanup-${{ github.run_id }}
+          path: _release/0.4.17/evidence/rev19-zapret-cleanup/*
+          if-no-files-found: error
