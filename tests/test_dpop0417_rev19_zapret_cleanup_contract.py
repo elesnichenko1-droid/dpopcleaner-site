@@ -34,13 +34,19 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('MeasurePreferredWidth', source)
         self.assertIn('CompactUpdateToggleButtonIds', source)
 
-    def test_service_heading_uses_the_current_theme_instead_of_a_white_static_background(self):
-        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
-        self.assertIn('WM_CTLCOLORSTATIC', source)
-        self.assertIn('ServiceActionsHeadingId', source)
-        self.assertIn('DrawServiceHeading', source)
-        self.assertIn('DarkPageBrush', source)
-        self.assertIn('LightPageBrush', source)
+    def test_service_heading_uses_same_process_host_and_current_theme(self):
+        layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
+        polish = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('ServiceActionsHeadingHostId', layout)
+        self.assertIn('_serviceActionsHeadingHost', layout)
+        self.assertIn('CreateWindowEx(0, "Static", string.Empty', layout)
+        self.assertIn('_serviceActionsHeadingHost, new IntPtr(ServiceActionsHeadingId)', layout)
+        self.assertIn('WM_CTLCOLORSTATIC', polish)
+        self.assertIn('EnsureServiceHeadingThemeHost', polish)
+        self.assertIn('GetParent(heading)', polish)
+        self.assertIn('DrawServiceHeading', polish)
+        self.assertIn('DarkPageBrush', polish)
+        self.assertIn('LightPageBrush', polish)
 
     def test_compact_rows_replace_legacy_ellipsis_captions_with_full_labels(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
