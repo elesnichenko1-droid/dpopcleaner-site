@@ -29,6 +29,7 @@ public sealed class R19ProbeRect { public int Left; public int Top; public int R
 public static class R19ProbeNative {
  private delegate bool EnumProc(IntPtr h,IntPtr p);
  [StructLayout(LayoutKind.Sequential)] private struct RECT{public int L,T,R,B;}
+ [StructLayout(LayoutKind.Sequential)] private struct DRAWITEMSTRUCT{public uint CtlType,CtlID,itemID,itemAction,itemState;public IntPtr hwndItem,hDC;public RECT rcItem;public UIntPtr itemData;}
  [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr p,EnumProc cb,IntPtr x);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr h,StringBuilder b,int n);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr h,StringBuilder b,int n);
@@ -52,6 +53,7 @@ public static class R19ProbeNative {
  static long Style(IntPtr h){return IntPtr.Size==8?GetWindowLongPtr64(h,-16).ToInt64():GetWindowLong32(h,-16);}
  public static R19ProbeRect Bounds(IntPtr h){RECT r;if(!GetWindowRect(h,out r))return null;return new R19ProbeRect{Left=r.L,Top=r.T,Right=r.R,Bottom=r.B};}
  public static void ForceRedraw(IntPtr h){if(h==IntPtr.Zero)return;InvalidateRect(h,IntPtr.Zero,true);RedrawWindow(h,IntPtr.Zero,IntPtr.Zero,0x0001|0x0004|0x0080|0x0100);UpdateWindow(h);}
+ public static long SyntheticDraw(IntPtr host,IntPtr button,int id,IntPtr hdc,int width,int height){var d=new DRAWITEMSTRUCT{CtlType=4,CtlID=(uint)id,itemID=0,itemAction=1,itemState=0,hwndItem=button,hDC=hdc,rcItem=new RECT{L=0,T=0,R=width,B=height},itemData=UIntPtr.Zero};var p=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(DRAWITEMSTRUCT)));try{Marshal.StructureToPtr(d,p,false);return SendMessage(host,0x002B,new IntPtr(id),p).ToInt64();}finally{Marshal.FreeHGlobal(p);}}
  public static R19ProbeItem[] Probe(IntPtr root,int id){
   var list=new List<R19ProbeItem>();EnumProc cb=delegate(IntPtr h,IntPtr _){if(GetDlgCtrlID(h)!=id)return true;RECT r;GetWindowRect(h,out r);var p=GetParent(h);RECT pr=new RECT();if(p!=IntPtr.Zero)GetWindowRect(p,out pr);uint pid=0,ppid=0;GetWindowThreadProcessId(h,out pid);if(p!=IntPtr.Zero)GetWindowThreadProcessId(p,out ppid);
    list.Add(new R19ProbeItem{Hwnd=h.ToInt64(),Id=id,Text=Text(h),ClassName=Cls(h),Visible=IsWindowVisible(h),Enabled=IsWindowEnabled(h),Left=r.L,Top=r.T,Right=r.R,Bottom=r.B,Parent=p.ToInt64(),OwnerPid=(int)pid,Style=Style(h),Theme=GetWindowTheme(h).ToInt64(),ParentHwnd=p.ToInt64(),ParentId=p==IntPtr.Zero?0:GetDlgCtrlID(p),ParentText=p==IntPtr.Zero?"":Text(p),ParentClass=p==IntPtr.Zero?"":Cls(p),ParentVisible=p!=IntPtr.Zero&&IsWindowVisible(p),ParentPid=(int)ppid,ParentLeft=pr.L,ParentTop=pr.T,ParentRight=pr.R,ParentBottom=pr.B});return true;};
@@ -65,6 +67,7 @@ function Wait-Until([int]$Seconds,[string]$What,[scriptblock]$Condition){$d=[Dat
 function Get-Core { foreach($p in @(Get-Process -Name 'DPopCleaner.Core' -ErrorAction SilentlyContinue)){try{if($p.Path -and [IO.Path]::GetFullPath($p.Path).Equals([IO.Path]::GetFullPath($corePath),[StringComparison]::OrdinalIgnoreCase)-and$p.MainWindowHandle-ne[IntPtr]::Zero){return $p}}catch{}};$null }
 function Capture-Print([IntPtr]$Window,[string]$Path){$r=[R19ProbeNative]::Bounds($Window);if(-not$r){return};$w=[Math]::Max(1,$r.Right-$r.Left);$h=[Math]::Max(1,$r.Bottom-$r.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);$dc=$g.GetHdc();try{[void][R19ProbeNative]::PrintWindow($Window,$dc,2)}finally{$g.ReleaseHdc($dc);$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()}}
 function Capture-Screen([IntPtr]$Window,[string]$Path){$r=[R19ProbeNative]::Bounds($Window);$w=[Math]::Max(1,$r.Right-$r.Left);$h=[Math]::Max(1,$r.Bottom-$r.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);try{$g.CopyFromScreen($r.Left,$r.Top,0,0,[Drawing.Size]::new($w,$h))}finally{$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()}}
+function Capture-Synthetic($Sample,[string]$Path){$w=[Math]::Max(1,$Sample.Right-$Sample.Left);$h=[Math]::Max(1,$Sample.Bottom-$Sample.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);$dc=$g.GetHdc();try{$result=[R19ProbeNative]::SyntheticDraw([IntPtr]$Sample.ParentHwnd,[IntPtr]$Sample.Hwnd,$Sample.Id,$dc,$w,$h)}finally{$g.ReleaseHdc($dc);$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()};$result}
 
 $launcher=$null;$core=$null
 try{
@@ -74,7 +77,7 @@ try{
  $tab=@([R19ProbeNative]::Probe($window,905))|Where-Object{$_.Visible}|Select-Object -First 1
  if(-not$tab){throw 'Zapret tab 905 missing'};[void][R19ProbeNative]::SendMessage([IntPtr]$tab.Hwnd,0x00F5,[IntPtr]::Zero,[IntPtr]::Zero)
  Wait-Until 8 'visible remove-services proxy' {@([R19ProbeNative]::Probe($window,1702))|Where-Object{$_.Visible}|Measure-Object|Select-Object -ExpandProperty Count}
- $reports=@()
+ $reports=@();$drawReports=@()
  foreach($w in @(1024,1366,1680,1908)){
   $h=if($w-eq1024){768}elseif($w-eq1366){800}elseif($w-eq1680){840}else{950}
   [void][R19ProbeNative]::SetWindowPos($window,[IntPtr]::Zero,0,0,$w,$h,0x0002-bor0x0004-bor0x0010-bor0x0400);Start-Sleep -Milliseconds 1200
@@ -89,7 +92,9 @@ try{
     if($sample){
      Capture-Print ([IntPtr]$sample.Hwnd) (Join-Path $OutputDir ("rev19-proxy-{0}-button.png" -f $sampleId))
      Capture-Print ([IntPtr]$sample.ParentHwnd) (Join-Path $OutputDir ("rev19-proxy-{0}-host.png" -f $sampleId))
-     Write-Host ("REV19_PROXY_PAINT_SAMPLE id={0} hwnd=0x{1:X} parent=0x{2:X} rect={3},{4}-{5},{6}" -f $sampleId,$sample.Hwnd,$sample.ParentHwnd,$sample.Left,$sample.Top,$sample.Right,$sample.Bottom)
+     $synthetic=Capture-Synthetic $sample (Join-Path $OutputDir ("rev19-synthetic-draw-{0}.png" -f $sampleId))
+     $drawReports+=[pscustomobject]@{id=$sampleId;text=$sample.Text;synthetic_result=$synthetic;hwnd=$sample.Hwnd;parent=$sample.ParentHwnd}
+     Write-Host ("REV19_PROXY_PAINT_SAMPLE id={0} hwnd=0x{1:X} parent=0x{2:X} rect={3},{4}-{5},{6} synthetic={7}" -f $sampleId,$sample.Hwnd,$sample.ParentHwnd,$sample.Left,$sample.Top,$sample.Right,$sample.Bottom,$synthetic)
     }
    }
    $proxy=$items|Where-Object{$_.Visible -and $_.OwnerPid-eq$launcher.Id}|Select-Object -First 1
@@ -99,6 +104,7 @@ try{
   }
  }
  $reports|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $OutputDir 'rev19-remove-services-probe.json') -Encoding utf8
+ $drawReports|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $OutputDir 'rev19-ownerdraw-probe.json') -Encoding utf8
  Write-Host 'REV19_REMOVE_SERVICES_PROBE_OK'
 }
 finally{foreach($name in @('DPopCleaner','DPopCleaner.Core','SimpleUpdate')){foreach($p in @(Get-Process -Name $name -ErrorAction SilentlyContinue)){try{if($p.Path-and[IO.Path]::GetFullPath($p.Path).StartsWith($RootPath,[StringComparison]::OrdinalIgnoreCase)){Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue}}catch{}}}}
