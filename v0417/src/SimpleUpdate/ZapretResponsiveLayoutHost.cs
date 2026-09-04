@@ -9,6 +9,7 @@ namespace DPopCleaner.SimpleUpdate
     internal sealed class ZapretResponsiveLayoutHost : IDisposable
     {
         internal const int ServiceActionsHeadingId = 1726;
+        internal const int ServiceActionsHeadingHostId = 1727;
 
         private const int ResponsiveRowGap = 8;
         private const int ResponsiveColumnGap = 8;
@@ -65,6 +66,7 @@ namespace DPopCleaner.SimpleUpdate
         private readonly IntPtr _parent;
         private int _nativeButtonHeight;
         private int _nativeStatusDetailHeight;
+        private IntPtr _serviceActionsHeadingHost;
         private IntPtr _serviceActionsHeading;
         private bool _disposed;
 
@@ -83,8 +85,11 @@ namespace DPopCleaner.SimpleUpdate
 
         internal void Hide()
         {
-            if (_disposed || _serviceActionsHeading == IntPtr.Zero) return;
-            NativeBridge.ShowWindow(_serviceActionsHeading, NativeBridge.SW_HIDE);
+            if (_disposed) return;
+            if (_serviceActionsHeadingHost != IntPtr.Zero)
+                NativeBridge.ShowWindow(_serviceActionsHeadingHost, NativeBridge.SW_HIDE);
+            else if (_serviceActionsHeading != IntPtr.Zero)
+                NativeBridge.ShowWindow(_serviceActionsHeading, NativeBridge.SW_HIDE);
         }
 
         internal void ApplyResponsiveLayout()
@@ -324,12 +329,24 @@ namespace DPopCleaner.SimpleUpdate
         private IntPtr EnsureServiceActionsHeading(IntPtr fontAnchor, bool english)
         {
             var caption = english ? "Service actions" : "Сервисные действия";
+            if (_serviceActionsHeadingHost == IntPtr.Zero)
+            {
+                _serviceActionsHeadingHost = CreateWindowEx(0, "Static", string.Empty,
+                    WS_CHILD | WS_VISIBLE | SS_LEFT,
+                    0, 0, 1, 1, _parent, new IntPtr(ServiceActionsHeadingHostId), GetModuleHandle(null), IntPtr.Zero);
+                if (_serviceActionsHeadingHost == IntPtr.Zero) return IntPtr.Zero;
+            }
             if (_serviceActionsHeading == IntPtr.Zero)
             {
                 _serviceActionsHeading = CreateWindowEx(0, "Static", caption,
                     WS_CHILD | WS_VISIBLE | SS_LEFT,
-                    0, 0, 1, 1, _parent, new IntPtr(ServiceActionsHeadingId), GetModuleHandle(null), IntPtr.Zero);
-                if (_serviceActionsHeading == IntPtr.Zero) return IntPtr.Zero;
+                    0, 0, 1, 1, _serviceActionsHeadingHost, new IntPtr(ServiceActionsHeadingId), GetModuleHandle(null), IntPtr.Zero);
+                if (_serviceActionsHeading == IntPtr.Zero)
+                {
+                    try { DestroyWindow(_serviceActionsHeadingHost); } catch { }
+                    _serviceActionsHeadingHost = IntPtr.Zero;
+                    return IntPtr.Zero;
+                }
                 var font = fontAnchor == IntPtr.Zero
                     ? IntPtr.Zero
                     : NativeBridge.SendMessage(fontAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
@@ -337,6 +354,7 @@ namespace DPopCleaner.SimpleUpdate
                     NativeBridge.SendMessage(_serviceActionsHeading, 0x0030, font, new IntPtr(1));
             }
             NativeBridge.WriteWindowText(_serviceActionsHeading, caption);
+            NativeBridge.ShowWindow(_serviceActionsHeadingHost, NativeBridge.SW_SHOW);
             NativeBridge.ShowWindow(_serviceActionsHeading, NativeBridge.SW_SHOW);
             return _serviceActionsHeading;
         }
@@ -472,7 +490,16 @@ namespace DPopCleaner.SimpleUpdate
             headingWidth = Math.Max(Scale(132, scale), Math.Min(Scale(190, scale), headingWidth));
             var headingHeight = Math.Min(height, Scale(26, scale));
             var headingTop = top + Math.Max(0, (height - headingHeight) / 2);
-            NativeBridge.PositionChildWindow(heading, Bounds(left, headingTop, left + headingWidth, headingTop + headingHeight));
+            if (_serviceActionsHeadingHost != IntPtr.Zero)
+            {
+                NativeBridge.PositionChildWindow(_serviceActionsHeadingHost,
+                    Bounds(left, headingTop, left + headingWidth, headingTop + headingHeight));
+                NativeBridge.PositionChildWindow(heading, Bounds(0, 0, headingWidth, headingHeight));
+            }
+            else
+            {
+                NativeBridge.PositionChildWindow(heading, Bounds(left, headingTop, left + headingWidth, headingTop + headingHeight));
+            }
 
             var buttonsLeft = left + headingWidth + gap;
             var available = Math.Max(1, right - buttonsLeft);
@@ -643,7 +670,13 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (_disposed) return;
             _disposed = true;
-            if (_serviceActionsHeading != IntPtr.Zero)
+            if (_serviceActionsHeadingHost != IntPtr.Zero)
+            {
+                try { DestroyWindow(_serviceActionsHeadingHost); } catch { }
+                _serviceActionsHeadingHost = IntPtr.Zero;
+                _serviceActionsHeading = IntPtr.Zero;
+            }
+            else if (_serviceActionsHeading != IntPtr.Zero)
             {
                 try { DestroyWindow(_serviceActionsHeading); } catch { }
                 _serviceActionsHeading = IntPtr.Zero;
