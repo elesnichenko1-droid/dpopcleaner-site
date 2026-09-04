@@ -88,8 +88,9 @@ jobs:
             -OutputDir '_release/0.4.17/evidence/rev19-zapret-cleanup'
 
       - name: Upload rev.19 visual evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dpopcleaner-0.4.17-rev19-zapret-cleanup-${{ github.run_id }}
           path: _release/0.4.17/evidence/rev19-zapret-cleanup/*
-          if-no-files-found: error
+          if-no-files-found: warn
