@@ -213,7 +213,7 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void Zapret_visual_layer_follows_native_theme_and_styles_every_action_consistently()
+        public void Zapret_visual_layer_follows_native_theme_and_styles_bridge_actions_consistently()
         {
             var visual = ReadSource("ZapretVisualPolishHost.cs");
             var bridge = ReadSource("NativeBridge.cs");
@@ -222,14 +222,18 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(bridge, "internal static bool IsDarkThemeSelected(IntPtr parent)");
             StringAssert.Contains(bridge, "ReadSettingsThemeSelection(parent)");
             StringAssert.Contains(visual, "NativeBridge.IsDarkThemeSelected(_parent)");
-            StringAssert.Contains(visual, "UnifiedZapretButtonIds");
+            StringAssert.Contains(visual, "BridgeButtonIds");
+            StringAssert.Contains(visual, "BS_OWNERDRAW");
+            StringAssert.Contains(visual, "WM_DRAWITEM");
+            StringAssert.Contains(visual, "BridgeHostSubclassDelegate");
+            StringAssert.Contains(visual, "WS_CLIPCHILDREN");
             StringAssert.Contains(visual, "DarkButtonBrush");
             StringAssert.Contains(visual, "LightButtonBrush");
             StringAssert.Contains(visual, "ZapretEnhancementHost.InstallServiceProxyButtonId");
             StringAssert.Contains(visual, "ZapretEnhancementHost.RemoveServicesProxyButtonId");
             StringAssert.Contains(visual, "ZapretEnhancementHost.StartStandaloneProxyButtonId");
-            foreach (var nativeId in new[] { "1703", "1714", "1716", "1717", "1704", "1705", "1707", "1708", "1710", "1711" })
-                StringAssert.Contains(visual, nativeId);
+            Assert.IsFalse(visual.Contains("SetWindowSubclass(button, ButtonSubclassDelegate"),
+                "Bridge button painting must be owned by the launcher host, not a fragile per-button WM_PAINT subclass.");
             Assert.IsFalse(visual.Contains("EnsureDarkBridgeButtons"),
                 "Zapret presentation must not be permanently dark after the native theme changes.");
             Assert.IsFalse(enhancement.Contains("SetWindowTheme(button, \"DarkMode_Explorer\""),
@@ -254,7 +258,7 @@ namespace SimpleUpdate.Tests
         {
             var visual = ReadSource("ZapretVisualPolishHost.cs");
             var show = SliceMethod(visual, "internal void Show()", "internal void Hide()");
-            var hide = SliceMethod(visual, "internal void Hide()", "private void EnsureUnifiedZapretButtons()");
+            var hide = SliceMethod(visual, "internal void Hide()", "private void EnsureBridgeButtonPainting()");
 
             StringAssert.Contains(show, "HideJournalForZapret()");
             StringAssert.Contains(hide, "RestoreJournal()");
