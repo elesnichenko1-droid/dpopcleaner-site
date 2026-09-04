@@ -266,11 +266,12 @@ try{
         $serviceWidths=@($service|ForEach-Object{$_.Right-$_.Left})
         if($size.Width -ge 1680 -and ($serviceWidths|Measure-Object -Maximum).Maximum -gt 230){throw "$($size.Name): service actions are not compact."}
         $unusedBottom=$windowBounds.Bottom-$serviceBottom
-        if($size.Width -eq 1908 -and $unusedBottom -gt 210){throw "$($size.Name): too much lower blank space remains: $unusedBottom px."}
 
         $shot=Join-Path $OutputDir ("rev19-zapret-{0}-{1}x{2}.png" -f $size.Name,$size.Width,$size.Height)
         Capture-Window $window $shot
         $removeColors=Assert-RemoveServicesCaptured $shot $children $launcher.Id $windowBounds $size.Name
+        Write-Host "REV19_SIZE_CAPTURE name=$($size.Name) rows=$strategyTop/$updateTop/$actionTop/$additionalTop/$serviceTop serviceBottom=$serviceBottom unusedBottom=$unusedBottom"
+        if($size.Width -eq 1908 -and $unusedBottom -gt 210){throw "$($size.Name): too much lower blank space remains: $unusedBottom px."}
         $reports += [pscustomobject]@{name=$size.Name;width=$size.Width;height=$size.Height;detail_height=$detailHeight;strategy_top=$strategyTop;update_top=$updateTop;action_top=$actionTop;additional_top=$additionalTop;service_top=$serviceTop;service_bottom=$serviceBottom;unused_bottom=$unusedBottom;toggle_widths=$toggleWidths;primary_update_widths=$primaryWidths;service_widths=$serviceWidths;remove_services_colors=$removeColors;screenshot=$shot}
         Write-Host "REV19_SIZE_OK name=$($size.Name) size=$($size.Width)x$($size.Height) detail=$detailHeight rows=$strategyTop/$updateTop/$actionTop/$additionalTop/$serviceTop unusedBottom=$unusedBottom"
     }
