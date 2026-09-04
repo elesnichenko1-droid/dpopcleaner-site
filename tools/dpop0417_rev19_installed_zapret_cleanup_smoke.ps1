@@ -25,6 +25,11 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-zapret-cleanup-report.json') -PathType Leaf)) {
         throw 'rev.19 installed Zapret cleanup report was not produced.'
     }
+    & (Join-Path $PSScriptRoot 'dpop0417_rev19_remove_services_probe.ps1') -RootPath $installRoot -OutputDir $OutputDir
+    if (-not $?) { throw 'rev.19 remove-services HWND probe failed.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-remove-services-probe.json') -PathType Leaf)) {
+        throw 'rev.19 remove-services probe report was not produced.'
+    }
     Write-Host 'REV19_INSTALLED_ZAPRET_CLEANUP_SMOKE_OK'
 }
 finally {
