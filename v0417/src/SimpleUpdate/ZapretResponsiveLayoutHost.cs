@@ -23,6 +23,10 @@ namespace DPopCleaner.SimpleUpdate
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
         private const uint SS_LEFTNOWORDWRAP = 0x0000000C;
+        private const uint RDW_INVALIDATE = 0x0001;
+        private const uint RDW_ERASE = 0x0004;
+        private const uint RDW_ALLCHILDREN = 0x0080;
+        private const uint RDW_UPDATENOW = 0x0100;
 
         private static readonly int[] ResponsiveZapretButtonIds =
         {
@@ -52,6 +56,9 @@ namespace DPopCleaner.SimpleUpdate
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetParent(IntPtr hwnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool RedrawWindow(IntPtr hwnd, IntPtr updateRect, IntPtr updateRegion, uint flags);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr GetModuleHandle(string moduleName);
@@ -645,30 +652,35 @@ namespace DPopCleaner.SimpleUpdate
                     groupBottom = Math.Max(groupBottom, cells[j].Bottom);
                 }
 
-                PositionIfChanged(_parent, parent, Bounds(groupLeft, groupTop, groupRight, groupBottom));
+                var groupChanged = PositionIfChanged(_parent, parent, Bounds(groupLeft, groupTop, groupRight, groupBottom));
                 for (var j = i; j < buttons.Length; j++)
                 {
                     if (placed[j] || buttons[j] == IntPtr.Zero || cells[j] == null) continue;
                     if (GetParent(buttons[j]) != parent) continue;
-                    PositionIfChanged(parent, buttons[j], Bounds(
+                    groupChanged |= PositionIfChanged(parent, buttons[j], Bounds(
                         cells[j].Left - groupLeft,
                         cells[j].Top - groupTop,
                         cells[j].Right - groupLeft,
                         cells[j].Bottom - groupTop));
                     placed[j] = true;
                 }
+
+                if (groupChanged)
+                    RedrawWindow(parent, IntPtr.Zero, IntPtr.Zero,
+                        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
             }
         }
 
-        private static void PositionIfChanged(IntPtr coordinateParent, IntPtr handle, NativeBridge.ClientBounds desired)
+        private static bool PositionIfChanged(IntPtr coordinateParent, IntPtr handle, NativeBridge.ClientBounds desired)
         {
-            if (coordinateParent == IntPtr.Zero || handle == IntPtr.Zero || desired == null) return;
+            if (coordinateParent == IntPtr.Zero || handle == IntPtr.Zero || desired == null) return false;
             var current = NativeBridge.GetChildClientBounds(coordinateParent, handle);
             if (current != null &&
                 current.Left == desired.Left && current.Top == desired.Top &&
                 current.Right == desired.Right && current.Bottom == desired.Bottom)
-                return;
+                return false;
             NativeBridge.PositionChildWindow(handle, desired);
+            return true;
         }
 
         private static NativeBridge.ClientBounds Bounds(int left, int top, int right, int bottom)
