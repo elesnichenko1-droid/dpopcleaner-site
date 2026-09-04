@@ -52,6 +52,11 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('DarkPageBrush', polish)
         self.assertIn('LightPageBrush', polish)
 
+    def test_bridge_buttons_are_ownerdraw_from_creation(self):
+        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
+        self.assertIn('private const uint BS_OWNERDRAW = 0x0000000B;', source)
+        self.assertIn('WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW', source)
+
     def test_compact_rows_replace_legacy_ellipsis_captions_with_full_labels(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
         for token in ('Автообновление', 'Автозапуск Zapret', 'Auto-update', 'Zapret autostart', 'Удалить сервисы', 'Remove services', 'Диагностика', 'Diagnostics'):
