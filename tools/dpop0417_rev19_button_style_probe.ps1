@@ -75,19 +75,19 @@ try{
  }
  $target=$samples|Where-Object{$_.Id-eq1702}|Select-Object -First 1
  if(-not$target){throw 'visible launcher 1702 missing'}
- $button=[IntPtr]$target.Hwnd;$host=[IntPtr]$target.Parent
+ $button=[IntPtr]$target.Hwnd;$parentHost=[IntPtr]$target.Parent
  Capture-Print $button (Join-Path $OutputDir 'rev19-style-1702-baseline.png')
- Capture-Print $host (Join-Path $OutputDir 'rev19-style-1702-host-baseline.png')
- [R19StyleNative]::EnableRedraw($host);[R19StyleNative]::EnableRedraw($button);Start-Sleep -Milliseconds 250
+ Capture-Print $parentHost (Join-Path $OutputDir 'rev19-style-1702-host-baseline.png')
+ [R19StyleNative]::EnableRedraw($parentHost);[R19StyleNative]::EnableRedraw($button);Start-Sleep -Milliseconds 250
  Capture-Print $button (Join-Path $OutputDir 'rev19-style-1702-after-setredraw.png')
- Capture-Print $host (Join-Path $OutputDir 'rev19-style-1702-host-after-setredraw.png')
+ Capture-Print $parentHost (Join-Path $OutputDir 'rev19-style-1702-host-after-setredraw.png')
  [R19StyleNative]::SetButtonStyle($button,0x0000000B);Start-Sleep -Milliseconds 250
  Capture-Print $button (Join-Path $OutputDir 'rev19-style-1702-after-bm-ownerdraw.png')
- Capture-Print $host (Join-Path $OutputDir 'rev19-style-1702-host-after-bm-ownerdraw.png')
+ Capture-Print $parentHost (Join-Path $OutputDir 'rev19-style-1702-host-after-bm-ownerdraw.png')
  [R19StyleNative]::SetButtonStyle($button,0x00000000);Start-Sleep -Milliseconds 100
  [R19StyleNative]::SetButtonStyle($button,0x0000000B);Start-Sleep -Milliseconds 250
  Capture-Print $button (Join-Path $OutputDir 'rev19-style-1702-after-bm-toggle.png')
- Capture-Print $host (Join-Path $OutputDir 'rev19-style-1702-host-after-bm-toggle.png')
+ Capture-Print $parentHost (Join-Path $OutputDir 'rev19-style-1702-host-after-bm-toggle.png')
  $samples|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $OutputDir 'rev19-button-style-probe.json') -Encoding utf8
  Write-Host 'REV19_BUTTON_STYLE_PROBE_OK'
 }
