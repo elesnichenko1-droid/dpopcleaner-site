@@ -44,6 +44,17 @@ try {
         Write-Host ('REV19_REMOVE_SERVICES_PRE_GATE_PROBE_RED: ' + $_.Exception.Message)
     }
 
+    # Third process launch reproduces the observed blank first-paint state. Compare the instance
+    # window proc with the Button class proc, then send exactly one WM_PAINT and capture the real screen.
+    try {
+        & (Join-Path $PSScriptRoot 'dpop0417_rev19_subclass_probe.ps1') -RootPath $installRoot -OutputDir $OutputDir
+        if (-not $?) { throw 'rev.19 subclass lifecycle probe failed.' }
+        Write-Host 'REV19_SUBCLASS_PRE_GATE_PROBE_OK'
+    }
+    catch {
+        Write-Host ('REV19_SUBCLASS_PRE_GATE_PROBE_RED: ' + $_.Exception.Message)
+    }
+
     & (Join-Path $PSScriptRoot 'dpop0417_rev19_zapret_cleanup_smoke.ps1') -RootPath $installRoot -OutputDir $OutputDir
     if (-not $?) { throw 'rev.19 installed Zapret cleanup smoke failed.' }
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-zapret-cleanup-report.json') -PathType Leaf)) {
