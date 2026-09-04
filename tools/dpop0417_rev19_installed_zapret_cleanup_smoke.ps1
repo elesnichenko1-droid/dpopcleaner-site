@@ -21,7 +21,18 @@ try {
     if ($install.ExitCode -ne 0) { throw "rev.19 silent install failed: $($install.ExitCode)" }
     $installed = $true
 
-    # Diagnostic runs first so the strict 1024 layout RED cannot hide HWND/paint evidence.
+    # Diagnostic-only 1024 comparison: physical desktop vs main PrintWindow vs direct 1702.
+    # It is non-blocking so the strict installed gate below remains the acceptance authority.
+    try {
+        & (Join-Path $PSScriptRoot 'dpop0417_rev19_1702_1024_capture_probe.ps1') -RootPath $installRoot -OutputDir $OutputDir
+        if (-not $?) { throw 'rev.19 1024 capture comparison probe failed.' }
+        Write-Host 'REV19_1702_1024_CAPTURE_PROBE_OK'
+    }
+    catch {
+        Write-Host ('REV19_1702_1024_CAPTURE_PROBE_RED: ' + $_.Exception.Message)
+    }
+
+    # Existing diagnostic runs before the strict 1024 layout RED so it cannot hide HWND/paint evidence.
     # It is intentionally non-blocking: the actual acceptance result still comes from the
     # installed cleanup smoke below.
     try {
