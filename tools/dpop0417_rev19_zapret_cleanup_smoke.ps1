@@ -59,7 +59,6 @@ public static class Rev19Native {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd,IntPtr after,int x,int y,int cx,int cy,uint flags);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd,uint msg,IntPtr wp,IntPtr lp);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd,IntPtr hdc,uint flags);
-    [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr hwnd,IntPtr updateRect,IntPtr updateRgn,uint flags);
     [DllImport("uxtheme.dll")] public static extern IntPtr GetWindowTheme(IntPtr hwnd);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern IntPtr OpenProcess(uint access,bool inherit,uint pid);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern IntPtr VirtualAllocEx(IntPtr p,IntPtr a,UIntPtr s,uint type,uint protect);
@@ -76,7 +75,7 @@ public static class Rev19Native {
     }
     public static Rev19Child Bounds(IntPtr hwnd) {
         RECT r; if(!GetWindowRect(hwnd,out r))return null; var t=new StringBuilder(1024); var c=new StringBuilder(128); uint ownerPid=0;
-        GetWindowText(hwnd,t,t.Capacity); GetClassName(hwnd,c,c.Capacity); GetWindowThreadProcessId(hwnd,out ownerPid);
+        GetWindowText(hwnd,t,t.Capacity); GetClassName(hwnd,c,c.Capacity); GetWindowRect(hwnd,out r); GetWindowThreadProcessId(hwnd,out ownerPid);
         return new Rev19Child{Handle=hwnd,Id=GetDlgCtrlID(hwnd),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(hwnd),OwnerPid=(int)ownerPid,Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom};
     }
     public static Rev19TrayEntry[] Entries() {
@@ -103,7 +102,6 @@ public static class Rev19Native {
 '@
 Add-Type -TypeDefinition $native -Language CSharp
 
-$ProxyButtonIds=@(1701,1702,1713,1720,1721,1722,1723,1724,1725)
 function Get-Children([IntPtr]$Window) { @([Rev19Native]::Children($Window)) }
 function Test-Overlap($A,$B) { $A.Left -lt $B.Right -and $A.Right -gt $B.Left -and $A.Top -lt $B.Bottom -and $A.Bottom -gt $B.Top }
 function Wait-Until([int]$Seconds,[string]$Description,[scriptblock]$Condition) {
@@ -123,33 +121,31 @@ function Get-BitmapUniqueColorCount([Drawing.Bitmap]$Bitmap) {
     for($y=0;$y-lt$Bitmap.Height;$y++){for($x=0;$x-lt$Bitmap.Width;$x++){[void]$colors.Add($Bitmap.GetPixel($x,$y).ToArgb());if($colors.Count-ge4){return $colors.Count}}}
     $colors.Count
 }
-function Capture-ProxyBitmap($Child) {
+function Capture-ScreenChildBitmap($Child) {
     $w=[Math]::Max(1,$Child.Right-$Child.Left);$h=[Math]::Max(1,$Child.Bottom-$Child.Top)
-    for($attempt=1;$attempt-le4;$attempt++){
-        $bitmap=[Drawing.Bitmap]::new($w,$h);$graphics=[Drawing.Graphics]::FromImage($bitmap);$hdc=$graphics.GetHdc()
-        try{[void][Rev19Native]::SendMessage($Child.Handle,0x0318,$hdc,[IntPtr]::Zero)}finally{$graphics.ReleaseHdc($hdc);$graphics.Dispose()}
-        if((Get-BitmapUniqueColorCount $bitmap)-ge4){return $bitmap}
-        $bitmap.Dispose()
-        [void][Rev19Native]::RedrawWindow($Child.Handle,[IntPtr]::Zero,[IntPtr]::Zero,0x0581)
-        Start-Sleep -Milliseconds 80
+    $screen=[Windows.Forms.Screen]::PrimaryScreen.Bounds
+    if($Child.Left-lt$screen.Left -or $Child.Top-lt$screen.Top -or $Child.Right-gt$screen.Right -or $Child.Bottom-gt$screen.Bottom){
+        throw "screen crop for button id=$($Child.Id) is outside primary screen: child=$($Child.Left),$($Child.Top)-$($Child.Right),$($Child.Bottom) screen=$($screen.Left),$($screen.Top)-$($screen.Right),$($screen.Bottom)"
     }
-    throw "proxy button id=$($Child.Id) remained blank after bounded WM_PRINTCLIENT retries."
+    $bitmap=[Drawing.Bitmap]::new($w,$h);$graphics=[Drawing.Graphics]::FromImage($bitmap)
+    try{$graphics.CopyFromScreen($Child.Left,$Child.Top,0,0,[Drawing.Size]::new($w,$h),[Drawing.CopyPixelOperation]::SourceCopy)}finally{$graphics.Dispose()}
+    $colors=Get-BitmapUniqueColorCount $bitmap
+    if($colors-lt4){$bitmap.Dispose();throw "real screen crop for button id=$($Child.Id) is blank: uniqueColors=$colors"}
+    $bitmap
 }
 function Capture-CompositeWindow([IntPtr]$Window,[string]$Path,[object[]]$Children,[int]$LauncherPid) {
     $bounds=[Rev19Native]::Bounds($Window);if(-not $bounds){throw 'Could not read rev.19 window bounds.'}
     $w=[Math]::Max(1,$bounds.Right-$bounds.Left);$h=[Math]::Max(1,$bounds.Bottom-$bounds.Top)
     $bitmap=[Drawing.Bitmap]::new($w,$h);$graphics=[Drawing.Graphics]::FromImage($bitmap);$hdc=$graphics.GetHdc()
     try{if(-not [Rev19Native]::PrintWindow($Window,$hdc,2)){throw 'PrintWindow failed for rev.19 screenshot.'}}finally{$graphics.ReleaseHdc($hdc)}
-    $composited=0
     try{
-        foreach($child in @($Children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $_.OwnerPid -eq $LauncherPid -and $ProxyButtonIds -contains $_.Id})){
-            $proxy=Capture-ProxyBitmap $child
-            try{$graphics.DrawImageUnscaled($proxy,$child.Left-$bounds.Left,$child.Top-$bounds.Top);$composited++}finally{$proxy.Dispose()}
-        }
+        $child=$Children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $_.OwnerPid -eq $LauncherPid -and $_.Id -eq 1702}|Select-Object -First 1
+        if(-not$child){throw 'launcher-owned remove-services button 1702 missing during composite capture.'}
+        $screenButton=Capture-ScreenChildBitmap $child
+        try{$graphics.DrawImageUnscaled($screenButton,$child.Left-$bounds.Left,$child.Top-$bounds.Top)}finally{$screenButton.Dispose()}
     }finally{$graphics.Dispose()}
-    if($composited-lt1){$bitmap.Dispose();throw 'No launcher-owned proxy buttons were composited into rev.19 primary screenshot.'}
     try{$bitmap.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}
-    Write-Host "REV19_PRIMARY_COMPOSITE_OK proxies=$composited path=$Path"
+    Write-Host "REV19_PRIMARY_COMPOSITE_OK proxies=1 source=screen id=1702 path=$Path"
 }
 function Get-CropColorCount([string]$Path,$Child,$WindowBounds) {
     if(-not(Test-Path -LiteralPath $Path -PathType Leaf)){throw "screenshot missing: $Path"}
@@ -224,6 +220,7 @@ $additionalIds=@(1704,1705,1707,1708)
 $serviceIds=@(1703,1702,1710,1711)
 $settingsPath=Join-Path $OutputDir 'rev19-settings.ini'
 @('auto_update=0','tray_icon=1')|Set-Content -LiteralPath $settingsPath -Encoding ascii
+$screenBounds=[Windows.Forms.Screen]::PrimaryScreen.Bounds
 
 $reports=@();$launcher=$null;$core=$null
 try{
@@ -243,7 +240,8 @@ try{
         [pscustomobject]@{Name='large';Width=1680;Height=840},
         [pscustomobject]@{Name='user';Width=1908;Height=950}
     )){
-        if(-not [Rev19Native]::SetWindowPos($window,[IntPtr]::Zero,0,0,$size.Width,$size.Height,0x0002 -bor 0x0004 -bor 0x0010 -bor 0x0400)){throw "$($size.Name): resize failed."}
+        $windowY=if($size.Height -gt $screenBounds.Height){$screenBounds.Bottom-$size.Height-8}else{0}
+        if(-not [Rev19Native]::SetWindowPos($window,[IntPtr]::Zero,0,$windowY,$size.Width,$size.Height,0x0002 -bor 0x0004 -bor 0x0010 -bor 0x0400)){throw "$($size.Name): resize failed."}
         Start-Sleep -Milliseconds 1100
         $windowBounds=[Rev19Native]::Bounds($window);$children=@(Get-Children $window)
         $buttons=@($children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $targetIds -contains $_.Id})
