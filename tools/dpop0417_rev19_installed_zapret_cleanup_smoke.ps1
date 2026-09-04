@@ -20,13 +20,24 @@ try {
     $install = Start-Process -FilePath $InstallerPath -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=$installRoot") -Wait -PassThru
     if ($install.ExitCode -ne 0) { throw "rev.19 silent install failed: $($install.ExitCode)" }
     $installed = $true
+
+    # Diagnostic runs first so the strict 1024 layout RED cannot hide HWND/paint evidence.
+    # It is intentionally non-blocking: the actual acceptance result still comes from the
+    # installed cleanup smoke below.
+    try {
+        & (Join-Path $PSScriptRoot 'dpop0417_rev19_remove_services_probe.ps1') -RootPath $installRoot -OutputDir $OutputDir
+        if (-not $?) { throw 'rev.19 remove-services HWND probe failed.' }
+        Write-Host 'REV19_REMOVE_SERVICES_PRE_GATE_PROBE_OK'
+    }
+    catch {
+        Write-Host ('REV19_REMOVE_SERVICES_PRE_GATE_PROBE_RED: ' + $_.Exception.Message)
+    }
+
     & (Join-Path $PSScriptRoot 'dpop0417_rev19_zapret_cleanup_smoke.ps1') -RootPath $installRoot -OutputDir $OutputDir
     if (-not $?) { throw 'rev.19 installed Zapret cleanup smoke failed.' }
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-zapret-cleanup-report.json') -PathType Leaf)) {
         throw 'rev.19 installed Zapret cleanup report was not produced.'
     }
-    & (Join-Path $PSScriptRoot 'dpop0417_rev19_remove_services_probe.ps1') -RootPath $installRoot -OutputDir $OutputDir
-    if (-not $?) { throw 'rev.19 remove-services HWND probe failed.' }
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-remove-services-probe.json') -PathType Leaf)) {
         throw 'rev.19 remove-services probe report was not produced.'
     }
