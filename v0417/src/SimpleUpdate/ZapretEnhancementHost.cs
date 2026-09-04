@@ -409,7 +409,7 @@ namespace DPopCleaner.SimpleUpdate
                     if (process == null) throw new InvalidOperationException("Не удалось запустить upstream service.bat.");
                     try
                     {
-                        var deadline = DateTime.UtcNow.AddSeconds(15);
+                        var deadline = DateTime.UtcNow.AddSeconds(30);
                         while (DateTime.UtcNow < deadline)
                         {
                             var state = ZapretRuntimeState.Read(_applicationRoot);
