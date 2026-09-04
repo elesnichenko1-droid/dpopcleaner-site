@@ -20,10 +20,10 @@ try {
     $install = Start-Process -FilePath $InstallerPath -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=$installRoot") -Wait -PassThru
     if ($install.ExitCode -ne 0) { throw "rev.18 silent install failed: $($install.ExitCode)" }
     $installed = $true
-    & (Join-Path $PSScriptRoot 'dpop0417_rev18_user_report_smoke.ps1') -RootPath $installRoot -OutputDir $OutputDir
-    if (-not $?) { throw 'rev.18 installed user-report smoke script failed.' }
+    & (Join-Path $PSScriptRoot 'dpop0417_rev19_zapret_cleanup_smoke.ps1') -RootPath $installRoot -OutputDir $OutputDir
+    if (-not $?) { throw 'rev.18 canonical tray/ghost regression failed through rev.19 visual verifier.' }
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev18-user-report-smoke.json') -PathType Leaf)) {
-        throw 'rev.18 installed user-report smoke report was not produced.'
+        throw 'rev.18 compatibility user-report smoke report was not produced.'
     }
     Write-Host 'REV18_INSTALLED_USER_REPORT_SMOKE_OK'
 }
