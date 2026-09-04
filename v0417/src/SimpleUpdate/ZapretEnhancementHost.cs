@@ -29,7 +29,7 @@ namespace DPopCleaner.SimpleUpdate
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
         private const uint WS_TABSTOP = 0x00010000;
-        private const uint BS_OWNERDRAW = 0x0000000B;
+        private const uint BS_PUSHBUTTON = 0x00000000;
         private const uint WM_COMMAND = 0x0111;
         private const uint WM_ERASEBKGND = 0x0014;
         private const uint WM_SETFONT = 0x0030;
@@ -572,7 +572,7 @@ namespace DPopCleaner.SimpleUpdate
         private static IntPtr CreateButton(IntPtr host, string text, int id, int x, int y, int width, int height, IntPtr font)
         {
             var button = CreateWindowEx(0, "Button", text,
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                 x, y, Math.Max(1, width), Math.Max(1, height), host, new IntPtr(id), GetModuleHandle(null), IntPtr.Zero);
             if (button == IntPtr.Zero) throw new InvalidOperationException("Could not create Zapret button id=" + id + ".");
             if (font != IntPtr.Zero) NativeBridge.SendMessage(button, WM_SETFONT, font, new IntPtr(1));
