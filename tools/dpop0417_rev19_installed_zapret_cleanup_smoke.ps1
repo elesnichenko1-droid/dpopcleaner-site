@@ -33,6 +33,11 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-ownerdraw-probe.json') -PathType Leaf)) {
         throw 'rev.19 integrated owner-draw probe report was not produced.'
     }
+    & (Join-Path $PSScriptRoot 'dpop0417_rev19_button_style_probe.ps1') -RootPath $installRoot -OutputDir $OutputDir
+    if (-not $?) { throw 'rev.19 button style probe failed.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-button-style-probe.json') -PathType Leaf)) {
+        throw 'rev.19 button style probe report was not produced.'
+    }
     Write-Host 'REV19_INSTALLED_ZAPRET_CLEANUP_SMOKE_OK'
 }
 finally {
