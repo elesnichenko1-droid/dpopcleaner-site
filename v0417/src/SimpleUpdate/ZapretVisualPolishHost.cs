@@ -2,25 +2,25 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace DPopCleaner.SimpleUpdate
 {
     internal sealed class ZapretVisualPolishHost : IDisposable
     {
         private const string FallbackZapretVersion = "1.10.2";
-        private const uint WM_ERASEBKGND = 0x0014;
-        private const uint WM_PAINT = 0x000F;
-        private const uint WM_PRINT = 0x0317;
-        private const uint WM_PRINTCLIENT = 0x0318;
+        private const uint WM_DRAWITEM = 0x002B;
         private const uint WM_CTLCOLORSTATIC = 0x0138;
-        private const uint BM_GETSTATE = 0x00F2;
-        private const int BST_PUSHED = 0x0004;
+        private const uint ODT_BUTTON = 4;
+        private const uint ODS_SELECTED = 0x0001;
+        private const uint ODS_DISABLED = 0x0004;
         private const uint DT_CENTER = 0x0001;
         private const uint DT_VCENTER = 0x0004;
         private const uint DT_SINGLELINE = 0x0020;
         private const int TRANSPARENT = 1;
-        private const uint ButtonSubclassId = 0xD512;
+        private const int GWL_STYLE = -16;
+        private const int BS_TYPEMASK = 0x0000000F;
+        private const int BS_OWNERDRAW = 0x0000000B;
+        private const uint BridgeHostSubclassId = 0xD512;
         private const uint ServiceHeadingSubclassId = 0xD511;
         private const uint RDW_INVALIDATE = 0x0001;
         private const uint RDW_ERASE = 0x0004;
@@ -41,9 +41,9 @@ namespace DPopCleaner.SimpleUpdate
         };
 
         private static readonly object Sync = new object();
-        private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> ButtonOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
+        private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> BridgeHostOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
         private static readonly Dictionary<IntPtr, ZapretVisualPolishHost> ServiceHeadingOwners = new Dictionary<IntPtr, ZapretVisualPolishHost>();
-        private static readonly SubclassProc ButtonSubclassDelegate = StaticButtonSubclassProc;
+        private static readonly SubclassProc BridgeHostSubclassDelegate = StaticBridgeHostSubclassProc;
         private static readonly SubclassProc ServiceHeadingSubclassDelegate = StaticServiceHeadingSubclassProc;
 
         private static readonly IntPtr DarkButtonBrush = CreateSolidBrush(Rgb(18, 27, 38));
@@ -57,7 +57,8 @@ namespace DPopCleaner.SimpleUpdate
 
         private readonly IntPtr _parent;
         private readonly string _applicationRoot;
-        private readonly HashSet<IntPtr> _buttons = new HashSet<IntPtr>();
+        private readonly HashSet<IntPtr> _bridgeHosts = new HashSet<IntPtr>();
+        private readonly Dictionary<IntPtr, int> _originalButtonStyles = new Dictionary<IntPtr, int>();
         private bool _darkTheme = true;
         private bool _themeKnown;
         private IntPtr _serviceHeadingHost;
@@ -72,23 +73,23 @@ namespace DPopCleaner.SimpleUpdate
         private struct RECT { public int Left, Top, Right, Bottom; }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct PAINTSTRUCT
+        private struct DRAWITEMSTRUCT
         {
-            public IntPtr hdc;
-            public int fErase;
-            public RECT rcPaint;
-            public int fRestore;
-            public int fIncUpdate;
-            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] rgbReserved;
+            public uint CtlType;
+            public uint CtlID;
+            public uint itemID;
+            public uint itemAction;
+            public uint itemState;
+            public IntPtr hwndItem;
+            public IntPtr hDC;
+            public RECT rcItem;
+            public UIntPtr itemData;
         }
 
         private delegate IntPtr SubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr refData);
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetParent(IntPtr hwnd);
-
-        [DllImport("user32.dll")]
-        private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
 
         [DllImport("user32.dll")]
         private static extern bool IsWindowEnabled(IntPtr hwnd);
@@ -100,19 +101,16 @@ namespace DPopCleaner.SimpleUpdate
         private static extern bool RedrawWindow(IntPtr hwnd, IntPtr updateRect, IntPtr updateRegion, uint flags);
 
         [DllImport("user32.dll")]
-        private static extern IntPtr BeginPaint(IntPtr hwnd, out PAINTSTRUCT paint);
-
-        [DllImport("user32.dll")]
-        private static extern bool EndPaint(IntPtr hwnd, ref PAINTSTRUCT paint);
-
-        [DllImport("user32.dll")]
         private static extern int FillRect(IntPtr hdc, ref RECT rect, IntPtr brush);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int DrawText(IntPtr hdc, string text, int count, ref RECT rect, uint format);
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hwnd, int index);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+        private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
 
         [DllImport("gdi32.dll")]
         private static extern IntPtr CreateSolidBrush(uint colorRef);
@@ -183,44 +181,59 @@ namespace DPopCleaner.SimpleUpdate
             _darkTheme = darkTheme;
             _themeKnown = true;
 
-            var added = false;
+            var changed = false;
             foreach (var child in NativeBridge.GetChildren(_parent))
             {
                 if (!child.Visible || !string.Equals(child.ClassName, "Button", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!BridgeButtonIds.Contains(child.Id)) continue;
-                var button = child.Handle;
-                if (button == IntPtr.Zero || !_buttons.Add(button)) continue;
 
-                // These nine HWNDs live in the launcher process. Paint them directly instead of
-                // converting frozen-core buttons to BS_OWNERDRAW through a different process.
-                // The underlying Button class remains BS_PUSHBUTTON and keeps all click/state logic.
-                lock (Sync) ButtonOwners[button] = this;
-                if (!SetWindowSubclass(button, ButtonSubclassDelegate, new UIntPtr(ButtonSubclassId), UIntPtr.Zero))
-                {
-                    lock (Sync) ButtonOwners.Remove(button);
-                    _buttons.Remove(button);
-                    continue;
-                }
+                var button = child.Handle;
+                if (button == IntPtr.Zero) continue;
+                var host = GetParent(button);
+                if (host == IntPtr.Zero || host == _parent) continue;
+
+                // Install the renderer on the launcher-owned parent first. Only after the host can
+                // answer WM_DRAWITEM do we switch its child Button to BS_OWNERDRAW. This removes the
+                // fragile per-button WM_PAINT subclass and leaves click/WM_COMMAND behavior untouched.
+                if (!EnsureBridgeHostSubclass(host)) continue;
+                changed |= SetOwnerDrawStyle(button);
                 SetWindowTheme(button, string.Empty, string.Empty);
-                added = true;
+                if (themeChanged || changed) InvalidateRect(button, IntPtr.Zero, true);
             }
 
-            if (themeChanged || added)
+            if (themeChanged || changed)
             {
-                var bridgeHosts = new HashSet<IntPtr>();
-                foreach (var button in _buttons)
-                {
-                    InvalidateRect(button, IntPtr.Zero, true);
-                    var host = GetParent(button);
-                    if (host != IntPtr.Zero && host != _parent) bridgeHosts.Add(host);
-                }
-                foreach (var host in bridgeHosts)
+                foreach (var host in _bridgeHosts)
                     RedrawWindow(host, IntPtr.Zero, IntPtr.Zero,
                         RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
 
                 var serviceHeading = NativeBridge.FindChildById(_parent, ZapretResponsiveLayoutHost.ServiceActionsHeadingId);
                 if (serviceHeading != IntPtr.Zero) InvalidateRect(serviceHeading, IntPtr.Zero, true);
             }
+        }
+
+        private bool EnsureBridgeHostSubclass(IntPtr host)
+        {
+            if (_bridgeHosts.Contains(host)) return true;
+            lock (Sync) BridgeHostOwners[host] = this;
+            if (!SetWindowSubclass(host, BridgeHostSubclassDelegate, new UIntPtr(BridgeHostSubclassId), UIntPtr.Zero))
+            {
+                lock (Sync) BridgeHostOwners.Remove(host);
+                return false;
+            }
+            _bridgeHosts.Add(host);
+            return true;
+        }
+
+        private bool SetOwnerDrawStyle(IntPtr button)
+        {
+            var current = GetWindowLong(button, GWL_STYLE);
+            if (!_originalButtonStyles.ContainsKey(button)) _originalButtonStyles[button] = current;
+            var desired = (current & ~BS_TYPEMASK) | BS_OWNERDRAW;
+            if (current == desired) return false;
+            SetWindowLong(button, GWL_STYLE, desired);
+            InvalidateRect(button, IntPtr.Zero, true);
+            return true;
         }
 
         private void RefreshVersionCaptions()
@@ -395,31 +408,19 @@ namespace DPopCleaner.SimpleUpdate
             return FallbackZapretVersion;
         }
 
-        private static IntPtr StaticButtonSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr refData)
+        private static IntPtr StaticBridgeHostSubclassProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr refData)
         {
             ZapretVisualPolishHost owner;
-            lock (Sync) ButtonOwners.TryGetValue(hwnd, out owner);
-            if (owner == null) return DefSubclassProc(hwnd, msg, wParam, lParam);
-
-            if (msg == WM_ERASEBKGND) return new IntPtr(1);
-            if (msg == WM_PRINT || msg == WM_PRINTCLIENT)
+            lock (Sync) BridgeHostOwners.TryGetValue(hwnd, out owner);
+            if (owner != null && msg == WM_DRAWITEM && lParam != IntPtr.Zero)
             {
-                if (wParam != IntPtr.Zero) owner.DrawBridgeButton(hwnd, wParam);
-                return IntPtr.Zero;
-            }
-            if (msg == WM_PAINT)
-            {
-                PAINTSTRUCT paint;
-                var hdc = BeginPaint(hwnd, out paint);
-                try
+                var draw = (DRAWITEMSTRUCT)Marshal.PtrToStructure(lParam, typeof(DRAWITEMSTRUCT));
+                if (draw.CtlType == ODT_BUTTON && BridgeButtonIds.Contains(unchecked((int)draw.CtlID)) &&
+                    draw.hwndItem != IntPtr.Zero && owner._originalButtonStyles.ContainsKey(draw.hwndItem))
                 {
-                    if (hdc != IntPtr.Zero) owner.DrawBridgeButton(hwnd, hdc);
+                    owner.DrawOwnerDrawButton(ref draw);
+                    return new IntPtr(1);
                 }
-                finally
-                {
-                    EndPaint(hwnd, ref paint);
-                }
-                return IntPtr.Zero;
             }
             return DefSubclassProc(hwnd, msg, wParam, lParam);
         }
@@ -449,15 +450,17 @@ namespace DPopCleaner.SimpleUpdate
             return _darkTheme ? DarkPageBrush : LightPageBrush;
         }
 
-        private void DrawBridgeButton(IntPtr button, IntPtr hdc)
+        private void DrawOwnerDrawButton(ref DRAWITEMSTRUCT draw)
         {
-            RECT rect;
-            if (button == IntPtr.Zero || hdc == IntPtr.Zero || !GetClientRect(button, out rect)) return;
+            var button = draw.hwndItem;
+            var hdc = draw.hDC;
+            var rect = draw.rcItem;
+            if (button == IntPtr.Zero || hdc == IntPtr.Zero) return;
 
             var pageBrush = _darkTheme ? DarkPageBrush : LightPageBrush;
             FillRect(hdc, ref rect, pageBrush);
 
-            var pushed = (NativeBridge.SendMessage(button, BM_GETSTATE, IntPtr.Zero, IntPtr.Zero).ToInt32() & BST_PUSHED) != 0;
+            var pushed = (draw.itemState & ODS_SELECTED) != 0;
             var buttonBrush = _darkTheme
                 ? (pushed ? DarkPressedBrush : DarkButtonBrush)
                 : (pushed ? LightPressedBrush : LightButtonBrush);
@@ -483,17 +486,16 @@ namespace DPopCleaner.SimpleUpdate
             if (font != IntPtr.Zero) oldFont = SelectObject(hdc, font);
             try
             {
-                var text = new StringBuilder(256);
-                GetWindowText(button, text, text.Capacity);
                 SetBkMode(hdc, TRANSPARENT);
-                var disabled = !IsWindowEnabled(button);
+                var disabled = (draw.itemState & ODS_DISABLED) != 0 || !IsWindowEnabled(button);
                 var textColor = disabled
                     ? (_darkTheme ? Rgb(145, 154, 164) : Rgb(132, 139, 148))
                     : (_darkTheme ? Rgb(242, 246, 250) : Rgb(28, 36, 46));
                 SetTextColor(hdc, textColor);
                 var textRect = rect;
                 if (pushed) { textRect.Top += 1; textRect.Bottom += 1; }
-                DrawText(hdc, text.ToString(), -1, ref textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                DrawText(hdc, NativeBridge.ReadWindowText(button) ?? string.Empty, -1, ref textRect,
+                    DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             }
             finally
             {
@@ -518,18 +520,25 @@ namespace DPopCleaner.SimpleUpdate
                 lock (Sync) ServiceHeadingOwners.Remove(_serviceHeadingHost);
                 _serviceHeadingHost = IntPtr.Zero;
             }
-            foreach (var button in _buttons)
+
+            foreach (var host in _bridgeHosts)
+            {
+                try { RemoveWindowSubclass(host, BridgeHostSubclassDelegate, new UIntPtr(BridgeHostSubclassId)); } catch { }
+                lock (Sync) BridgeHostOwners.Remove(host);
+            }
+            _bridgeHosts.Clear();
+
+            foreach (var pair in _originalButtonStyles)
             {
                 try
                 {
-                    RemoveWindowSubclass(button, ButtonSubclassDelegate, new UIntPtr(ButtonSubclassId));
-                    SetWindowTheme(button, null, null);
-                    InvalidateRect(button, IntPtr.Zero, true);
+                    SetWindowLong(pair.Key, GWL_STYLE, pair.Value);
+                    SetWindowTheme(pair.Key, null, null);
+                    InvalidateRect(pair.Key, IntPtr.Zero, true);
                 }
                 catch { }
-                lock (Sync) ButtonOwners.Remove(button);
             }
-            _buttons.Clear();
+            _originalButtonStyles.Clear();
         }
     }
 }
