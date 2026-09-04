@@ -59,6 +59,8 @@ public static class Rev19Native {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd,IntPtr after,int x,int y,int cx,int cy,uint flags);
     [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd,uint msg,IntPtr wp,IntPtr lp);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd,IntPtr hdc,uint flags);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("uxtheme.dll")] public static extern IntPtr GetWindowTheme(IntPtr hwnd);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern IntPtr OpenProcess(uint access,bool inherit,uint pid);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern IntPtr VirtualAllocEx(IntPtr p,IntPtr a,UIntPtr s,uint type,uint protect);
@@ -116,6 +118,14 @@ function Get-CoreProcess([string]$ExpectedPath) {
     }
     $null
 }
+function Ensure-CaptureWindowForeground([IntPtr]$Window) {
+    if($Window -eq [IntPtr]::Zero){throw 'Cannot foreground an empty rev.19 capture window.'}
+    [void][Rev19Native]::SetWindowPos($Window,[IntPtr]::new(-1),0,0,0,0,0x0001 -bor 0x0002 -bor 0x0010 -bor 0x0040)
+    $brought=[Rev19Native]::BringWindowToTop($Window)
+    $foreground=[Rev19Native]::SetForegroundWindow($Window)
+    Start-Sleep -Milliseconds 220
+    Write-Host "REV19_CAPTURE_FOREGROUND bring=$brought foreground=$foreground"
+}
 function Get-BitmapUniqueColorCount([Drawing.Bitmap]$Bitmap) {
     $colors=[Collections.Generic.HashSet[int]]::new()
     for($y=0;$y-lt$Bitmap.Height;$y++){for($x=0;$x-lt$Bitmap.Width;$x++){[void]$colors.Add($Bitmap.GetPixel($x,$y).ToArgb());if($colors.Count-ge4){return $colors.Count}}}
@@ -141,6 +151,7 @@ function Capture-CompositeWindow([IntPtr]$Window,[string]$Path,[object[]]$Childr
     try{
         $child=$Children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $_.OwnerPid -eq $LauncherPid -and $_.Id -eq 1702}|Select-Object -First 1
         if(-not$child){throw 'launcher-owned remove-services button 1702 missing during composite capture.'}
+        Ensure-CaptureWindowForeground $Window
         $screenButton=Capture-ScreenChildBitmap $child
         try{$graphics.DrawImageUnscaled($screenButton,$child.Left-$bounds.Left,$child.Top-$bounds.Top)}finally{$screenButton.Dispose()}
     }finally{$graphics.Dispose()}
