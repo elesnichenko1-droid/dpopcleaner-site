@@ -122,8 +122,8 @@ namespace DPopCleaner.SimpleUpdate
                 Math.Max(nativeButtonHeight, Scale(ResponsiveButtonHeight, scale) + tallWindowExtra / 8));
             var rowGap = Math.Min(Scale(16, scale), Scale(ResponsiveRowGap, scale) + tallWindowExtra / 28);
             var sectionGap = Math.Min(
-                Scale(30, scale),
-                Math.Max(rowGap, Scale(ResponsiveRowGap, scale) + Math.Max(0, clientHeight - 800) / 12));
+                Scale(36, scale),
+                Math.Max(rowGap, Scale(ResponsiveRowGap, scale) + Math.Max(0, clientHeight - 800) / 6));
             var columnGap = Scale(ResponsiveColumnGap, scale);
             var minimumButtonWidth = Scale(ResponsiveMinimumButtonWidth, scale);
 
