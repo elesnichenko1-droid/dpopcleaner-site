@@ -58,6 +58,9 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('CopyFromScreen', smoke)
         self.assertIn('$_.Id -eq 1702', smoke)
         self.assertIn('DrawImageUnscaled', smoke)
+        self.assertIn('Ensure-CaptureWindowForeground', smoke)
+        self.assertIn('BringWindowToTop', smoke)
+        self.assertIn('SetForegroundWindow', smoke)
         self.assertIn('REV19_PRIMARY_COMPOSITE_OK', smoke)
         self.assertIn('Capture-CompositeWindow $window $shot $children $launcher.Id', smoke)
 
