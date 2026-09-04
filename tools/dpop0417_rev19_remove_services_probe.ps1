@@ -68,6 +68,13 @@ function Get-Core { foreach($p in @(Get-Process -Name 'DPopCleaner.Core' -ErrorA
 function Capture-Print([IntPtr]$Window,[string]$Path){$r=[R19ProbeNative]::Bounds($Window);if(-not$r){return};$w=[Math]::Max(1,$r.Right-$r.Left);$h=[Math]::Max(1,$r.Bottom-$r.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);$dc=$g.GetHdc();try{[void][R19ProbeNative]::PrintWindow($Window,$dc,2)}finally{$g.ReleaseHdc($dc);$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()}}
 function Capture-Screen([IntPtr]$Window,[string]$Path){$r=[R19ProbeNative]::Bounds($Window);$w=[Math]::Max(1,$r.Right-$r.Left);$h=[Math]::Max(1,$r.Bottom-$r.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);try{$g.CopyFromScreen($r.Left,$r.Top,0,0,[Drawing.Size]::new($w,$h))}finally{$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()}}
 function Capture-Synthetic($Sample,[string]$Path){$w=[Math]::Max(1,$Sample.Right-$Sample.Left);$h=[Math]::Max(1,$Sample.Bottom-$Sample.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);$dc=$g.GetHdc();try{$result=[R19ProbeNative]::SyntheticDraw([IntPtr]$Sample.ParentHwnd,[IntPtr]$Sample.Hwnd,$Sample.Id,$dc,$w,$h)}finally{$g.ReleaseHdc($dc);$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()};$result}
+function Assert-FirstPaint([string]$Path){
+ if(-not(Test-Path -LiteralPath $Path -PathType Leaf)){throw "first-paint evidence missing: $Path"}
+ $bmp=[Drawing.Bitmap]::new($Path);$colors=[Collections.Generic.HashSet[int]]::new()
+ try{for($y=0;$y-lt$bmp.Height;$y++){for($x=0;$x-lt$bmp.Width;$x++){[void]$colors.Add($bmp.GetPixel($x,$y).ToArgb())}}}finally{$bmp.Dispose()}
+ if($colors.Count-lt4){throw "remove-services first paint is blank: uniqueColors=$($colors.Count) path=$Path"}
+ Write-Host "REV19_FIRST_PAINT_OK uniqueColors=$($colors.Count) path=$Path"
+}
 
 $launcher=$null;$core=$null
 try{
@@ -90,7 +97,9 @@ try{
    foreach($sampleId in @(1701,1702,1713,1720)){
     $sample=@([R19ProbeNative]::Probe($window,$sampleId))|Where-Object{$_.Visible -and $_.OwnerPid-eq$launcher.Id}|Select-Object -First 1
     if($sample){
-     Capture-Print ([IntPtr]$sample.Hwnd) (Join-Path $OutputDir ("rev19-proxy-{0}-button.png" -f $sampleId))
+     $buttonPath=Join-Path $OutputDir ("rev19-proxy-{0}-button.png" -f $sampleId)
+     Capture-Print ([IntPtr]$sample.Hwnd) $buttonPath
+     if($sampleId-eq1702){Assert-FirstPaint $buttonPath}
      Capture-Print ([IntPtr]$sample.ParentHwnd) (Join-Path $OutputDir ("rev19-proxy-{0}-host.png" -f $sampleId))
      $synthetic=Capture-Synthetic $sample (Join-Path $OutputDir ("rev19-synthetic-draw-{0}.png" -f $sampleId))
      $drawReports+=[pscustomobject]@{id=$sampleId;text=$sample.Text;synthetic_result=$synthetic;hwnd=$sample.Hwnd;parent=$sample.ParentHwnd}
