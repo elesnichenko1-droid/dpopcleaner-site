@@ -126,14 +126,14 @@ function Get-BitmapUniqueColorCount([Drawing.Bitmap]$Bitmap) {
 function Capture-ProxyBitmap($Child) {
     $w=[Math]::Max(1,$Child.Right-$Child.Left);$h=[Math]::Max(1,$Child.Bottom-$Child.Top)
     for($attempt=1;$attempt-le4;$attempt++){
-        $bitmap=[Drawing.Bitmap]::new($w,$h);$graphics=[Drawing.Graphics]::FromImage($bitmap);$hdc=$graphics.GetHdc();$ok=$false
-        try{$ok=[Rev19Native]::PrintWindow($Child.Handle,$hdc,2)}finally{$graphics.ReleaseHdc($hdc);$graphics.Dispose()}
-        if($ok -and (Get-BitmapUniqueColorCount $bitmap)-ge4){return $bitmap}
+        $bitmap=[Drawing.Bitmap]::new($w,$h);$graphics=[Drawing.Graphics]::FromImage($bitmap);$hdc=$graphics.GetHdc()
+        try{[void][Rev19Native]::SendMessage($Child.Handle,0x0318,$hdc,[IntPtr]::Zero)}finally{$graphics.ReleaseHdc($hdc);$graphics.Dispose()}
+        if((Get-BitmapUniqueColorCount $bitmap)-ge4){return $bitmap}
         $bitmap.Dispose()
         [void][Rev19Native]::RedrawWindow($Child.Handle,[IntPtr]::Zero,[IntPtr]::Zero,0x0581)
         Start-Sleep -Milliseconds 80
     }
-    throw "proxy button id=$($Child.Id) remained blank after bounded direct PrintWindow retries."
+    throw "proxy button id=$($Child.Id) remained blank after bounded WM_PRINTCLIENT retries."
 }
 function Capture-CompositeWindow([IntPtr]$Window,[string]$Path,[object[]]$Children,[int]$LauncherPid) {
     $bounds=[Rev19Native]::Bounds($Window);if(-not $bounds){throw 'Could not read rev.19 window bounds.'}
