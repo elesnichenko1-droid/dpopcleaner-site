@@ -45,6 +45,7 @@ public static class Rev19Native {
     private const uint MEM_COMMIT=0x1000, MEM_RESERVE=0x2000, MEM_RELEASE=0x8000, PAGE_READWRITE=0x04;
     private delegate bool EnumProc(IntPtr hwnd, IntPtr p);
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left,Top,Right,Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X,Y; public POINT(int x,int y){X=x;Y=y;} }
     [StructLayout(LayoutKind.Sequential)] private struct TBBUTTON64 { public int iBitmap; public int idCommand; public byte fsState; public byte fsStyle; [MarshalAs(UnmanagedType.ByValArray,SizeConst=6)] public byte[] reserved; public UIntPtr dwData; public IntPtr iString; }
     [StructLayout(LayoutKind.Sequential)] private struct TRAYDATA64 { public IntPtr hwnd; public uint uID; public uint callback; public uint r0; public uint r1; public IntPtr hIcon; }
 
@@ -61,6 +62,9 @@ public static class Rev19Native {
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd,IntPtr hdc,uint flags);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT point);
+    [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd,uint flags);
     [DllImport("uxtheme.dll")] public static extern IntPtr GetWindowTheme(IntPtr hwnd);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern IntPtr OpenProcess(uint access,bool inherit,uint pid);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern IntPtr VirtualAllocEx(IntPtr p,IntPtr a,UIntPtr s,uint type,uint protect);
@@ -76,8 +80,8 @@ public static class Rev19Native {
         }; EnumChildWindows(parent,cb,IntPtr.Zero); GC.KeepAlive(cb); return list.ToArray();
     }
     public static Rev19Child Bounds(IntPtr hwnd) {
-        RECT r; if(!GetWindowRect(hwnd,out r))return null; var t=new StringBuilder(1024); var c=new StringBuilder(128); uint ownerPid=0;
-        GetWindowText(hwnd,t,t.Capacity); GetClassName(hwnd,c,c.Capacity); GetWindowRect(hwnd,out r); GetWindowThreadProcessId(hwnd,out ownerPid);
+        if(hwnd==IntPtr.Zero)return null; RECT r; if(!GetWindowRect(hwnd,out r))return null; var t=new StringBuilder(1024); var c=new StringBuilder(128); uint ownerPid=0;
+        GetWindowText(hwnd,t,t.Capacity); GetClassName(hwnd,c,c.Capacity); GetWindowThreadProcessId(hwnd,out ownerPid);
         return new Rev19Child{Handle=hwnd,Id=GetDlgCtrlID(hwnd),Text=t.ToString(),ClassName=c.ToString(),Visible=IsWindowVisible(hwnd),OwnerPid=(int)ownerPid,Left=r.Left,Top=r.Top,Right=r.Right,Bottom=r.Bottom};
     }
     public static Rev19TrayEntry[] Entries() {
@@ -131,7 +135,33 @@ function Get-BitmapUniqueColorCount([Drawing.Bitmap]$Bitmap) {
     for($y=0;$y-lt$Bitmap.Height;$y++){for($x=0;$x-lt$Bitmap.Width;$x++){[void]$colors.Add($Bitmap.GetPixel($x,$y).ToArgb());if($colors.Count-ge4){return $colors.Count}}}
     $colors.Count
 }
-function Capture-ScreenChildBitmap($Child) {
+function Format-WindowEvidence([IntPtr]$Handle) {
+    if($Handle-eq[IntPtr]::Zero){return 'hwnd=0x0'}
+    $info=[Rev19Native]::Bounds($Handle)
+    if(-not$info){return ('hwnd=0x{0:X} unreadable' -f $Handle.ToInt64())}
+    "hwnd=0x{0:X} pid={1} id={2} class='{3}' text='{4}' visible={5} rect={6},{7}-{8},{9}" -f $Handle.ToInt64(),$info.OwnerPid,$info.Id,$info.ClassName,$info.Text,$info.Visible,$info.Left,$info.Top,$info.Right,$info.Bottom
+}
+function Save-PhysicalScreen([string]$Path) {
+    $screen=[Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $bitmap=[Drawing.Bitmap]::new([Math]::Max(1,$screen.Width),[Math]::Max(1,$screen.Height));$graphics=[Drawing.Graphics]::FromImage($bitmap)
+    try{$graphics.CopyFromScreen($screen.Left,$screen.Top,0,0,$screen.Size,[Drawing.CopyPixelOperation]::SourceCopy)}finally{$graphics.Dispose()}
+    try{$bitmap.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}
+}
+function Write-ScreenOccupancyEvidence($Child,[IntPtr]$ExpectedWindow,[string]$Stem) {
+    $centerX=[int](($Child.Left+$Child.Right)/2);$centerY=[int](($Child.Top+$Child.Bottom)/2)
+    $point=[Rev19Native+POINT]::new($centerX,$centerY)
+    $atPoint=[Rev19Native]::WindowFromPoint($point)
+    $rootAtPoint=if($atPoint-ne[IntPtr]::Zero){[Rev19Native]::GetAncestor($atPoint,2)}else{[IntPtr]::Zero}
+    $foreground=[Rev19Native]::GetForegroundWindow()
+    $screenPath=Join-Path $OutputDir ($Stem+'-physical-screen.png')
+    Save-PhysicalScreen $screenPath
+    Write-Host ('REV19_SCREEN_OCCUPANCY center={0},{1} expected={2}' -f $centerX,$centerY,(Format-WindowEvidence $ExpectedWindow))
+    Write-Host ('REV19_SCREEN_OCCUPANCY point={0}' -f (Format-WindowEvidence $atPoint))
+    Write-Host ('REV19_SCREEN_OCCUPANCY pointRoot={0}' -f (Format-WindowEvidence $rootAtPoint))
+    Write-Host ('REV19_SCREEN_OCCUPANCY foreground={0}' -f (Format-WindowEvidence $foreground))
+    Write-Host ('REV19_SCREEN_OCCUPANCY fullScreen={0}' -f $screenPath)
+}
+function Capture-ScreenChildBitmap($Child,[IntPtr]$ExpectedWindow,[string]$EvidenceStem) {
     $w=[Math]::Max(1,$Child.Right-$Child.Left);$h=[Math]::Max(1,$Child.Bottom-$Child.Top)
     $screen=[Windows.Forms.Screen]::PrimaryScreen.Bounds
     if($Child.Left-lt$screen.Left -or $Child.Top-lt$screen.Top -or $Child.Right-gt$screen.Right -or $Child.Bottom-gt$screen.Bottom){
@@ -140,7 +170,13 @@ function Capture-ScreenChildBitmap($Child) {
     $bitmap=[Drawing.Bitmap]::new($w,$h);$graphics=[Drawing.Graphics]::FromImage($bitmap)
     try{$graphics.CopyFromScreen($Child.Left,$Child.Top,0,0,[Drawing.Size]::new($w,$h),[Drawing.CopyPixelOperation]::SourceCopy)}finally{$graphics.Dispose()}
     $colors=Get-BitmapUniqueColorCount $bitmap
-    if($colors-lt4){$bitmap.Dispose();throw "real screen crop for button id=$($Child.Id) is blank: uniqueColors=$colors"}
+    if($colors-lt4){
+        $cropPath=Join-Path $OutputDir ($EvidenceStem+'-1702-screen-crop.png')
+        try{$bitmap.Save($cropPath,[Drawing.Imaging.ImageFormat]::Png)}catch{}
+        Write-ScreenOccupancyEvidence $Child $ExpectedWindow $EvidenceStem
+        $bitmap.Dispose()
+        throw "real screen crop for button id=$($Child.Id) is blank: uniqueColors=$colors path=$cropPath"
+    }
     $bitmap
 }
 function Capture-CompositeWindow([IntPtr]$Window,[string]$Path,[object[]]$Children,[int]$LauncherPid) {
@@ -152,7 +188,8 @@ function Capture-CompositeWindow([IntPtr]$Window,[string]$Path,[object[]]$Childr
         $child=$Children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $_.OwnerPid -eq $LauncherPid -and $_.Id -eq 1702}|Select-Object -First 1
         if(-not$child){throw 'launcher-owned remove-services button 1702 missing during composite capture.'}
         Ensure-CaptureWindowForeground $Window
-        $screenButton=Capture-ScreenChildBitmap $child
+        $stem=[IO.Path]::GetFileNameWithoutExtension($Path)
+        $screenButton=Capture-ScreenChildBitmap $child $Window $stem
         try{$graphics.DrawImageUnscaled($screenButton,$child.Left-$bounds.Left,$child.Top-$bounds.Top)}finally{$screenButton.Dispose()}
     }finally{$graphics.Dispose()}
     try{$bitmap.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}
