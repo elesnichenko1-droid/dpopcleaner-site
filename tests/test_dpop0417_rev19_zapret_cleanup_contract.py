@@ -34,6 +34,16 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('MeasurePreferredWidth', source)
         self.assertIn('CompactUpdateToggleButtonIds', source)
 
+    def test_rev19_has_real_installed_multisize_visual_and_tray_gate(self):
+        workflow_path = ROOT / '.github/workflows/DPopCleaner_0.4.17_REV19_ZAPRET_CLEANUP.yml'
+        self.assertTrue(workflow_path.is_file(), 'rev.19 dedicated installed workflow is required')
+        workflow = workflow_path.read_text(encoding='utf-8')
+        self.assertIn('dpop0417_rev19_installed_zapret_cleanup_smoke.ps1', workflow)
+        self.assertIn('DPopCleaner_Setup_0.4.17.exe', workflow)
+        smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
+        for token in ('1024', '1366', '1680', '1908', 'Service actions', 'Сервисные действия', 'GetWindowTheme', 'Assert-TrayState', 'rev19-zapret-cleanup-report.json'):
+            self.assertIn(token, smoke)
+
 
 if __name__ == '__main__':
     unittest.main()
