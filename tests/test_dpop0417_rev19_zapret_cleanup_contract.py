@@ -43,6 +43,12 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('MeasurePreferredWidth', layout)
         self.assertNotIn('DT_END_ELLIPSIS', polish)
 
+    def test_remove_services_probe_rejects_blank_first_paint(self):
+        probe = (ROOT / 'tools/dpop0417_rev19_remove_services_probe.ps1').read_text(encoding='utf-8')
+        self.assertIn('Assert-FirstPaint', probe)
+        self.assertIn('REV19_FIRST_PAINT_OK', probe)
+        self.assertIn('rev19-proxy-1702-button.png', probe)
+
     def test_service_heading_uses_same_process_host_and_current_theme(self):
         layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
         polish = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
