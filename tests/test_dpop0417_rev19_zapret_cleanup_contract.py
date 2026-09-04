@@ -104,18 +104,19 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         for token in ('Автообновление', 'Автозапуск Zapret', 'Auto-update', 'Zapret autostart', 'Удалить сервисы', 'Remove services', 'Диагностика', 'Diagnostics'):
             self.assertIn(token, source)
 
-    def test_bridge_buttons_use_host_ownerdraw_not_per_button_subclass(self):
-        enhancement = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
-        polish = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
-        self.assertIn('BS_OWNERDRAW', enhancement)
-        self.assertIn('WM_DRAWITEM', enhancement)
-        self.assertIn('DrawOwnerDrawButton', enhancement)
-        self.assertIn('CreateRoundRectRgn', enhancement)
-        self.assertIn('NativeBridge.WM_GETFONT', enhancement)
-        self.assertIn('SelectObject', enhancement)
-        self.assertNotIn('SetWindowSubclass(button, ButtonSubclassDelegate', polish)
-        self.assertNotIn('ButtonSubclassDelegate', polish)
-        self.assertNotIn('StaticButtonSubclassProc', polish)
+    def test_bridge_buttons_use_host_level_ownerdraw_not_per_button_subclass(self):
+        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('BS_OWNERDRAW', source)
+        self.assertIn('WM_DRAWITEM', source)
+        self.assertIn('BridgeHostSubclassDelegate', source)
+        self.assertIn('DrawOwnerDrawButton', source)
+        self.assertIn('SetOwnerDrawStyle', source)
+        self.assertIn('CreateRoundRectRgn', source)
+        self.assertIn('NativeBridge.WM_GETFONT', source)
+        self.assertIn('SelectObject', source)
+        self.assertIn('SetWindowTheme(button, string.Empty, string.Empty)', source)
+        self.assertNotIn('SetWindowSubclass(button, ButtonSubclassDelegate', source)
+        self.assertNotIn('StaticButtonSubclassProc', source)
 
     def test_rev19_has_real_installed_multisize_visual_and_tray_gate(self):
         workflow_path = ROOT / '.github/workflows/DPopCleaner_0.4.17_REV19_ZAPRET_CLEANUP.yml'
