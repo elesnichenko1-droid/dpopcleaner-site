@@ -19,7 +19,6 @@ namespace DPopCleaner.SimpleUpdate
         private const uint DT_CENTER = 0x0001;
         private const uint DT_VCENTER = 0x0004;
         private const uint DT_SINGLELINE = 0x0020;
-        private const uint DT_END_ELLIPSIS = 0x8000;
         private const int TRANSPARENT = 1;
         private const uint ButtonSubclassId = 0xD512;
         private const uint ServiceHeadingSubclassId = 0xD511;
@@ -478,7 +477,7 @@ namespace DPopCleaner.SimpleUpdate
                 SetTextColor(hdc, textColor);
                 var textRect = rect;
                 if (pushed) { textRect.Top += 1; textRect.Bottom += 1; }
-                DrawText(hdc, text.ToString(), -1, ref textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+                DrawText(hdc, text.ToString(), -1, ref textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             }
             finally
             {
