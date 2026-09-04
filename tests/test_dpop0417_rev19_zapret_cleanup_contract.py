@@ -57,6 +57,32 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         for token in ('Автообновление', 'Автозапуск Zapret', 'Auto-update', 'Zapret autostart', 'Удалить сервисы', 'Remove services', 'Диагностика', 'Diagnostics'):
             self.assertIn(token, source)
 
+    def test_bridge_buttons_use_same_process_direct_painting(self):
+        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('BridgeButtonIds', source)
+        for token in (
+            'ZapretEnhancementHost.InstallServiceProxyButtonId',
+            'ZapretEnhancementHost.RemoveServicesProxyButtonId',
+            'ZapretEnhancementHost.StartStandaloneProxyButtonId',
+            'ZapretEnhancementHost.RepairBroadcastButtonId',
+            'ZapretEnhancementHost.RepairConnectionButtonId',
+            'ZapretEnhancementHost.GameFilterButtonId',
+            'ZapretEnhancementHost.ManagerButtonId',
+            'ZapretEnhancementHost.LegacyCheckVersionButtonId',
+            'ZapretEnhancementHost.LegacyDownloadButtonId',
+        ):
+            self.assertIn(token, source)
+        self.assertIn('ButtonSubclassDelegate', source)
+        self.assertIn('SetWindowSubclass(button, ButtonSubclassDelegate', source)
+        self.assertIn('WM_PAINT', source)
+        self.assertIn('WM_PRINTCLIENT', source)
+        self.assertIn('DrawBridgeButton', source)
+        self.assertIn('CreateRoundRectRgn', source)
+        self.assertIn('WM_GETFONT', source)
+        self.assertIn('SelectObject', source)
+        self.assertNotIn('SetOwnerDrawStyle(button, originalStyle)', source)
+        self.assertNotIn('UnifiedZapretButtonIds', source)
+
     def test_rev19_has_real_installed_multisize_visual_and_tray_gate(self):
         workflow_path = ROOT / '.github/workflows/DPopCleaner_0.4.17_REV19_ZAPRET_CLEANUP.yml'
         self.assertTrue(workflow_path.is_file(), 'rev.19 dedicated installed workflow is required')
