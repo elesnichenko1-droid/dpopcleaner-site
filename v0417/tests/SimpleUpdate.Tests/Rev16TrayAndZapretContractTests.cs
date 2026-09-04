@@ -142,6 +142,21 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
+        public void Install_action_allows_a_safe_margin_for_real_flowseal_service_startup()
+        {
+            var source = ReadSource("ZapretEnhancementHost.cs");
+            var install = SliceMethod(
+                source,
+                "private void InstallSelectedStrategyUsingUpstreamManager()",
+                "private static string BuildDirectUpstreamInstallManager");
+
+            StringAssert.Contains(install, "DateTime.UtcNow.AddSeconds(30)",
+                "Real installed Flowseal 1.10.2 startup has measured near 10 seconds on current runners and exceeded the old 15-second budget on a slower runner; keep a deterministic safety margin.");
+            Assert.IsFalse(install.Contains("DateTime.UtcNow.AddSeconds(15)"),
+                "The old 15-second install deadline is too close to observed real startup time and caused an intermittent false timeout.");
+        }
+
+        [TestMethod]
         public void Proven_broken_remove_action_is_replaced_by_a_same_bounds_upstream_proxy()
         {
             var source = ReadSource("ZapretEnhancementHost.cs");
