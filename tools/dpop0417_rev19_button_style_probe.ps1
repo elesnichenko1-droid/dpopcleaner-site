@@ -43,6 +43,7 @@ public static class R19StyleNative {
  [DllImport("user32.dll")] private static extern bool InvalidateRect(IntPtr h,IntPtr r,bool erase);
  [DllImport("user32.dll")] private static extern bool RedrawWindow(IntPtr h,IntPtr r,IntPtr region,uint flags);
  [DllImport("user32.dll")] private static extern bool UpdateWindow(IntPtr h);
+ [DllImport("uxtheme.dll",CharSet=CharSet.Unicode)] private static extern int SetWindowTheme(IntPtr h,string subApp,string subIdList);
  static string Text(IntPtr h){var b=new StringBuilder(512);GetWindowText(h,b,b.Capacity);return b.ToString();}
  static string Cls(IntPtr h){var b=new StringBuilder(128);GetClassName(h,b,b.Capacity);return b.ToString();}
  static long Long(IntPtr h,int i){return IntPtr.Size==8?GetWindowLongPtr64(h,i).ToInt64():GetWindowLong32(h,i);}
@@ -50,6 +51,7 @@ public static class R19StyleNative {
  public static R19StyleItem[] Probe(IntPtr root,int id){var list=new List<R19StyleItem>();EnumProc cb=delegate(IntPtr h,IntPtr _){if(GetDlgCtrlID(h)!=id)return true;RECT r;if(!GetWindowRect(h,out r))return true;uint pid=0,ppid=0;var tid=GetWindowThreadProcessId(h,out pid);var p=GetParent(h);var ptid=p==IntPtr.Zero?0:GetWindowThreadProcessId(p,out ppid);list.Add(new R19StyleItem{Hwnd=h.ToInt64(),Parent=p.ToInt64(),Id=id,Pid=(int)pid,ThreadId=(int)tid,ParentThreadId=(int)ptid,Text=Text(h),ClassName=Cls(h),Visible=IsWindowVisible(h),Left=r.L,Top=r.T,Right=r.R,Bottom=r.B,Style=Long(h,-16),WndProc=Long(h,-4)});return true;};EnumChildWindows(root,cb,IntPtr.Zero);GC.KeepAlive(cb);return list.ToArray();}
  public static void EnableRedraw(IntPtr h){SendMessage(h,0x000B,new IntPtr(1),IntPtr.Zero);InvalidateRect(h,IntPtr.Zero,true);RedrawWindow(h,IntPtr.Zero,IntPtr.Zero,0x0001|0x0004|0x0080|0x0100);UpdateWindow(h);}
  public static void SetButtonStyle(IntPtr h,uint style){SendMessage(h,0x00F4,new IntPtr((long)style),new IntPtr(1));InvalidateRect(h,IntPtr.Zero,true);RedrawWindow(h,IntPtr.Zero,IntPtr.Zero,0x0001|0x0004|0x0080|0x0100);UpdateWindow(h);}
+ public static void RestorePushTheme(IntPtr h){SendMessage(h,0x00F4,IntPtr.Zero,new IntPtr(1));SetWindowTheme(h,null,null);InvalidateRect(h,IntPtr.Zero,true);RedrawWindow(h,IntPtr.Zero,IntPtr.Zero,0x0001|0x0004|0x0080|0x0100);UpdateWindow(h);}
 }
 '@
 Add-Type -TypeDefinition $native -Language CSharp
@@ -88,6 +90,17 @@ try{
  [R19StyleNative]::SetButtonStyle($button,0x0000000B);Start-Sleep -Milliseconds 250
  Capture-Print $button (Join-Path $OutputDir 'rev19-style-1702-after-bm-toggle.png')
  Capture-Print $parentHost (Join-Path $OutputDir 'rev19-style-1702-host-after-bm-toggle.png')
+
+ Capture-Print $window (Join-Path $OutputDir 'rev19-style-full-before-system-theme.png')
+ foreach($id in @(1701,1702,1713,1720,1721,1722,1723,1724,1725)){
+   $bridge=@([R19StyleNative]::Probe($window,$id))|Where-Object{$_.Visible -and $_.Pid-eq$launcher.Id}|Select-Object -First 1
+   if($bridge){[R19StyleNative]::RestorePushTheme([IntPtr]$bridge.Hwnd);Write-Host ("REV19_SYSTEM_THEME_RESTORE id={0} hwnd=0x{1:X}" -f $id,$bridge.Hwnd)}
+ }
+ Start-Sleep -Milliseconds 500
+ Capture-Print $window (Join-Path $OutputDir 'rev19-style-full-after-system-theme.png')
+ $targetAfter=@([R19StyleNative]::Probe($window,1702))|Where-Object{$_.Visible -and $_.Pid-eq$launcher.Id}|Select-Object -First 1
+ if($targetAfter){Capture-Print ([IntPtr]$targetAfter.Hwnd) (Join-Path $OutputDir 'rev19-style-1702-after-system-theme.png')}
+
  $samples|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $OutputDir 'rev19-button-style-probe.json') -Encoding utf8
  Write-Host 'REV19_BUTTON_STYLE_PROBE_OK'
 }
