@@ -66,8 +66,9 @@ namespace SimpleUpdate.Tests
             var source = ReadSource("ZapretResponsiveLayoutHost.cs");
 
             StringAssert.Contains(source, "FindStatusEdits");
-            StringAssert.Contains(source, "statusDetailBottom + rowGap");
-            StringAssert.Contains(source, "availableVerticalSpace");
+            StringAssert.Contains(source, "ComputeStatusDetailHeight");
+            StringAssert.Contains(source, "statusDetailBottom + sectionGap");
+            StringAssert.Contains(source, "clientHeight");
             StringAssert.Contains(source, "updateHeadingTop");
             Assert.IsFalse(source.Contains("legacyStrategyTop"),
                 "Strategy Y must not be inherited from the previous responsive tick; maximize/restore must be reversible.");
