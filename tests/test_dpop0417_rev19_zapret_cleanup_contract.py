@@ -48,7 +48,8 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('Assert-FirstPaint', probe)
         self.assertIn('REV19_FIRST_PAINT_OK', probe)
         self.assertIn('rev19-proxy-{0}-button.png', probe)
-        self.assertIn('if($sampleId-eq1702){Assert-FirstPaint $buttonPath}', probe)
+        self.assertIn('REV19_FIRST_PAINT_DIAG', probe)
+        self.assertIn('Assert-FirstPaint $buttonPath', probe)
 
     def test_zapret_geometry_is_applied_before_bridge_painting(self):
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
