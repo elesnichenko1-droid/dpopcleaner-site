@@ -645,12 +645,12 @@ namespace DPopCleaner.SimpleUpdate
                     groupBottom = Math.Max(groupBottom, cells[j].Bottom);
                 }
 
-                NativeBridge.PositionChildWindow(parent, Bounds(groupLeft, groupTop, groupRight, groupBottom));
+                PositionIfChanged(_parent, parent, Bounds(groupLeft, groupTop, groupRight, groupBottom));
                 for (var j = i; j < buttons.Length; j++)
                 {
                     if (placed[j] || buttons[j] == IntPtr.Zero || cells[j] == null) continue;
                     if (GetParent(buttons[j]) != parent) continue;
-                    NativeBridge.PositionChildWindow(buttons[j], Bounds(
+                    PositionIfChanged(parent, buttons[j], Bounds(
                         cells[j].Left - groupLeft,
                         cells[j].Top - groupTop,
                         cells[j].Right - groupLeft,
@@ -658,6 +658,17 @@ namespace DPopCleaner.SimpleUpdate
                     placed[j] = true;
                 }
             }
+        }
+
+        private static void PositionIfChanged(IntPtr coordinateParent, IntPtr handle, NativeBridge.ClientBounds desired)
+        {
+            if (coordinateParent == IntPtr.Zero || handle == IntPtr.Zero || desired == null) return;
+            var current = NativeBridge.GetChildClientBounds(coordinateParent, handle);
+            if (current != null &&
+                current.Left == desired.Left && current.Top == desired.Top &&
+                current.Right == desired.Right && current.Bottom == desired.Bottom)
+                return;
+            NativeBridge.PositionChildWindow(handle, desired);
         }
 
         private static NativeBridge.ClientBounds Bounds(int left, int top, int right, int bottom)
