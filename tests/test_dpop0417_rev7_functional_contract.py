@@ -101,7 +101,12 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertIn('BS_OWNERDRAW', visual)
         self.assertIn('WM_DRAWITEM', visual)
         self.assertIn('DrawOwnerButton', visual)
-        self.assertIn('prefix + version', visual)
+        self.assertIn('GetInstalledZapretVersion()', visual)
+        self.assertIn('Game filter ', visual)
+        self.assertIn('Игровой фильтр ', visual)
+        self.assertIn('Manager ', visual)
+        self.assertIn('Менеджер ', visual)
+        self.assertIn('+ version', visual)
         self.assertIn('ReadSettingsThemeSelection', native)
         self.assertIn('ZapretVisualPolishHost', launcher)
 
