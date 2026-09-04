@@ -8,12 +8,20 @@ namespace DPopCleaner.SimpleUpdate
 {
     internal sealed class ZapretResponsiveLayoutHost : IDisposable
     {
+        internal const int ServiceActionsHeadingId = 1726;
+
         private const int ResponsiveRowGap = 8;
         private const int ResponsiveColumnGap = 8;
         private const int ResponsiveButtonHeight = 34;
         private const int ResponsiveMaximumButtonHeight = 48;
         private const int ResponsiveMinimumButtonWidth = 76;
         private const int ResponsiveTextPadding = 28;
+        private const int CompactIdleStatusDetailHeight = 116;
+        private const int ExpandedStatusDetailHeight = 220;
+
+        private const uint WS_CHILD = 0x40000000;
+        private const uint WS_VISIBLE = 0x10000000;
+        private const uint SS_LEFT = 0x00000000;
 
         private static readonly int[] ResponsiveZapretButtonIds =
         {
@@ -22,10 +30,12 @@ namespace DPopCleaner.SimpleUpdate
             1720, 1721, 1722, 1723, 1724, 1725
         };
 
-        private static readonly int[] StrategyRowButtonIds = { 1701, 1713, 1714, 1703 };
-        private static readonly int[] UpdateRowButtonIds = { 1724, 1725, 1716, 1717, 1702 };
+        private static readonly int[] StrategyRowButtonIds = { 1701, 1713, 1714 };
+        private static readonly int[] PrimaryUpdateButtonIds = { 1724, 1725 };
+        private static readonly int[] CompactUpdateToggleButtonIds = { 1716, 1717 };
         private static readonly int[] BridgeActionButtonIds = { 1720, 1721, 1722, 1723 };
-        private static readonly int[] AdditionalRowButtonIds = { 1704, 1705, 1707, 1708, 1710, 1711 };
+        private static readonly int[] PrimaryAdditionalRowButtonIds = { 1704, 1705, 1707, 1708 };
+        private static readonly int[] ServiceActionButtonIds = { 1703, 1702, 1710, 1711 };
 
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
@@ -42,9 +52,20 @@ namespace DPopCleaner.SimpleUpdate
         [DllImport("user32.dll")]
         private static extern IntPtr GetParent(IntPtr hwnd);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr GetModuleHandle(string moduleName);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateWindowEx(uint exStyle, string className, string windowName, uint style,
+            int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
+
+        [DllImport("user32.dll")]
+        private static extern bool DestroyWindow(IntPtr hwnd);
+
         private readonly IntPtr _parent;
         private int _nativeButtonHeight;
         private int _nativeStatusDetailHeight;
+        private IntPtr _serviceActionsHeading;
         private bool _disposed;
 
         internal ZapretResponsiveLayoutHost(IntPtr parent)
@@ -62,7 +83,8 @@ namespace DPopCleaner.SimpleUpdate
 
         internal void Hide()
         {
-            // Geometry is page-local and the frozen core owns visibility. Nothing is created here.
+            if (_disposed || _serviceActionsHeading == IntPtr.Zero) return;
+            NativeBridge.ShowWindow(_serviceActionsHeading, NativeBridge.SW_HIDE);
         }
 
         internal void ApplyResponsiveLayout()
@@ -89,10 +111,6 @@ namespace DPopCleaner.SimpleUpdate
 
             var applyBounds = NativeBridge.GetChildClientBounds(_parent, buttons[NativeBridge.ZapretApplyButtonId]);
             if (applyBounds == null) return;
-
-            // Capture immutable native baselines before this host changes any vertical geometry.
-            // Reading apply/status-detail height again on later 100ms ticks would feed our previous
-            // responsive result back into DPI calculations and make the page grow on every pass.
             if (_nativeButtonHeight <= 0) _nativeButtonHeight = Math.Max(1, applyBounds.Height);
             if (_nativeStatusDetailHeight <= 0) _nativeStatusDetailHeight = Math.Max(1, statusDetailBounds.Height);
 
@@ -102,7 +120,10 @@ namespace DPopCleaner.SimpleUpdate
             var buttonHeight = Math.Min(
                 Scale(ResponsiveMaximumButtonHeight, scale),
                 Math.Max(nativeButtonHeight, Scale(ResponsiveButtonHeight, scale) + tallWindowExtra / 8));
-            var rowGap = Math.Min(Scale(18, scale), Scale(ResponsiveRowGap, scale) + tallWindowExtra / 20);
+            var rowGap = Math.Min(Scale(16, scale), Scale(ResponsiveRowGap, scale) + tallWindowExtra / 28);
+            var sectionGap = Math.Min(
+                Scale(30, scale),
+                Math.Max(rowGap, Scale(ResponsiveRowGap, scale) + Math.Max(0, clientHeight - 800) / 12));
             var columnGap = Scale(ResponsiveColumnGap, scale);
             var minimumButtonWidth = Scale(ResponsiveMinimumButtonWidth, scale);
 
@@ -111,6 +132,10 @@ namespace DPopCleaner.SimpleUpdate
             var bottomMargin = Scale(24, scale);
             var contentRight = Math.Max(contentLeft + 1, clientWidth - rightMargin);
             var contentBottom = Math.Max(1, clientHeight - bottomMargin);
+            var supportButton = FindControlByCaption(children, "Поддержка", "Support", "Button");
+            var supportBounds = NativeBridge.GetChildClientBounds(_parent, supportButton);
+            if (supportBounds != null && supportBounds.Top > statusDetailBounds.Top)
+                contentBottom = Math.Min(contentBottom, Math.Max(1, supportBounds.Top - rowGap));
             var contentWidth = contentRight - contentLeft;
             if (contentWidth < Scale(620, scale)) return;
 
@@ -122,6 +147,11 @@ namespace DPopCleaner.SimpleUpdate
             var strategyLabel = FindStaticByCaption(children, "Стратегия", "Strategy");
             var strategyLabelBounds = NativeBridge.GetChildClientBounds(_parent, strategyLabel);
             if (strategyComboBounds == null || strategyLabelBounds == null) return;
+
+            var strategyCaption = NativeBridge.ReadWindowText(strategyLabel) ?? string.Empty;
+            var english = string.Equals(strategyCaption, "Strategy", StringComparison.OrdinalIgnoreCase);
+            var serviceHeading = EnsureServiceActionsHeading(strategyLabel, english);
+            if (serviceHeading == IntPtr.Zero) return;
 
             var updateHeading = FindStaticByCaption(children, "Обновление Zapret", "Zapret Update");
             var updateHeadingBounds = NativeBridge.GetChildClientBounds(_parent, updateHeading);
@@ -139,14 +169,14 @@ namespace DPopCleaner.SimpleUpdate
                 : Math.Max(1, additionalHeadingBounds.Height);
 
             var strategyButtons = ResolveButtons(buttons, StrategyRowButtonIds);
-            var updateButtons = ResolveButtons(buttons, UpdateRowButtonIds);
+            var primaryUpdateButtons = ResolveButtons(buttons, PrimaryUpdateButtonIds);
+            var compactUpdateButtons = ResolveButtons(buttons, CompactUpdateToggleButtonIds);
             var actionButtons = ResolveButtons(buttons, BridgeActionButtonIds);
-            var additionalButtons = ResolveButtons(buttons, AdditionalRowButtonIds);
-            if (strategyButtons == null || updateButtons == null || actionButtons == null || additionalButtons == null) return;
+            var additionalButtons = ResolveButtons(buttons, PrimaryAdditionalRowButtonIds);
+            var serviceButtons = ResolveButtons(buttons, ServiceActionButtonIds);
+            if (strategyButtons == null || primaryUpdateButtons == null || compactUpdateButtons == null ||
+                actionButtons == null || additionalButtons == null || serviceButtons == null) return;
 
-            // rev.18: both status controls consume the real current client width. The second
-            // status/detail control also consumes spare vertical space, so a 1908x950/maximized
-            // window no longer leaves the whole lower half unused.
             var statusSummaryHeight = Math.Max(1, statusSummaryBounds.Height);
             var statusSummaryTop = statusSummaryBounds.Top;
             var statusSummaryBottom = statusSummaryTop + statusSummaryHeight;
@@ -155,22 +185,18 @@ namespace DPopCleaner.SimpleUpdate
 
             var halfGap = Math.Max(2, rowGap / 2);
             var statusDetailTop = Math.Max(statusSummaryBottom + halfGap, statusDetailBounds.Top);
-            var minimumStatusDetailHeight = Math.Max(_nativeStatusDetailHeight, Scale(56, scale));
-            var availableVerticalSpace = Math.Max(0, contentBottom - statusDetailTop);
-            var reservedGridHeight = buttonHeight * 4 + updateHeadingHeight + halfGap * 2 + rowGap * 4;
-            var statusDetailBottom = Math.Max(
-                statusDetailTop + minimumStatusDetailHeight,
-                statusDetailTop + Math.Max(minimumStatusDetailHeight, availableVerticalSpace - reservedGridHeight));
-            statusDetailBottom = Math.Min(statusDetailBottom, Math.Max(statusDetailTop + 1, contentBottom - reservedGridHeight));
+            var statusDetailHeight = ComputeStatusDetailHeight(
+                NativeBridge.ReadWindowText(statusDetail), clientHeight, scale);
+            var statusDetailBottom = Math.Min(
+                statusDetailTop + statusDetailHeight,
+                Math.Max(statusDetailTop + 1, contentBottom - Scale(280, scale)));
             NativeBridge.PositionChildWindow(statusDetail, Bounds(
                 contentLeft, statusDetailTop, contentRight, statusDetailBottom));
 
-            // Every tick is a pure function of current client/status geometry plus immutable native
-            // size baselines. No previous responsive Y/height is reused.
-            var strategyRowTop = statusDetailBottom + rowGap;
+            var strategyRowTop = statusDetailBottom + sectionGap;
             var labelWidth = Math.Max(strategyLabelBounds.Width, Scale(82, scale));
             var minimumStrategyWidth = labelWidth + Scale(120, scale);
-            var desiredStrategyWidth = Math.Max(minimumStrategyWidth, (int)Math.Round(contentWidth * 0.40));
+            var desiredStrategyWidth = Math.Max(minimumStrategyWidth, (int)Math.Round(contentWidth * 0.42));
             var strategyButtonsMinimum = minimumButtonWidth * strategyButtons.Length + columnGap * (strategyButtons.Length - 1);
             var maximumStrategyWidth = contentWidth - strategyButtonsMinimum - columnGap;
             if (maximumStrategyWidth < minimumStrategyWidth) return;
@@ -211,10 +237,18 @@ namespace DPopCleaner.SimpleUpdate
             var updateRowTop = Math.Max(
                 updateHeadingTop + updateHeadingHeight + halfGap,
                 strategyRowTop + buttonHeight + rowGap);
-            LayoutZapretRow(updateButtons, contentLeft, updateRowTop, contentRight,
-                buttonHeight, columnGap, minimumButtonWidth, scale);
+            LayoutUpdateRowWithCompactToggles(
+                primaryUpdateButtons,
+                compactUpdateButtons,
+                contentLeft,
+                updateRowTop,
+                contentRight,
+                buttonHeight,
+                columnGap,
+                minimumButtonWidth,
+                scale);
 
-            var actionRowTop = updateRowTop + buttonHeight + rowGap;
+            var actionRowTop = updateRowTop + buttonHeight + sectionGap;
             var headingWidth = additionalHeadingBounds == null
                 ? Scale(180, scale)
                 : Math.Max(additionalHeadingBounds.Width, Scale(150, scale));
@@ -233,12 +267,12 @@ namespace DPopCleaner.SimpleUpdate
             LayoutZapretRow(actionButtons, actionLeft, actionRowTop, contentRight,
                 buttonHeight, columnGap, minimumButtonWidth, scale);
 
-            var additionalRowTop = actionRowTop + Math.Max(buttonHeight, additionalHeadingHeight) + rowGap;
+            var additionalRowTop = actionRowTop + Math.Max(buttonHeight, additionalHeadingHeight) + sectionGap;
             var filterBounds = NativeBridge.GetChildClientBounds(_parent, filterCombo);
             if (filterBounds == null) return;
             var filterHeight = Math.Max(1, filterBounds.Height);
             var filterTop = additionalRowTop + Math.Max(0, (buttonHeight - filterHeight) / 2);
-            var filterWidth = (int)Math.Round(contentWidth * 0.18);
+            var filterWidth = (int)Math.Round(contentWidth * 0.19);
             filterWidth = Math.Max(Scale(145, scale), filterWidth);
             filterWidth = Math.Min(filterWidth, Math.Max(1, contentWidth / 3));
 
@@ -256,6 +290,55 @@ namespace DPopCleaner.SimpleUpdate
                 columnGap,
                 minimumButtonWidth,
                 scale);
+
+            var serviceRowTop = additionalRowTop + buttonHeight + sectionGap;
+            LayoutCompactServiceRow(
+                serviceHeading,
+                serviceButtons,
+                contentLeft,
+                serviceRowTop,
+                contentRight,
+                buttonHeight,
+                columnGap,
+                scale);
+        }
+
+        private int ComputeStatusDetailHeight(string statusText, int clientHeight, double scale)
+        {
+            var idleMinimum = Scale(96, scale);
+            var idleCap = Scale(CompactIdleStatusDetailHeight, scale);
+            var native = Math.Max(1, Math.Min(_nativeStatusDetailHeight, idleCap));
+            var idleHeight = Math.Max(idleMinimum, native);
+
+            var normalized = (statusText ?? string.Empty).Replace("\r\n", "\n");
+            var lines = normalized.Length == 0 ? 1 : normalized.Split('\n').Length;
+            var overflowLines = Math.Max(0, lines - 2);
+            var overflowText = Math.Max(0, normalized.Length - 180);
+            if (overflowLines == 0 && overflowText == 0) return idleHeight;
+
+            var expanded = idleHeight + Scale(22 * overflowLines, scale) + Scale(18 * (overflowText / 90), scale);
+            var maximum = Math.Min(Scale(ExpandedStatusDetailHeight, scale), Math.Max(idleHeight, clientHeight / 3));
+            return Math.Max(idleHeight, Math.Min(maximum, expanded));
+        }
+
+        private IntPtr EnsureServiceActionsHeading(IntPtr fontAnchor, bool english)
+        {
+            var caption = english ? "Service actions" : "Сервисные действия";
+            if (_serviceActionsHeading == IntPtr.Zero)
+            {
+                _serviceActionsHeading = CreateWindowEx(0, "Static", caption,
+                    WS_CHILD | WS_VISIBLE | SS_LEFT,
+                    0, 0, 1, 1, _parent, new IntPtr(ServiceActionsHeadingId), GetModuleHandle(null), IntPtr.Zero);
+                if (_serviceActionsHeading == IntPtr.Zero) return IntPtr.Zero;
+                var font = fontAnchor == IntPtr.Zero
+                    ? IntPtr.Zero
+                    : NativeBridge.SendMessage(fontAnchor, NativeBridge.WM_GETFONT, IntPtr.Zero, IntPtr.Zero);
+                if (font != IntPtr.Zero)
+                    NativeBridge.SendMessage(_serviceActionsHeading, 0x0030, font, new IntPtr(1));
+            }
+            NativeBridge.WriteWindowText(_serviceActionsHeading, caption);
+            NativeBridge.ShowWindow(_serviceActionsHeading, NativeBridge.SW_SHOW);
+            return _serviceActionsHeading;
         }
 
         private Dictionary<int, IntPtr> CaptureResponsiveButtons(NativeBridge.ChildInfo[] children)
@@ -332,9 +415,14 @@ namespace DPopCleaner.SimpleUpdate
 
         private IntPtr FindStaticByCaption(NativeBridge.ChildInfo[] children, string russian, string english)
         {
+            return FindControlByCaption(children, russian, english, "Static");
+        }
+
+        private IntPtr FindControlByCaption(NativeBridge.ChildInfo[] children, string russian, string english, string className)
+        {
             foreach (var child in children)
             {
-                if (!child.Visible || !string.Equals(child.ClassName, "Static", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!child.Visible || !string.Equals(child.ClassName, className, StringComparison.OrdinalIgnoreCase)) continue;
                 if (string.Equals(child.Text, russian, StringComparison.Ordinal) ||
                     string.Equals(child.Text, english, StringComparison.OrdinalIgnoreCase))
                     return child.Handle;
@@ -363,6 +451,35 @@ namespace DPopCleaner.SimpleUpdate
             PlaceButtonCells(buttons, cells);
         }
 
+        private void LayoutUpdateRowWithCompactToggles(IntPtr[] primaryButtons, IntPtr[] toggleButtons,
+            int left, int top, int right, int height, int gap, int minimumWidth, double scale)
+        {
+            if (primaryButtons == null || toggleButtons == null || right <= left) return;
+            var compactWidths = ComputeCompactWidths(toggleButtons, right - left, gap, Scale(112, scale), Scale(220, scale), scale);
+            var compactTotal = SumWidths(compactWidths) + gap * Math.Max(0, compactWidths.Length - 1);
+            var primaryRight = Math.Max(left + 1, right - compactTotal - (compactWidths.Length > 0 ? gap : 0));
+            LayoutZapretRow(primaryButtons, left, top, primaryRight, height, gap, minimumWidth, scale);
+            var toggleLeft = Math.Min(right - 1, primaryRight + gap);
+            PlaceButtonCells(toggleButtons, BuildCells(toggleLeft, top, height, gap, compactWidths));
+        }
+
+        private void LayoutCompactServiceRow(IntPtr heading, IntPtr[] buttons, int left, int top, int right,
+            int height, int gap, double scale)
+        {
+            if (heading == IntPtr.Zero || buttons == null || right <= left) return;
+            var caption = NativeBridge.ReadWindowText(heading) ?? string.Empty;
+            var headingWidth = TextRenderer.MeasureText(caption, SystemFonts.MessageBoxFont).Width + Scale(18, scale);
+            headingWidth = Math.Max(Scale(132, scale), Math.Min(Scale(190, scale), headingWidth));
+            var headingHeight = Math.Min(height, Scale(26, scale));
+            var headingTop = top + Math.Max(0, (height - headingHeight) / 2);
+            NativeBridge.PositionChildWindow(heading, Bounds(left, headingTop, left + headingWidth, headingTop + headingHeight));
+
+            var buttonsLeft = left + headingWidth + gap;
+            var available = Math.Max(1, right - buttonsLeft);
+            var widths = ComputeCompactWidths(buttons, available, gap, Scale(82, scale), Scale(190, scale), scale);
+            PlaceButtonCells(buttons, BuildCells(buttonsLeft, top, height, gap, widths));
+        }
+
         private int[] ComputeWidths(IntPtr[] buttons, int availableWidth, int gap, int minimumWidth, double scale)
         {
             var widths = new int[buttons.Length];
@@ -372,7 +489,7 @@ namespace DPopCleaner.SimpleUpdate
             var desiredTotal = 0;
             for (var i = 0; i < buttons.Length; i++)
             {
-                desired[i] = Math.Max(minimumWidth, MeasureDesiredWidth(buttons[i], scale));
+                desired[i] = Math.Max(minimumWidth, MeasurePreferredWidth(buttons[i], scale));
                 desiredTotal += desired[i];
             }
 
@@ -388,18 +505,40 @@ namespace DPopCleaner.SimpleUpdate
                 return widths;
             }
 
-            var effectiveMinimum = Math.Min(minimumWidth, Math.Max(1, contentWidth / buttons.Length));
-            var minimumTotal = effectiveMinimum * buttons.Length;
+            return ShrinkWidths(desired, contentWidth, Math.Min(minimumWidth, Math.Max(1, contentWidth / buttons.Length)));
+        }
+
+        private int[] ComputeCompactWidths(IntPtr[] buttons, int availableWidth, int gap,
+            int minimumWidth, int maximumWidth, double scale)
+        {
+            var widths = new int[buttons.Length];
+            if (buttons.Length == 0) return widths;
+            var contentWidth = Math.Max(buttons.Length, availableWidth - gap * (buttons.Length - 1));
+            var desiredTotal = 0;
+            for (var i = 0; i < buttons.Length; i++)
+            {
+                widths[i] = Math.Max(minimumWidth, Math.Min(maximumWidth, MeasurePreferredWidth(buttons[i], scale)));
+                desiredTotal += widths[i];
+            }
+            if (desiredTotal <= contentWidth) return widths;
+            return ShrinkWidths(widths, contentWidth, Math.Min(minimumWidth, Math.Max(1, contentWidth / buttons.Length)));
+        }
+
+        private static int[] ShrinkWidths(int[] desired, int contentWidth, int effectiveMinimum)
+        {
+            var widths = new int[desired.Length];
+            if (desired.Length == 0) return widths;
+            var minimumTotal = effectiveMinimum * desired.Length;
             var flexibleAvailable = Math.Max(0, contentWidth - minimumTotal);
             var flexibleDesired = 0;
-            for (var i = 0; i < buttons.Length; i++)
+            for (var i = 0; i < desired.Length; i++)
                 flexibleDesired += Math.Max(0, desired[i] - effectiveMinimum);
 
             var assigned = 0;
-            for (var i = 0; i < buttons.Length; i++)
+            for (var i = 0; i < desired.Length; i++)
             {
                 var flexible = Math.Max(0, desired[i] - effectiveMinimum);
-                var share = i == buttons.Length - 1
+                var share = i == desired.Length - 1
                     ? contentWidth - assigned - effectiveMinimum
                     : (flexibleDesired <= 0 ? 0 : (int)Math.Floor((double)flexibleAvailable * flexible / flexibleDesired));
                 widths[i] = effectiveMinimum + Math.Max(0, share);
@@ -412,11 +551,18 @@ namespace DPopCleaner.SimpleUpdate
             return widths;
         }
 
-        private int MeasureDesiredWidth(IntPtr button, double scale)
+        private int MeasurePreferredWidth(IntPtr button, double scale)
         {
             var caption = NativeBridge.ReadWindowText(button) ?? string.Empty;
             var measured = TextRenderer.MeasureText(caption, SystemFonts.MessageBoxFont).Width;
             return measured + Scale(ResponsiveTextPadding, scale);
+        }
+
+        private static int SumWidths(int[] widths)
+        {
+            var total = 0;
+            for (var i = 0; i < widths.Length; i++) total += widths[i];
+            return total;
         }
 
         private NativeBridge.ClientBounds[] BuildCells(int left, int top, int height, int gap, int[] widths)
@@ -495,7 +641,13 @@ namespace DPopCleaner.SimpleUpdate
 
         public void Dispose()
         {
+            if (_disposed) return;
             _disposed = true;
+            if (_serviceActionsHeading != IntPtr.Zero)
+            {
+                try { DestroyWindow(_serviceActionsHeading); } catch { }
+                _serviceActionsHeading = IntPtr.Zero;
+            }
         }
     }
 }
