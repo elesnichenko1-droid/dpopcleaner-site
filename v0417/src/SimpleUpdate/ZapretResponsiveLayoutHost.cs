@@ -22,7 +22,7 @@ namespace DPopCleaner.SimpleUpdate
 
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
-        private const uint SS_LEFT = 0x00000000;
+        private const uint SS_LEFTNOWORDWRAP = 0x0000000C;
 
         private static readonly int[] ResponsiveZapretButtonIds =
         {
@@ -332,14 +332,14 @@ namespace DPopCleaner.SimpleUpdate
             if (_serviceActionsHeadingHost == IntPtr.Zero)
             {
                 _serviceActionsHeadingHost = CreateWindowEx(0, "Static", string.Empty,
-                    WS_CHILD | WS_VISIBLE | SS_LEFT,
+                    WS_CHILD | WS_VISIBLE,
                     0, 0, 1, 1, _parent, new IntPtr(ServiceActionsHeadingHostId), GetModuleHandle(null), IntPtr.Zero);
                 if (_serviceActionsHeadingHost == IntPtr.Zero) return IntPtr.Zero;
             }
             if (_serviceActionsHeading == IntPtr.Zero)
             {
                 _serviceActionsHeading = CreateWindowEx(0, "Static", caption,
-                    WS_CHILD | WS_VISIBLE | SS_LEFT,
+                    WS_CHILD | WS_VISIBLE | SS_LEFTNOWORDWRAP,
                     0, 0, 1, 1, _serviceActionsHeadingHost, new IntPtr(ServiceActionsHeadingId), GetModuleHandle(null), IntPtr.Zero);
                 if (_serviceActionsHeading == IntPtr.Zero)
                 {
@@ -473,7 +473,7 @@ namespace DPopCleaner.SimpleUpdate
             int left, int top, int right, int height, int gap, int minimumWidth, double scale)
         {
             if (primaryButtons == null || toggleButtons == null || right <= left) return;
-            var compactWidths = ComputeCompactWidths(toggleButtons, right - left, gap, Scale(112, scale), Scale(220, scale), scale);
+            var compactWidths = ComputeCompactWidths(toggleButtons, right - left, gap, Scale(170, scale), Scale(240, scale), scale);
             var compactTotal = SumWidths(compactWidths) + gap * Math.Max(0, compactWidths.Length - 1);
             var primaryRight = Math.Max(left + 1, right - compactTotal - (compactWidths.Length > 0 ? gap : 0));
             LayoutZapretRow(primaryButtons, left, top, primaryRight, height, gap, minimumWidth, scale);
@@ -486,8 +486,8 @@ namespace DPopCleaner.SimpleUpdate
         {
             if (heading == IntPtr.Zero || buttons == null || right <= left) return;
             var caption = NativeBridge.ReadWindowText(heading) ?? string.Empty;
-            var headingWidth = TextRenderer.MeasureText(caption, SystemFonts.MessageBoxFont).Width + Scale(18, scale);
-            headingWidth = Math.Max(Scale(132, scale), Math.Min(Scale(190, scale), headingWidth));
+            var headingWidth = TextRenderer.MeasureText(caption, SystemFonts.MessageBoxFont).Width + Scale(24, scale);
+            headingWidth = Math.Max(Scale(180, scale), Math.Min(Scale(240, scale), headingWidth));
             var headingHeight = Math.Min(height, Scale(26, scale));
             var headingTop = top + Math.Max(0, (height - headingHeight) / 2);
             if (_serviceActionsHeadingHost != IntPtr.Zero)
@@ -503,7 +503,7 @@ namespace DPopCleaner.SimpleUpdate
 
             var buttonsLeft = left + headingWidth + gap;
             var available = Math.Max(1, right - buttonsLeft);
-            var widths = ComputeCompactWidths(buttons, available, gap, Scale(82, scale), Scale(190, scale), scale);
+            var widths = ComputeCompactWidths(buttons, available, gap, Scale(130, scale), Scale(220, scale), scale);
             PlaceButtonCells(buttons, BuildCells(buttonsLeft, top, height, gap, widths));
         }
 
