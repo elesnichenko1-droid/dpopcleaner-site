@@ -63,7 +63,7 @@ Add-Type -TypeDefinition $native -Language CSharp
 
 function Wait-Until([int]$Seconds,[string]$What,[scriptblock]$Condition){$d=[DateTime]::UtcNow.AddSeconds($Seconds);do{if(& $Condition){return};Start-Sleep -Milliseconds 120}while([DateTime]::UtcNow-lt$d);throw "Timed out waiting for $What"}
 function Get-Core { foreach($p in @(Get-Process -Name 'DPopCleaner.Core' -ErrorAction SilentlyContinue)){try{if($p.Path -and [IO.Path]::GetFullPath($p.Path).Equals([IO.Path]::GetFullPath($corePath),[StringComparison]::OrdinalIgnoreCase)-and$p.MainWindowHandle-ne[IntPtr]::Zero){return $p}}catch{}};$null }
-function Capture-Print([IntPtr]$Window,[string]$Path){$r=[R19ProbeNative]::Bounds($Window);$w=[Math]::Max(1,$r.Right-$r.Left);$h=[Math]::Max(1,$r.Bottom-$r.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);$dc=$g.GetHdc();try{[void][R19ProbeNative]::PrintWindow($Window,$dc,2)}finally{$g.ReleaseHdc($dc);$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()}}
+function Capture-Print([IntPtr]$Window,[string]$Path){$r=[R19ProbeNative]::Bounds($Window);if(-not$r){return};$w=[Math]::Max(1,$r.Right-$r.Left);$h=[Math]::Max(1,$r.Bottom-$r.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);$dc=$g.GetHdc();try{[void][R19ProbeNative]::PrintWindow($Window,$dc,2)}finally{$g.ReleaseHdc($dc);$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()}}
 function Capture-Screen([IntPtr]$Window,[string]$Path){$r=[R19ProbeNative]::Bounds($Window);$w=[Math]::Max(1,$r.Right-$r.Left);$h=[Math]::Max(1,$r.Bottom-$r.Top);$bmp=[Drawing.Bitmap]::new($w,$h);$g=[Drawing.Graphics]::FromImage($bmp);try{$g.CopyFromScreen($r.Left,$r.Top,0,0,[Drawing.Size]::new($w,$h))}finally{$g.Dispose()};try{$bmp.Save($Path,[Drawing.Imaging.ImageFormat]::Png)}finally{$bmp.Dispose()}}
 
 $launcher=$null;$core=$null
@@ -84,9 +84,18 @@ try{
   Write-Host ('REV19_SERVICE_RECTS size='+$w+' '+(@($service|ForEach-Object{'id='+$_.Id+' rect='+$_.Left+','+$_.Top+'-'+$_.Right+','+$_.Bottom+' pid='+$_.OwnerPid})-join '; '))
   if($w-eq1908){
    Capture-Print $window (Join-Path $OutputDir 'rev19-remove-probe-print-before.png');Capture-Screen $window (Join-Path $OutputDir 'rev19-remove-probe-screen-before.png')
+   foreach($sampleId in @(1701,1702,1713,1720)){
+    $sample=@([R19ProbeNative]::Probe($window,$sampleId))|Where-Object{$_.Visible -and $_.OwnerPid-eq$launcher.Id}|Select-Object -First 1
+    if($sample){
+     Capture-Print ([IntPtr]$sample.Hwnd) (Join-Path $OutputDir ("rev19-proxy-{0}-button.png" -f $sampleId))
+     Capture-Print ([IntPtr]$sample.ParentHwnd) (Join-Path $OutputDir ("rev19-proxy-{0}-host.png" -f $sampleId))
+     Write-Host ("REV19_PROXY_PAINT_SAMPLE id={0} hwnd=0x{1:X} parent=0x{2:X} rect={3},{4}-{5},{6}" -f $sampleId,$sample.Hwnd,$sample.ParentHwnd,$sample.Left,$sample.Top,$sample.Right,$sample.Bottom)
+    }
+   }
    $proxy=$items|Where-Object{$_.Visible -and $_.OwnerPid-eq$launcher.Id}|Select-Object -First 1
    if($proxy){[R19ProbeNative]::ForceRedraw([IntPtr]$proxy.ParentHwnd);[R19ProbeNative]::ForceRedraw([IntPtr]$proxy.Hwnd);Start-Sleep -Milliseconds 300}
    Capture-Print $window (Join-Path $OutputDir 'rev19-remove-probe-print-after.png');Capture-Screen $window (Join-Path $OutputDir 'rev19-remove-probe-screen-after.png')
+   if($proxy){Capture-Print ([IntPtr]$proxy.Hwnd) (Join-Path $OutputDir 'rev19-proxy-1702-button-after.png');Capture-Print ([IntPtr]$proxy.ParentHwnd) (Join-Path $OutputDir 'rev19-proxy-1702-host-after.png')}
   }
  }
  $reports|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $OutputDir 'rev19-remove-services-probe.json') -Encoding utf8
