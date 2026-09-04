@@ -50,6 +50,15 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('rev19-proxy-{0}-button.png', probe)
         self.assertIn('if($sampleId-eq1702){Assert-FirstPaint $buttonPath}', probe)
 
+    def test_zapret_geometry_is_applied_before_bridge_painting(self):
+        launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
+        start = launcher.index('private void UpdateZapretEnhancements()')
+        end = launcher.index('private void UpdateSettingsEnhancements()', start)
+        method = launcher[start:end]
+        layout_pos = method.index('new ZapretResponsiveLayoutHost')
+        polish_pos = method.index('new ZapretVisualPolishHost')
+        self.assertLess(layout_pos, polish_pos, 'responsive geometry must be applied before bridge visual painting')
+
     def test_service_heading_uses_same_process_host_and_current_theme(self):
         layout = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
         polish = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
