@@ -136,9 +136,9 @@ function Get-CropColorCount([string]$Path,$Child,$WindowBounds) {
 }
 function Assert-RemoveServicesCaptured([string]$Path,[object[]]$Children,[int]$LauncherPid,$WindowBounds,[string]$Phase) {
     $button=$Children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1702 -and $_.OwnerPid -eq $LauncherPid}|Select-Object -First 1
-    if(-not$button){throw "$Phase: launcher remove-services button 1702 missing at screenshot time."}
+    if(-not$button){throw "${Phase}: launcher remove-services button 1702 missing at screenshot time."}
     $colors=Get-CropColorCount $Path $button $WindowBounds
-    if($colors-lt4){throw "$Phase: remove-services is blank in primary screenshot: uniqueColors=$colors path=$Path"}
+    if($colors-lt4){throw "${Phase}: remove-services is blank in primary screenshot: uniqueColors=$colors path=$Path"}
     Write-Host "REV19_PRIMARY_SCREENSHOT_PAINT_OK name=$Phase uniqueColors=$colors"
     $colors
 }
