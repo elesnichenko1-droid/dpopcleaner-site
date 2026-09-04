@@ -34,6 +34,19 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('MeasurePreferredWidth', source)
         self.assertIn('CompactUpdateToggleButtonIds', source)
 
+    def test_service_heading_uses_the_current_theme_instead_of_a_white_static_background(self):
+        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('WM_CTLCOLORSTATIC', source)
+        self.assertIn('ServiceActionsHeadingId', source)
+        self.assertIn('DrawServiceHeading', source)
+        self.assertIn('DarkPageBrush', source)
+        self.assertIn('LightPageBrush', source)
+
+    def test_compact_rows_replace_legacy_ellipsis_captions_with_full_labels(self):
+        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        for token in ('Автообновление', 'Автозапуск Zapret', 'Auto-update', 'Zapret autostart', 'Удалить сервисы', 'Remove services', 'Диагностика', 'Diagnostics'):
+            self.assertIn(token, source)
+
     def test_rev19_has_real_installed_multisize_visual_and_tray_gate(self):
         workflow_path = ROOT / '.github/workflows/DPopCleaner_0.4.17_REV19_ZAPRET_CLEANUP.yml'
         self.assertTrue(workflow_path.is_file(), 'rev.19 dedicated installed workflow is required')
