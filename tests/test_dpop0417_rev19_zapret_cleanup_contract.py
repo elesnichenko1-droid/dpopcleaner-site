@@ -12,15 +12,23 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('ComputeStatusDetailHeight', source)
         self.assertIn('NativeBridge.ReadWindowText(statusDetail)', source)
 
-    def test_tall_window_does_not_reanchor_frozen_status_block(self):
+    def test_tall_window_uses_virtual_compact_status_floor_without_reanchoring_native_edits(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
+        self.assertIn('TallWindowMaximumRowShift', source)
+        self.assertIn('_compactClientHeight', source)
+        self.assertIn('_compactStatusSummaryTop', source)
+        self.assertIn('if (clientHeight <= 840)', source)
+        self.assertIn('_compactStatusSummaryTop = statusSummaryBounds.Top;', source)
+        self.assertIn('var tallWindowHeightGrowth = Math.Max(0, clientHeight - _compactClientHeight);', source)
+        self.assertIn('var tallWindowRowShift = Math.Min(', source)
+        self.assertIn('tallWindowHeightGrowth / 3', source)
+        self.assertIn('var virtualStatusSummaryTop = _compactStatusSummaryTop + tallWindowRowShift;', source)
+        self.assertIn('var virtualStatusDetailBottom = virtualStatusDetailTop + statusDetailHeight;', source)
+        self.assertIn('var strategyRowFloor = virtualStatusDetailBottom + sectionGap;', source)
+        self.assertIn('var strategyRowTop = Math.Max(statusDetailBottom + sectionGap, strategyRowFloor);', source)
         self.assertIn('var statusSummaryTop = statusSummaryBounds.Top;', source)
-        self.assertIn('var strategyRowTop = statusDetailBottom + sectionGap;', source)
-        self.assertNotIn('TallWindowMaximumStatusShift', source)
-        self.assertNotIn('_compactClientHeight', source)
-        self.assertNotIn('_compactStatusSummaryTop', source)
+        self.assertNotIn('Math.Max(statusSummaryBounds.Top', source)
         self.assertNotIn('tallWindowStatusFloor', source)
-        self.assertNotIn('Math.Max(statusSummaryBounds.Top, tallWindowStatusFloor)', source)
 
     def test_secondary_commands_are_removed_from_primary_rows(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
