@@ -1,0 +1,17 @@
+name: Stop stale DPopCleaner 0.4.17 rev.18 publisher
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: dpopcleaner-0-4-17-rev18-publish-push
+  cancel-in-progress: true
+
+jobs:
+  stop-stale-publisher:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hold rev.18 publication boundary
+        run: echo "Stale rev.18 push publisher cancelled; rev.19 publication fix will use a new release tag."
