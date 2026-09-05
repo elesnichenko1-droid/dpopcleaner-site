@@ -70,6 +70,8 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         self.assertGreater(finally_block, rethrow)
         self.assertGreater(success_marker, finally_block)
         self.assertGreater(explicit_success_exit, success_marker)
+        self.assertIn("$installDeadline=[DateTime]::UtcNow.AddSeconds(30)", text)
+        self.assertNotIn("$installDeadline=[DateTime]::UtcNow.AddSeconds(20)", text)
 
     def test_rev16_installed_presentation_smoke_gates_theme_layout_and_journal_policy(self):
         smoke_path = ROOT / "tools" / "dpop0417_rev16_zapret_presentation_smoke.ps1"
