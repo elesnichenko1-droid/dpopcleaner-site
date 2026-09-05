@@ -101,6 +101,7 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
             'dpop0417_rev16_single_tray_smoke.ps1',
             'dpop0417_rev16_zapret_functional_smoke.ps1',
             'dpop0417_rev16_zapret_presentation_smoke.ps1',
+            'dpop0417_rev19_installed_zapret_cleanup_smoke.ps1',
             'dpop0417_rev9_zapret_update_smoke.ps1',
             'dpop0417_rev12_native_version_smoke.ps1',
             SCREENSHOT_PATH,
@@ -108,10 +109,13 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
             'actions/deploy-pages',
             'sha256',
             'dpopcleaner-0.4.17-rev19-release-candidate',
+            'cancel-in-progress: true',
         ):
             self.assertIn(token, workflow)
         self.assertIn('$live.revision -ne 19', workflow)
         self.assertIn('v0\\.4\\.17-rev19', workflow)
+        self.assertNotIn('release_tag: v0.4.17-rev18', workflow)
+        self.assertNotIn('dpopcleaner-0.4.17-rev18-release-candidate', workflow)
 
 
 if __name__ == '__main__':
