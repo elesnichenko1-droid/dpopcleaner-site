@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCREENSHOT_SHA256 = 'ad8dd8dfd5d07312d9ff588f2afcae6d655e1a84cb64e17cb1666dc22dd7a572'
 SCREENSHOT_SIZE = 74050
 SCREENSHOT_PATH = 'assets/dpopcleaner-current-settings.png'
+# Original verified rev.18 candidate from production run 33866086719 / source c6cb03b2464e534ebfdd8daf8cb9d42cf0a69862.
 REV18_ORIGINAL_SHA256 = '35153aad901080a56c61d4527fa81e8fc36a2c10e3aa80804b07a8d4e2089763'
 
 
