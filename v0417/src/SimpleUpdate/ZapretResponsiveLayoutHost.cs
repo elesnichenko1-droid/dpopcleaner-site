@@ -19,6 +19,7 @@ namespace DPopCleaner.SimpleUpdate
         private const int ResponsiveTextPadding = 28;
         private const int CompactIdleStatusDetailHeight = 116;
         private const int ExpandedStatusDetailHeight = 220;
+        private const int TallWindowMaximumRowShift = 36;
 
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
@@ -73,6 +74,8 @@ namespace DPopCleaner.SimpleUpdate
         private readonly IntPtr _parent;
         private int _nativeButtonHeight;
         private int _nativeStatusDetailHeight;
+        private int _compactClientHeight;
+        private int _compactStatusSummaryTop = -1;
         private IntPtr _serviceActionsHeadingHost;
         private IntPtr _serviceActionsHeading;
         private bool _disposed;
@@ -189,10 +192,25 @@ namespace DPopCleaner.SimpleUpdate
             if (strategyButtons == null || primaryUpdateButtons == null || compactUpdateButtons == null ||
                 actionButtons == null || additionalButtons == null || serviceButtons == null) return;
 
+            if (_compactClientHeight <= 0 || _compactStatusSummaryTop < 0)
+            {
+                _compactClientHeight = clientHeight;
+                _compactStatusSummaryTop = statusSummaryBounds.Top;
+            }
+            if (clientHeight <= 840)
+            {
+                _compactClientHeight = clientHeight;
+                _compactStatusSummaryTop = statusSummaryBounds.Top;
+            }
+            var tallWindowHeightGrowth = Math.Max(0, clientHeight - _compactClientHeight);
+            var tallWindowRowShift = Math.Min(
+                Scale(TallWindowMaximumRowShift, scale),
+                tallWindowHeightGrowth / 3);
+
             var statusSummaryHeight = Math.Max(1, statusSummaryBounds.Height);
             var statusSummaryTop = statusSummaryBounds.Top;
             var statusSummaryBottom = statusSummaryTop + statusSummaryHeight;
-            NativeBridge.PositionChildWindow(statusSummary, Bounds(
+            PositionIfChanged(_parent, statusSummary, Bounds(
                 contentLeft, statusSummaryTop, contentRight, statusSummaryBottom));
 
             var halfGap = Math.Max(2, rowGap / 2);
@@ -202,10 +220,15 @@ namespace DPopCleaner.SimpleUpdate
             var statusDetailBottom = Math.Min(
                 statusDetailTop + statusDetailHeight,
                 Math.Max(statusDetailTop + 1, contentBottom - Scale(280, scale)));
-            NativeBridge.PositionChildWindow(statusDetail, Bounds(
+            PositionIfChanged(_parent, statusDetail, Bounds(
                 contentLeft, statusDetailTop, contentRight, statusDetailBottom));
 
-            var strategyRowTop = statusDetailBottom + sectionGap;
+            var virtualStatusSummaryTop = _compactStatusSummaryTop + tallWindowRowShift;
+            var virtualStatusSummaryBottom = virtualStatusSummaryTop + statusSummaryHeight;
+            var virtualStatusDetailTop = virtualStatusSummaryBottom + halfGap;
+            var virtualStatusDetailBottom = virtualStatusDetailTop + statusDetailHeight;
+            var strategyRowFloor = virtualStatusDetailBottom + sectionGap;
+            var strategyRowTop = Math.Max(statusDetailBottom + sectionGap, strategyRowFloor);
             var labelWidth = Math.Max(strategyLabelBounds.Width, Scale(82, scale));
             var minimumStrategyWidth = labelWidth + Scale(120, scale);
             var desiredStrategyWidth = Math.Max(minimumStrategyWidth, (int)Math.Round(contentWidth * 0.42));
