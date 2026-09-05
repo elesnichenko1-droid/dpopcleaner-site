@@ -8,6 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCREENSHOT_SHA256 = 'ad8dd8dfd5d07312d9ff588f2afcae6d655e1a84cb64e17cb1666dc22dd7a572'
 SCREENSHOT_SIZE = 74050
 SCREENSHOT_PATH = 'assets/dpopcleaner-current-settings.png'
+# Original verified rev.18 candidate from production run 33866086719 / source c6cb03b2464e534ebfdd8daf8cb9d42cf0a69862.
+REV18_ORIGINAL_SHA256 = '35153aad901080a56c61d4527fa81e8fc36a2c10e3aa80804b07a8d4e2089763'
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
@@ -38,23 +40,23 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('assets/dpopcleaner-0.4.17-disk.png', stage_site)
         self.assertIn('assets/dpopcleaner-0.4.17-restore.png', stage_site)
 
-    def test_site_manifest_and_publisher_are_one_stable_0417_rev18_release(self):
+    def test_site_manifest_and_publisher_are_one_stable_0417_rev19_release(self):
         version = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
         stable = json.loads((ROOT / 'update/stable.json').read_text(encoding='utf-8'))
         self.assertEqual(version['version'], '0.4.17')
-        self.assertEqual(version['revision'], 18)
+        self.assertEqual(version['revision'], 19)
         self.assertEqual(stable['version'], '0.4.17')
-        self.assertEqual(stable['revision'], 18)
+        self.assertEqual(stable['revision'], 19)
         self.assertEqual(stable['channel'], 'stable')
 
         program = (ROOT / 'v0417/src/SimpleUpdate/Program.cs').read_text(encoding='utf-8').lower()
-        self.assertIn('currentrevision = 18', program)
+        self.assertIn('currentrevision = 19', program)
         self.assertIn('dpopcleaner.core.exe', program)
         self.assertIn('dpopupdate.exe', program)
 
         manifest = (ROOT / 'release-manifest.js').read_text(encoding='utf-8').lower()
-        self.assertIn('number(m.revision) === 18', manifest)
-        self.assertIn('v0\\.4\\.17-rev18', manifest)
+        self.assertIn('number(m.revision) === 19', manifest)
+        self.assertIn('v0\\.4\\.17-rev19', manifest)
 
         zapret_host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8').lower()
         visual_host = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8').lower()
@@ -89,29 +91,45 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('rev.${revision}', script)
 
         notes = (ROOT / 'release/RELEASE_NOTES_0.4.17.md').read_text(encoding='utf-8').lower()
-        for token in ('revision 18', 'responsive', '1908', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'code 740', 'озу', 'смен', 'язык', 'tray'):
+        for token in ('revision 19', 'responsive', '1908', 'flowseal zapret 1.10.2', 'dpopcleaner.core.exe', 'dpopupdate.exe', 'code 740', 'озу', 'смен', 'язык', 'tray'):
             self.assertIn(token, notes)
 
         workflow = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
         for token in (
-            'release_tag: v0.4.17-rev18',
+            'release_tag: v0.4.17-rev19',
             'dpop0417_prepare_zapret.ps1',
             'dpop0417_install_smoke.ps1',
             'dpop0417_rev15_installed_restart_smoke.ps1',
             'dpop0417_rev16_single_tray_smoke.ps1',
             'dpop0417_rev16_zapret_functional_smoke.ps1',
             'dpop0417_rev16_zapret_presentation_smoke.ps1',
+            'dpop0417_rev19_installed_zapret_cleanup_smoke.ps1',
             'dpop0417_rev9_zapret_update_smoke.ps1',
             'dpop0417_rev12_native_version_smoke.ps1',
             SCREENSHOT_PATH,
-            'revision=18',
+            'revision=19',
             'actions/deploy-pages',
             'sha256',
-            'dpopcleaner-0.4.17-rev18-release-candidate',
+            'dpopcleaner-0.4.17-rev19-release-candidate',
+            'cancel-in-progress: true',
         ):
             self.assertIn(token, workflow)
-        self.assertIn('$live.revision -ne 18', workflow)
-        self.assertIn('v0\\.4\\.17-rev18', workflow)
+        self.assertIn('$live.revision -ne 19', workflow)
+        self.assertIn('v0\\.4\\.17-rev19', workflow)
+        self.assertNotIn('release_tag: v0.4.17-rev18', workflow)
+
+    def test_publisher_restores_verified_historical_rev18_asset_after_rev19_publish(self):
+        workflow = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
+        for token in (
+            'restore historical rev.18 asset',
+            '33866086719',
+            'dpopcleaner-0.4.17-rev18-release-candidate',
+            REV18_ORIGINAL_SHA256,
+            'gh run download',
+            'gh release upload v0.4.17-rev18',
+            '--clobber',
+        ):
+            self.assertIn(token, workflow)
 
 
 if __name__ == '__main__':
