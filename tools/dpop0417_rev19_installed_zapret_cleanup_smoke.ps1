@@ -55,6 +55,17 @@ try {
         Write-Host ('REV19_SUBCLASS_PRE_GATE_PROBE_RED: ' + $_.Exception.Message)
     }
 
+    # Diagnostic-only same-process sampling. It repeats the exact four-size sequence and then
+    # observes the 1908x950 row coordinates without moving them. The strict gate below is unchanged.
+    try {
+        & (Join-Path $PSScriptRoot 'dpop0417_rev19_layout_settle_probe.ps1') -RootPath $installRoot -OutputDir $OutputDir
+        if (-not $?) { throw 'rev.19 layout settle probe failed.' }
+        Write-Host 'REV19_LAYOUT_SETTLE_PRE_GATE_PROBE_OK'
+    }
+    catch {
+        Write-Host ('REV19_LAYOUT_SETTLE_PRE_GATE_PROBE_RED: ' + $_.Exception.Message)
+    }
+
     & (Join-Path $PSScriptRoot 'dpop0417_rev19_zapret_cleanup_smoke.ps1') -RootPath $installRoot -OutputDir $OutputDir
     if (-not $?) { throw 'rev.19 installed Zapret cleanup smoke failed.' }
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDir 'rev19-zapret-cleanup-report.json') -PathType Leaf)) {
