@@ -299,6 +299,7 @@ $serviceIds=@(1703,1702,1710,1711)
 $settingsPath=Join-Path $OutputDir 'rev19-settings.ini'
 @('auto_update=0','tray_icon=1')|Set-Content -LiteralPath $settingsPath -Encoding ascii
 $screenBounds=[Windows.Forms.Screen]::PrimaryScreen.Bounds
+$oversizedCaptureTopMargin = 32
 
 $reports=@();$launcher=$null;$core=$null
 try{
@@ -318,7 +319,7 @@ try{
         [pscustomobject]@{Name='large';Width=1680;Height=840},
         [pscustomobject]@{Name='user';Width=1908;Height=950}
     )){
-        $windowY=if($size.Height -gt $screenBounds.Height){$screenBounds.Bottom-$size.Height-8}else{0}
+        $windowY=if($size.Height -gt $screenBounds.Height){$screenBounds.Bottom-$size.Height-$oversizedCaptureTopMargin}else{0}
         if(-not [Rev19Native]::SetWindowPos($window,[IntPtr]::Zero,0,$windowY,$size.Width,$size.Height,0x0002 -bor 0x0004 -bor 0x0010 -bor 0x0400)){throw "$($size.Name): resize failed."}
         if($size.Width -eq 1908){Wait-StableZapretGeometry $window $targetIds}else{Start-Sleep -Milliseconds 1100}
         $windowBounds=[Rev19Native]::Bounds($window);$children=@(Get-Children $window)
