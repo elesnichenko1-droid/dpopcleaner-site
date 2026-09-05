@@ -249,18 +249,22 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/commits/${source_sha}" >/dev/null
 
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            gh release upload "${RELEASE_TAG}" "$asset" --clobber
             release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.id')"
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -f target_commitish="$source_sha" -f name="DPopCleaner 0.4.17 rev.19" -F draft=false -F prerelease=false >/dev/null
+            current_tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
+            if [[ "$current_tag_sha" != "$source_sha" ]]; then
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" -f sha="$source_sha" -F force=true >/dev/null
+            fi
+            verified_tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
+            verified_release_target="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.target_commitish')"
+            test "$verified_tag_sha" = "$source_sha"
+            test "$verified_release_target" = "$source_sha"
+            gh release upload "${RELEASE_TAG}" "$asset" --clobber
             gh release edit "${RELEASE_TAG}" --title "DPopCleaner 0.4.17 rev.19" --notes-file release/RELEASE_NOTES_0.4.17.md
           else
             gh release create "${RELEASE_TAG}" "$asset" --target "$source_sha" --title "DPopCleaner 0.4.17 rev.19" --notes-file release/RELEASE_NOTES_0.4.17.md
           fi
 
-          current_tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
-          if [[ "$current_tag_sha" != "$source_sha" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" -f sha="$source_sha" -F force=true >/dev/null
-          fi
           verified_tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
           verified_release_target="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.target_commitish')"
           test "$verified_tag_sha" = "$source_sha"
