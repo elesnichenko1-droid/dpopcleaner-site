@@ -151,10 +151,20 @@ try {
         if (-not ($zapretChildren | Where-Object { $_.Visible -and $_.Text -eq $label } | Select-Object -First 1)) { throw "Zapret rev.7 action missing: $label" }
     }
 
-    $proxyCheck = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1724 -and $_.Text -eq 'Проверить версию' } | Select-Object -First 1
-    $proxyDownload = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1725 -and $_.Text -eq 'Скачать и установить' } | Select-Object -First 1
-    if (-not $proxyCheck) { throw 'Bridge-owned Zapret check-version proxy id=1724 is missing.' }
-    if (-not $proxyDownload) { throw 'Bridge-owned Zapret updater proxy id=1725 is missing.' }
+    # The four action buttons are created before the legacy update proxy group in the launcher
+    # constructor. An external smoke can therefore observe them during that constructor. Wait for
+    # the complete bridge-owned update pair instead of treating that transient snapshot as failure.
+    $proxyDeadline = [DateTime]::UtcNow.AddSeconds(6)
+    $proxyCheck = $null
+    $proxyDownload = $null
+    do {
+        $zapretChildren = Children $window
+        $proxyCheck = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1724 -and $_.Text -eq 'Проверить версию' } | Select-Object -First 1
+        $proxyDownload = $zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1725 -and $_.Text -eq 'Скачать и установить' } | Select-Object -First 1
+        if (-not $proxyCheck -or -not $proxyDownload) { Start-Sleep -Milliseconds 100 }
+    } while ((-not $proxyCheck -or -not $proxyDownload) -and [DateTime]::UtcNow -lt $proxyDeadline)
+    if (-not $proxyCheck) { throw 'Bridge-owned Zapret check-version proxy id=1724 is missing after bounded wait.' }
+    if (-not $proxyDownload) { throw 'Bridge-owned Zapret updater proxy id=1725 is missing after bounded wait.' }
     if ($zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1709 } | Select-Object -First 1) { throw 'Broken frozen Zapret check-version button id=1709 is still visible.' }
     if ($zapretChildren | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $_.Id -eq 1715 } | Select-Object -First 1) { throw 'Broken frozen Zapret updater button id=1715 is still visible.' }
     foreach ($legacyLabel in @('Диагностика','Тесты')) {
