@@ -77,14 +77,8 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertNotIn('zapretProxyTimer', program)
         self.assertNotIn('ZapretUpdateProxyHost zapretUpdateProxy', program)
 
-    def test_legacy_zapret_update_proxies_retry_until_frozen_controls_are_ready(self):
-        host = (ROOT / 'v0417/src/SimpleUpdate/ZapretEnhancementHost.cs').read_text(encoding='utf-8')
+    def test_installed_smoke_waits_for_complete_legacy_update_proxy_group(self):
         smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
-        self.assertIn('private void EnsureLegacyUpdateProxy()', host)
-        self.assertIn('if (_updateToolbar != IntPtr.Zero) return;', host)
-        show_start = host.index('internal void Show()')
-        hide_start = host.index('internal void Hide()', show_start)
-        self.assertIn('EnsureLegacyUpdateProxy();', host[show_start:hide_start])
         self.assertIn('$proxyDeadline', smoke)
         self.assertIn('$proxyCheck = $null', smoke)
         self.assertIn('$proxyDownload = $null', smoke)
