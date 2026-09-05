@@ -244,6 +244,36 @@ function Find-TrayProxy([IntPtr]$Window) {
 function Get-DPopEntries([Diagnostics.Process]$Launcher,[Diagnostics.Process]$Core) {
     @([Rev19Native]::Entries()|Where-Object{$_.OwnerPid -eq $Launcher.Id -or $_.OwnerPid -eq $Core.Id -or $_.Title -like '*DPopCleaner*' -or $_.ButtonText -like '*DPopCleaner*'})
 }
+function Get-ZapretGeometrySignature([IntPtr]$Window,[int[]]$TargetIds) {
+    $children=@(Get-Children $Window)
+    $buttons=@($children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $TargetIds -contains $_.Id}|Sort-Object Id,Top,Left)
+    $edits=@($children|Where-Object{$_.Visible -and $_.ClassName -eq 'Edit'}|Sort-Object Top,Left)
+    $combos=@($children|Where-Object{$_.Visible -and $_.ClassName -eq 'ComboBox'}|Sort-Object Top,Left)
+    $buttonSignature=@($buttons|ForEach-Object{"$($_.Id):$($_.Left),$($_.Top),$($_.Right),$($_.Bottom)"})-join ';'
+    $editSignature=@($edits|ForEach-Object{"$($_.Left),$($_.Top),$($_.Right),$($_.Bottom)"})-join ';'
+    $comboSignature=@($combos|ForEach-Object{"$($_.Left),$($_.Top),$($_.Right),$($_.Bottom)"})-join ';'
+    "buttons=$($buttons.Count)|$buttonSignature|edits=$($edits.Count)|$editSignature|combos=$($combos.Count)|$comboSignature"
+}
+function Wait-StableZapretGeometry([IntPtr]$Window,[int[]]$TargetIds,[int]$MinimumObservationMilliseconds=2600,[int]$StableSamples=5) {
+    $started=[DateTime]::UtcNow
+    $deadline=$started.AddMilliseconds([Math]::Max(6000,$MinimumObservationMilliseconds+2500))
+    $lastSignature=$null
+    $stableCount=0
+    $sampleCount=0
+    do {
+        $signature=Get-ZapretGeometrySignature $Window $TargetIds
+        $sampleCount++
+        if($signature -eq $lastSignature){$stableCount++}else{$lastSignature=$signature;$stableCount=1}
+        $elapsed=[int]([DateTime]::UtcNow-$started).TotalMilliseconds
+        if($elapsed -ge $MinimumObservationMilliseconds -and $stableCount -ge $StableSamples){
+            Write-Host "REV19_GEOMETRY_SETTLE elapsedMs=$elapsed samples=$sampleCount stableSamples=$stableCount signature=$signature"
+            return
+        }
+        Start-Sleep -Milliseconds 180
+    } while([DateTime]::UtcNow -lt $deadline)
+    $elapsed=[int]([DateTime]::UtcNow-$started).TotalMilliseconds
+    throw "Zapret geometry did not stabilize after ${elapsed}ms; samples=$sampleCount stableSamples=$stableCount signature=$lastSignature"
+}
 function Assert-TrayState([Diagnostics.Process]$Launcher,[Diagnostics.Process]$Core,[int]$ExpectedCanonical,[string]$Phase) {
     $deadline=[DateTime]::UtcNow.AddSeconds(8)
     do{
@@ -290,7 +320,7 @@ try{
     )){
         $windowY=if($size.Height -gt $screenBounds.Height){$screenBounds.Bottom-$size.Height-8}else{0}
         if(-not [Rev19Native]::SetWindowPos($window,[IntPtr]::Zero,0,$windowY,$size.Width,$size.Height,0x0002 -bor 0x0004 -bor 0x0010 -bor 0x0400)){throw "$($size.Name): resize failed."}
-        Start-Sleep -Milliseconds 1100
+        if($size.Width -eq 1908){Wait-StableZapretGeometry $window $targetIds}else{Start-Sleep -Milliseconds 1100}
         $windowBounds=[Rev19Native]::Bounds($window);$children=@(Get-Children $window)
         $buttons=@($children|Where-Object{$_.Visible -and $_.ClassName -eq 'Button' -and $targetIds -contains $_.Id})
         if($buttons.Count -ne 19){throw "$($size.Name): expected 19 target buttons, found $($buttons.Count)."}
