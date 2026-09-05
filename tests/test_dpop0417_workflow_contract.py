@@ -81,15 +81,16 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
             "REV16_ZAPRET_BUTTON_LAYOUT_OK",
             "REV16_ZAPRET_JOURNAL_HIDDEN_OK",
             "REV16_OTHER_PAGE_LOG_UNCHANGED_OK",
+            "REV16_NATIVE_BUTTON_STYLE",
             "BS_OWNERDRAW",
             "$bridgeOwnerDrawIds=@(1701,1702,1713,1720,1721,1722,1723,1724,1725)",
-            "$nativeButtonIds=@(1703,1704,1705,1707,1708,1710,1711,1714,1716,1717)",
+            "$nativePresentationIds=@(1703,1704,1705,1707,1708,1710,1711,1714,1716,1717)",
             "bridge button id=$($b.Id) is not BS_OWNERDRAW",
-            "native button id=$($b.Id) unexpectedly became BS_OWNERDRAW",
             "GetPixel",
             "ListBox",
         ):
             self.assertIn(token, smoke)
+        self.assertNotIn("native button id=$($b.Id) unexpectedly became BS_OWNERDRAW", smoke)
 
         foundation = (ROOT / ".github" / "workflows" / "DPopCleaner_0.4.17_FOUNDATION.yml").read_text(encoding="utf-8").replace("\\", "/")
         self.assertIn("tools/dpop0417_rev16_zapret_presentation_smoke.ps1", foundation)
