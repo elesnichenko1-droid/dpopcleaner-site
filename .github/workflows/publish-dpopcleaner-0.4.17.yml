@@ -245,6 +245,27 @@ jobs:
           else
             gh release create "${RELEASE_TAG}" "$asset" --target "${GITHUB_SHA}" --title "DPopCleaner 0.4.17 rev.19" --notes-file release/RELEASE_NOTES_0.4.17.md
           fi
+      - name: Restore historical rev.18 asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf rev18-original
+          mkdir -p rev18-original
+          gh run download 33866086719 -n dpopcleaner-0.4.17-rev18-release-candidate -D rev18-original
+          rev18_asset="rev18-original/DPopCleaner_Setup_0.4.17.exe"
+          rev18_proof="rev18-original/release-proof.json"
+          test -f "$rev18_asset"
+          test -f "$rev18_proof"
+          rev18_sha="$(sha256sum "$rev18_asset" | awk '{print $1}')"
+          rev18_size="$(stat -c%s "$rev18_asset")"
+          test "$rev18_sha" = "35153aad901080a56c61d4527fa81e8fc36a2c10e3aa80804b07a8d4e2089763"
+          test "$rev18_size" = "3522368"
+          test "$(jq -r '.revision' "$rev18_proof")" = "18"
+          test "$(jq -r '.tag' "$rev18_proof")" = "v0.4.17-rev18"
+          test "$(jq -r '.source_sha' "$rev18_proof")" = "c6cb03b2464e534ebfdd8daf8cb9d42cf0a69862"
+          test "$(jq -r '.sha256' "$rev18_proof")" = "$rev18_sha"
+          gh release upload v0.4.17-rev18 "$rev18_asset" --clobber
       - name: Stage GitHub Pages
         run: |
           set -euo pipefail
