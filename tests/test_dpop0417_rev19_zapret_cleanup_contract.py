@@ -12,12 +12,17 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('ComputeStatusDetailHeight', source)
         self.assertIn('NativeBridge.ReadWindowText(statusDetail)', source)
 
-    def test_tall_window_rows_get_bounded_height_derived_shift(self):
+    def test_tall_window_uses_baseline_aware_status_floor_without_double_shift(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
-        self.assertIn('TallWindowMaximumVerticalShift', source)
-        self.assertIn('var tallWindowVerticalShift = Math.Min(', source)
+        self.assertIn('TallWindowMaximumStatusShift', source)
+        self.assertIn('_compactStatusSummaryTop', source)
+        self.assertIn('if (clientHeight <= 840)', source)
+        self.assertIn('_compactStatusSummaryTop = statusSummaryBounds.Top', source)
+        self.assertIn('var tallWindowStatusFloor = _compactStatusSummaryTop + Math.Min(', source)
         self.assertIn('tallWindowExtra / 3', source)
-        self.assertIn('statusDetailBottom + sectionGap + tallWindowVerticalShift', source)
+        self.assertIn('Math.Max(statusSummaryBounds.Top, tallWindowStatusFloor)', source)
+        self.assertIn('var strategyRowTop = statusDetailBottom + sectionGap;', source)
+        self.assertNotIn('statusDetailBottom + sectionGap + tallWindowVerticalShift', source)
 
     def test_secondary_commands_are_removed_from_primary_rows(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
