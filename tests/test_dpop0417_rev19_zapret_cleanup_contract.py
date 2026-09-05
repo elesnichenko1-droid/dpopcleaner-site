@@ -82,6 +82,22 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('REV19_PRIMARY_COMPOSITE_OK', smoke)
         self.assertIn('Capture-CompositeWindow $window $shot $children $launcher.Id', smoke)
 
+    def test_user_size_waits_for_stable_geometry_without_waiting_on_blank_space_threshold(self):
+        smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('function Get-ZapretGeometrySignature', smoke)
+        self.assertIn('function Wait-StableZapretGeometry', smoke)
+        self.assertIn('MinimumObservationMilliseconds', smoke)
+        self.assertIn('StableSamples', smoke)
+        self.assertIn('REV19_GEOMETRY_SETTLE', smoke)
+        self.assertIn('Wait-StableZapretGeometry $window $targetIds', smoke)
+        self.assertIn('$size.Width -eq 1908', smoke)
+        self.assertIn('if($size.Width -eq 1908 -and $unusedBottom -gt 210)', smoke)
+        settle_start = smoke.index('function Wait-StableZapretGeometry')
+        settle_end = smoke.index('function Assert-TrayState', settle_start)
+        settle = smoke[settle_start:settle_end]
+        self.assertNotIn('unusedBottom', settle)
+        self.assertNotIn('210', settle)
+
     def test_zapret_geometry_is_applied_before_bridge_painting(self):
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
         start = launcher.index('private void UpdateZapretEnhancements()')
