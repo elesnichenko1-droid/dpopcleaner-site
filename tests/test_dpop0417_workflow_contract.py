@@ -40,6 +40,10 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         for forbidden in ["cmake", "v035_overlay", "gh release", "deploy-pages", "pages: write", "contents: write"]:
             self.assertNotIn(forbidden, lowered)
 
+    def test_obsolete_rev16_runtime_diagnostic_workflow_is_retired(self):
+        path = ROOT / ".github" / "workflows" / "rev16-zapret-runtime-diagnostic.yml"
+        self.assertFalse(path.exists(), "obsolete branch-only rev16 diagnostic workflow must not remain in main")
+
     def test_publisher_verifies_the_same_legacy_zapret_subdirectory(self):
         path = ROOT / ".github" / "workflows" / "publish-dpopcleaner-0.4.17.yml"
         lowered = path.read_text(encoding="utf-8").lower()
