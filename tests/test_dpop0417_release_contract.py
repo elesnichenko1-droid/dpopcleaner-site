@@ -131,6 +131,26 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         ):
             self.assertIn(token, workflow)
 
+    def test_publisher_pins_rev19_tag_and_release_to_verified_candidate_source_sha(self):
+        workflow = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
+        for token in (
+            'release-proof.json',
+            "source_sha=\"$(jq -r '.source_sha' \"$proof\")\"",
+            'git/ref/tags/${release_tag}',
+            'git/refs/tags/${release_tag}',
+            'target_commitish',
+            'test "$verified_tag_sha" = "$source_sha"',
+            'test "$verified_release_target" = "$source_sha"',
+        ):
+            self.assertIn(token, workflow)
+
+        existing_release = workflow.index('if gh release view "${release_tag}"')
+        sync_tag = workflow.index('current_tag_sha=', existing_release)
+        verify_provenance = workflow.index('test "$verified_release_target" = "$source_sha"', existing_release)
+        clobber_asset = workflow.index('gh release upload "${release_tag}" "$asset" --clobber', existing_release)
+        self.assertLess(sync_tag, clobber_asset)
+        self.assertLess(verify_provenance, clobber_asset)
+
 
 if __name__ == '__main__':
     unittest.main()
