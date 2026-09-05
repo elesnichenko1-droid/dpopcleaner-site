@@ -87,20 +87,25 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         stage = (ROOT / 'tools/dpop0417_stage.ps1').read_text(encoding='utf-8')
 
         # The immutable core still owns the visible version row and reads
-        # Zapret\\utils\\dpop_version.txt itself. Rev.16 only unifies presentation.
+        # Zapret\\utils\\dpop_version.txt itself. Rev.19 keeps that source while
+        # moving launcher-owned bridge button painting to the bridge hosts.
         for forbidden in (
             'VersionStatusProxyId', 'CreateVersionStatusProxy', 'AttachToExistingVersionStatus',
             'SelectExistingStatusEdit', 'RefreshExistingVersionStatus', 'RewriteVersionStatusText',
             '_versionStatus', 'WriteWindowText(_versionStatus', 'SetWindowSubclass(_versionStatus'
         ):
             self.assertNotIn(forbidden, visual)
-        self.assertIn('EnsureUnifiedZapretButtons();', visual)
+        self.assertIn('EnsureBridgeButtonPainting();', visual)
         self.assertIn('NativeBridge.IsDarkThemeSelected(_parent)', visual)
+        self.assertIn('BridgeButtonIds', visual)
         self.assertIn('DarkButtonBrush', visual)
         self.assertIn('LightButtonBrush', visual)
         self.assertIn('BS_OWNERDRAW', visual)
         self.assertIn('WM_DRAWITEM', visual)
-        self.assertIn('DrawOwnerButton', visual)
+        self.assertIn('BridgeHostSubclassDelegate', visual)
+        self.assertIn('WS_CLIPCHILDREN', visual)
+        self.assertIn('DrawOwnerDrawButton', visual)
+        self.assertNotIn('SetWindowSubclass(button, ButtonSubclassDelegate', visual)
         self.assertIn('GetInstalledZapretVersion()', visual)
         self.assertIn('Game filter ', visual)
         self.assertIn('Игровой фильтр ', visual)
