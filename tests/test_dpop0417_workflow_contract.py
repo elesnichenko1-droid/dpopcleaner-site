@@ -86,11 +86,14 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
             "$bridgeOwnerDrawIds=@(1701,1702,1713,1720,1721,1722,1723,1724,1725)",
             "$nativePresentationIds=@(1703,1704,1705,1707,1708,1710,1711,1714,1716,1717)",
             "bridge button id=$($b.Id) is not BS_OWNERDRAW",
+            "$contentRight=($contentEdits|Measure-Object Right -Maximum).Maximum",
+            "Zapret action protrudes past current content boundary",
             "GetPixel",
             "ListBox",
         ):
             self.assertIn(token, smoke)
         self.assertNotIn("native button id=$($b.Id) unexpectedly became BS_OWNERDRAW", smoke)
+        self.assertNotIn("$tests.Right", smoke)
 
         foundation = (ROOT / ".github" / "workflows" / "DPopCleaner_0.4.17_FOUNDATION.yml").read_text(encoding="utf-8").replace("\\", "/")
         self.assertIn("tools/dpop0417_rev16_zapret_presentation_smoke.ps1", foundation)
