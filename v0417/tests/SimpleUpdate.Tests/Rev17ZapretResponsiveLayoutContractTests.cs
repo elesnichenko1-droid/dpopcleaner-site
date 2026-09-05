@@ -89,7 +89,7 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void Launcher_applies_responsive_layout_after_existing_Zapret_bridge_and_visual_polish()
+        public void Launcher_applies_responsive_layout_before_rev19_visual_owner_draw()
         {
             var launcher = ReadSource("LauncherContext.cs");
             StringAssert.Contains(launcher, "private ZapretResponsiveLayoutHost _zapretResponsiveHost;");
@@ -98,10 +98,10 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(launcher, "_zapretResponsiveHost.Dispose();");
 
             var bridgeIndex = launcher.IndexOf("_zapretHost.Show();", StringComparison.Ordinal);
-            var visualIndex = launcher.IndexOf("_zapretVisualHost.Show();", StringComparison.Ordinal);
             var responsiveIndex = launcher.IndexOf("_zapretResponsiveHost.Show();", StringComparison.Ordinal);
-            Assert.IsTrue(bridgeIndex >= 0 && visualIndex > bridgeIndex && responsiveIndex > visualIndex,
-                "Responsive geometry must run last so legacy/proxy positioning cannot overwrite the layout in the same 100ms tick.");
+            var visualIndex = launcher.IndexOf("_zapretVisualHost.Show();", StringComparison.Ordinal);
+            Assert.IsTrue(bridgeIndex >= 0 && responsiveIndex > bridgeIndex && visualIndex > responsiveIndex,
+                "rev.19 must establish final proxy geometry before visual owner-draw attaches to the launcher-owned hosts in the same 100ms tick.");
         }
     }
 }
