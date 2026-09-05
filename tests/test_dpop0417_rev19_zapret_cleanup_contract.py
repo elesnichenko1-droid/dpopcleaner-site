@@ -53,13 +53,21 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('MeasurePreferredWidth', layout)
         self.assertNotIn('DT_END_ELLIPSIS', polish)
 
-    def test_remove_services_probe_rejects_blank_first_paint(self):
-        probe = (ROOT / 'tools/dpop0417_rev19_remove_services_probe.ps1').read_text(encoding='utf-8')
-        self.assertIn('Assert-FirstPaint', probe)
-        self.assertIn('REV19_FIRST_PAINT_OK', probe)
-        self.assertIn('rev19-proxy-{0}-button.png', probe)
-        self.assertIn('REV19_FIRST_PAINT_DIAG', probe)
-        self.assertIn('Assert-FirstPaint $buttonPath', probe)
+    def test_installed_wrapper_uses_strict_gate_without_diagnostic_probe_dependencies(self):
+        wrapper = (ROOT / 'tools/dpop0417_rev19_installed_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('dpop0417_rev19_zapret_cleanup_smoke.ps1', wrapper)
+        self.assertIn('rev19-zapret-cleanup-report.json', wrapper)
+        self.assertIn('dpop0417_rev19_button_style_probe.ps1', wrapper)
+        self.assertIn('rev19-button-style-probe.json', wrapper)
+        for diagnostic in (
+            'dpop0417_rev19_1702_1024_capture_probe.ps1',
+            'dpop0417_rev19_remove_services_probe.ps1',
+            'dpop0417_rev19_subclass_probe.ps1',
+            'dpop0417_rev19_layout_settle_probe.ps1',
+            'rev19-remove-services-probe.json',
+            'rev19-ownerdraw-probe.json',
+        ):
+            self.assertNotIn(diagnostic, wrapper)
 
     def test_primary_screenshot_composites_real_screen_remove_services(self):
         smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
