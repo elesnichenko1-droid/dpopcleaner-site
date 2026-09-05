@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCREENSHOT_SHA256 = 'ad8dd8dfd5d07312d9ff588f2afcae6d655e1a84cb64e17cb1666dc22dd7a572'
 SCREENSHOT_SIZE = 74050
 SCREENSHOT_PATH = 'assets/dpopcleaner-current-settings.png'
+REV18_ORIGINAL_SHA256 = '35153aad901080a56c61d4527fa81e8fc36a2c10e3aa80804b07a8d4e2089763'
 
 
 class DPop0417ReleaseContractTests(unittest.TestCase):
@@ -115,7 +116,19 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         self.assertIn('$live.revision -ne 19', workflow)
         self.assertIn('v0\\.4\\.17-rev19', workflow)
         self.assertNotIn('release_tag: v0.4.17-rev18', workflow)
-        self.assertNotIn('dpopcleaner-0.4.17-rev18-release-candidate', workflow)
+
+    def test_publisher_restores_verified_historical_rev18_asset_after_rev19_publish(self):
+        workflow = (ROOT / '.github/workflows/publish-dpopcleaner-0.4.17.yml').read_text(encoding='utf-8').lower()
+        for token in (
+            'restore historical rev.18 asset',
+            '33866086719',
+            'dpopcleaner-0.4.17-rev18-release-candidate',
+            REV18_ORIGINAL_SHA256,
+            'gh run download',
+            'gh release upload v0.4.17-rev18',
+            '--clobber',
+        ):
+            self.assertIn(token, workflow)
 
 
 if __name__ == '__main__':
