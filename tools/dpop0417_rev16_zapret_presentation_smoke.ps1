@@ -73,7 +73,7 @@ Add-Type -TypeDefinition $native -Language CSharp
 
 $BS_OWNERDRAW=0xB
 $bridgeOwnerDrawIds=@(1701,1702,1713,1720,1721,1722,1723,1724,1725)
-$nativeButtonIds=@(1703,1704,1705,1707,1708,1710,1711,1714,1716,1717)
+$nativePresentationIds=@(1703,1704,1705,1707,1708,1710,1711,1714,1716,1717)
 
 function Get-Children([IntPtr]$Window) { @([Rev16PresentationNative]::Children($Window)) }
 function Wait-Until([int]$Seconds,[string]$Description,[scriptblock]$Condition) {
@@ -157,7 +157,7 @@ function Set-NativeTheme([IntPtr]$Window,[ValidateSet('light','dark')][string]$T
     [pscustomobject]@{Window=$core.MainWindowHandle;Value=$items[$index]}
 }
 function Get-VisibleTargetButtons([IntPtr]$Window) {
-    $ids=@($bridgeOwnerDrawIds+$nativeButtonIds)
+    $ids=@($bridgeOwnerDrawIds+$nativePresentationIds)
     @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $ids -contains $_.Id })
 }
 function Assert-OwnerDrawAndLayout([IntPtr]$Window) {
@@ -174,9 +174,9 @@ function Assert-OwnerDrawAndLayout([IntPtr]$Window) {
     $buttons=@(Get-VisibleTargetButtons $Window)
     if($buttons.Count -lt 16){ throw "Too few visible Zapret action buttons for unified presentation: $($buttons.Count)." }
     $bridgeButtons=@($buttons | Where-Object { $bridgeOwnerDrawIds -contains $_.Id })
-    $nativeButtons=@($buttons | Where-Object { $nativeButtonIds -contains $_.Id })
+    $nativeButtons=@($buttons | Where-Object { $nativePresentationIds -contains $_.Id })
     if($bridgeButtons.Count -ne $bridgeOwnerDrawIds.Count){ throw "Expected $($bridgeOwnerDrawIds.Count) bridge owner-draw buttons, found $($bridgeButtons.Count)." }
-    if($nativeButtons.Count -ne $nativeButtonIds.Count){ throw "Expected $($nativeButtonIds.Count) native Zapret buttons, found $($nativeButtons.Count)." }
+    if($nativeButtons.Count -ne $nativePresentationIds.Count){ throw "Expected $($nativePresentationIds.Count) native Zapret buttons, found $($nativeButtons.Count)." }
     foreach($b in $bridgeButtons) {
         $style=[Rev16PresentationNative]::Style($b.Handle)
         $type=$style -band 0xF
