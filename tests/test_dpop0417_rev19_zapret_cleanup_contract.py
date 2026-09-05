@@ -12,6 +12,13 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('ComputeStatusDetailHeight', source)
         self.assertIn('NativeBridge.ReadWindowText(statusDetail)', source)
 
+    def test_tall_window_rows_get_bounded_height_derived_shift(self):
+        source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
+        self.assertIn('TallWindowMaximumVerticalShift', source)
+        self.assertIn('var tallWindowVerticalShift = Math.Min(', source)
+        self.assertIn('tallWindowExtra / 3', source)
+        self.assertIn('statusDetailBottom + sectionGap + tallWindowVerticalShift', source)
+
     def test_secondary_commands_are_removed_from_primary_rows(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
         self.assertIn('StrategyRowButtonIds = { 1701, 1713, 1714 }', source)
