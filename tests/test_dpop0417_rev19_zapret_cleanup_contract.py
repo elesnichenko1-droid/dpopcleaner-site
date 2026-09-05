@@ -94,6 +94,8 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('$oversizedCaptureTopMargin = 32', smoke)
         self.assertIn('$screenBounds.Bottom-$size.Height-$oversizedCaptureTopMargin', smoke)
+        self.assertIn('$captureResizeFlags = 0x0004 -bor 0x0010 -bor 0x0400', smoke)
+        self.assertIn('SetWindowPos($window,[IntPtr]::Zero,0,$windowY,$size.Width,$size.Height,$captureResizeFlags)', smoke)
 
     def test_user_size_waits_for_stable_geometry_without_waiting_on_blank_space_threshold(self):
         smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
