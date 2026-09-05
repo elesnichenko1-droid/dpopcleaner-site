@@ -77,6 +77,15 @@ class DPop0417Rev7FunctionalContractTests(unittest.TestCase):
         self.assertNotIn('zapretProxyTimer', program)
         self.assertNotIn('ZapretUpdateProxyHost zapretUpdateProxy', program)
 
+    def test_installed_smoke_waits_for_complete_legacy_update_proxy_group(self):
+        smoke = (ROOT / 'tools/dpop0417_rev7_installed_ui_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('$proxyDeadline', smoke)
+        self.assertIn('$proxyCheck = $null', smoke)
+        self.assertIn('$proxyDownload = $null', smoke)
+        self.assertIn('while ((-not $proxyCheck -or -not $proxyDownload)', smoke)
+        self.assertIn("Bridge-owned Zapret check-version proxy id=1724 is missing after bounded wait.", smoke)
+        self.assertIn("Bridge-owned Zapret updater proxy id=1725 is missing after bounded wait.", smoke)
+
     def test_rev16_zapret_preserves_native_version_source_and_follows_selected_theme(self):
         visual_path = ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs'
         self.assertTrue(visual_path.is_file())
