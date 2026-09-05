@@ -190,13 +190,14 @@ function Assert-OwnerDrawAndLayout([IntPtr]$Window) {
 
     $actions=@($buttons | Where-Object { $_.Id -ge 1720 -and $_.Id -le 1723 } | Sort-Object Left)
     if($actions.Count -ne 4){ throw "Expected four rev.16 action buttons, found $($actions.Count)." }
-    $tests=Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and ($_.Text -eq 'Тесты' -or $_.Text -eq 'Tests') } | Select-Object -First 1
-    if(-not $tests){ throw 'Native Tests button was not found for action-toolbar right boundary.' }
+    $contentEdits=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' })
+    if($contentEdits.Count -lt 1){ throw 'Visible Zapret status content bounds are unavailable.' }
+    $contentRight=($contentEdits|Measure-Object Right -Maximum).Maximum
     for($i=0;$i -lt $actions.Count;$i++) {
         $width=$actions[$i].Right-$actions[$i].Left
         $needed=[Windows.Forms.TextRenderer]::MeasureText([string]$actions[$i].Text,[Drawing.SystemFonts]::MessageBoxFont).Width+8
         if($width -lt $needed){ throw "Zapret action text is clipped id=$($actions[$i].Id) width=$width needed=$needed text='$($actions[$i].Text)'." }
-        if($actions[$i].Right -gt $tests.Right){ throw "Zapret action protrudes past panel boundary id=$($actions[$i].Id) right=$($actions[$i].Right) testsRight=$($tests.Right)." }
+        if($actions[$i].Right -gt $contentRight){ throw "Zapret action protrudes past current content boundary id=$($actions[$i].Id) right=$($actions[$i].Right) contentRight=$contentRight." }
         if($i -gt 0 -and $actions[$i].Left -lt $actions[$i-1].Right){ throw "Zapret actions overlap ids=$($actions[$i-1].Id),$($actions[$i].Id)." }
     }
     Write-Host 'REV16_ZAPRET_BUTTON_LAYOUT_OK'
