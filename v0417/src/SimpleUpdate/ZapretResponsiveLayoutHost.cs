@@ -19,6 +19,7 @@ namespace DPopCleaner.SimpleUpdate
         private const int ResponsiveTextPadding = 28;
         private const int CompactIdleStatusDetailHeight = 116;
         private const int ExpandedStatusDetailHeight = 220;
+        private const int TallWindowMaximumVerticalShift = 36;
 
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
@@ -129,6 +130,9 @@ namespace DPopCleaner.SimpleUpdate
             var nativeButtonHeight = Math.Max(ResponsiveButtonHeight, _nativeButtonHeight);
             var scale = Math.Max(0.75, Math.Min(2.50, (double)nativeButtonHeight / ResponsiveButtonHeight));
             var tallWindowExtra = Math.Max(0, clientHeight - 840);
+            var tallWindowVerticalShift = Math.Min(
+                Scale(TallWindowMaximumVerticalShift, scale),
+                tallWindowExtra / 3);
             var buttonHeight = Math.Min(
                 Scale(ResponsiveMaximumButtonHeight, scale),
                 Math.Max(nativeButtonHeight, Scale(ResponsiveButtonHeight, scale) + tallWindowExtra / 8));
@@ -205,7 +209,7 @@ namespace DPopCleaner.SimpleUpdate
             NativeBridge.PositionChildWindow(statusDetail, Bounds(
                 contentLeft, statusDetailTop, contentRight, statusDetailBottom));
 
-            var strategyRowTop = statusDetailBottom + sectionGap;
+            var strategyRowTop = statusDetailBottom + sectionGap + tallWindowVerticalShift;
             var labelWidth = Math.Max(strategyLabelBounds.Width, Scale(82, scale));
             var minimumStrategyWidth = labelWidth + Scale(120, scale);
             var desiredStrategyWidth = Math.Max(minimumStrategyWidth, (int)Math.Round(contentWidth * 0.42));
