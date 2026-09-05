@@ -90,6 +90,11 @@ class DPop0417Rev19ZapretCleanupContractTests(unittest.TestCase):
         self.assertIn('REV19_PRIMARY_COMPOSITE_OK', smoke)
         self.assertIn('Capture-CompositeWindow $window $shot $children $launcher.Id', smoke)
 
+    def test_oversized_capture_window_keeps_tall_remove_services_inside_physical_desktop(self):
+        smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
+        self.assertIn('$oversizedCaptureTopMargin = 32', smoke)
+        self.assertIn('$screenBounds.Bottom-$size.Height-$oversizedCaptureTopMargin', smoke)
+
     def test_user_size_waits_for_stable_geometry_without_waiting_on_blank_space_threshold(self):
         smoke = (ROOT / 'tools/dpop0417_rev19_zapret_cleanup_smoke.ps1').read_text(encoding='utf-8')
         self.assertIn('function Get-ZapretGeometrySignature', smoke)
