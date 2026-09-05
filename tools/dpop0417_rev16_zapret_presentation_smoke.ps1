@@ -72,6 +72,8 @@ public static class Rev16PresentationNative {
 Add-Type -TypeDefinition $native -Language CSharp
 
 $BS_OWNERDRAW=0xB
+$bridgeOwnerDrawIds=@(1701,1702,1713,1720,1721,1722,1723,1724,1725)
+$nativeButtonIds=@(1703,1704,1705,1707,1708,1710,1711,1714,1716,1717)
 
 function Get-Children([IntPtr]$Window) { @([Rev16PresentationNative]::Children($Window)) }
 function Wait-Until([int]$Seconds,[string]$Description,[scriptblock]$Condition) {
@@ -155,15 +157,35 @@ function Set-NativeTheme([IntPtr]$Window,[ValidateSet('light','dark')][string]$T
     [pscustomobject]@{Window=$core.MainWindowHandle;Value=$items[$index]}
 }
 function Get-VisibleTargetButtons([IntPtr]$Window) {
-    $ids=@(1701,1702,1703,1704,1705,1707,1708,1710,1711,1713,1714,1716,1717,1720,1721,1722,1723,1724,1725)
+    $ids=@($bridgeOwnerDrawIds+$nativeButtonIds)
     @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $ids -contains $_.Id })
 }
 function Assert-OwnerDrawAndLayout([IntPtr]$Window) {
+    Wait-Until 6 'rev.16 bridge owner-draw styles' {
+        $visible=@(Get-VisibleTargetButtons $Window)
+        $bridges=@($visible | Where-Object { $bridgeOwnerDrawIds -contains $_.Id })
+        if($bridges.Count -ne $bridgeOwnerDrawIds.Count){ return $false }
+        foreach($b in $bridges) {
+            if(([Rev16PresentationNative]::Style($b.Handle) -band 0xF) -ne $BS_OWNERDRAW){ return $false }
+        }
+        $true
+    }
+
     $buttons=@(Get-VisibleTargetButtons $Window)
     if($buttons.Count -lt 16){ throw "Too few visible Zapret action buttons for unified presentation: $($buttons.Count)." }
-    foreach($b in $buttons) {
-        $type=[Rev16PresentationNative]::Style($b.Handle) -band 0xF
-        if($type -ne $BS_OWNERDRAW){ throw "Zapret button id=$($b.Id) is not BS_OWNERDRAW; style=0x$(([Rev16PresentationNative]::Style($b.Handle)).ToString('X'))." }
+    $bridgeButtons=@($buttons | Where-Object { $bridgeOwnerDrawIds -contains $_.Id })
+    $nativeButtons=@($buttons | Where-Object { $nativeButtonIds -contains $_.Id })
+    if($bridgeButtons.Count -ne $bridgeOwnerDrawIds.Count){ throw "Expected $($bridgeOwnerDrawIds.Count) bridge owner-draw buttons, found $($bridgeButtons.Count)." }
+    if($nativeButtons.Count -ne $nativeButtonIds.Count){ throw "Expected $($nativeButtonIds.Count) native Zapret buttons, found $($nativeButtons.Count)." }
+    foreach($b in $bridgeButtons) {
+        $style=[Rev16PresentationNative]::Style($b.Handle)
+        $type=$style -band 0xF
+        if($type -ne $BS_OWNERDRAW){ throw "bridge button id=$($b.Id) is not BS_OWNERDRAW; style=0x$($style.ToString('X'))." }
+    }
+    foreach($b in $nativeButtons) {
+        $style=[Rev16PresentationNative]::Style($b.Handle)
+        $type=$style -band 0xF
+        if($type -eq $BS_OWNERDRAW){ throw "native button id=$($b.Id) unexpectedly became BS_OWNERDRAW; style=0x$($style.ToString('X'))." }
     }
 
     $actions=@($buttons | Where-Object { $_.Id -ge 1720 -and $_.Id -le 1723 } | Sort-Object Left)
