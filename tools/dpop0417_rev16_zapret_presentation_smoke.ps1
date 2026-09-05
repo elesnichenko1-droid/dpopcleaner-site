@@ -72,6 +72,8 @@ public static class Rev16PresentationNative {
 Add-Type -TypeDefinition $native -Language CSharp
 
 $BS_OWNERDRAW=0xB
+$bridgeOwnerDrawIds=@(1701,1702,1713,1720,1721,1722,1723,1724,1725)
+$nativePresentationIds=@(1703,1704,1705,1707,1708,1710,1711,1714,1716,1717)
 
 function Get-Children([IntPtr]$Window) { @([Rev16PresentationNative]::Children($Window)) }
 function Wait-Until([int]$Seconds,[string]$Description,[scriptblock]$Condition) {
@@ -155,26 +157,47 @@ function Set-NativeTheme([IntPtr]$Window,[ValidateSet('light','dark')][string]$T
     [pscustomobject]@{Window=$core.MainWindowHandle;Value=$items[$index]}
 }
 function Get-VisibleTargetButtons([IntPtr]$Window) {
-    $ids=@(1701,1702,1703,1704,1705,1707,1708,1710,1711,1713,1714,1716,1717,1720,1721,1722,1723,1724,1725)
+    $ids=@($bridgeOwnerDrawIds+$nativePresentationIds)
     @(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and $ids -contains $_.Id })
 }
 function Assert-OwnerDrawAndLayout([IntPtr]$Window) {
+    Wait-Until 6 'rev.16 bridge owner-draw styles' {
+        $visible=@(Get-VisibleTargetButtons $Window)
+        $bridges=@($visible | Where-Object { $bridgeOwnerDrawIds -contains $_.Id })
+        if($bridges.Count -ne $bridgeOwnerDrawIds.Count){ return $false }
+        foreach($b in $bridges) {
+            if(([Rev16PresentationNative]::Style($b.Handle) -band 0xF) -ne $BS_OWNERDRAW){ return $false }
+        }
+        $true
+    }
+
     $buttons=@(Get-VisibleTargetButtons $Window)
     if($buttons.Count -lt 16){ throw "Too few visible Zapret action buttons for unified presentation: $($buttons.Count)." }
-    foreach($b in $buttons) {
-        $type=[Rev16PresentationNative]::Style($b.Handle) -band 0xF
-        if($type -ne $BS_OWNERDRAW){ throw "Zapret button id=$($b.Id) is not BS_OWNERDRAW; style=0x$(([Rev16PresentationNative]::Style($b.Handle)).ToString('X'))." }
+    $bridgeButtons=@($buttons | Where-Object { $bridgeOwnerDrawIds -contains $_.Id })
+    $nativeButtons=@($buttons | Where-Object { $nativePresentationIds -contains $_.Id })
+    if($bridgeButtons.Count -ne $bridgeOwnerDrawIds.Count){ throw "Expected $($bridgeOwnerDrawIds.Count) bridge owner-draw buttons, found $($bridgeButtons.Count)." }
+    if($nativeButtons.Count -ne $nativePresentationIds.Count){ throw "Expected $($nativePresentationIds.Count) native Zapret buttons, found $($nativeButtons.Count)." }
+    foreach($b in $bridgeButtons) {
+        $style=[Rev16PresentationNative]::Style($b.Handle)
+        $type=$style -band 0xF
+        if($type -ne $BS_OWNERDRAW){ throw "bridge button id=$($b.Id) is not BS_OWNERDRAW; style=0x$($style.ToString('X'))." }
+    }
+    foreach($b in $nativeButtons) {
+        $style=[Rev16PresentationNative]::Style($b.Handle)
+        $type=$style -band 0xF
+        Write-Host "REV16_NATIVE_BUTTON_STYLE id=$($b.Id) type=0x$($type.ToString('X')) style=0x$($style.ToString('X'))"
     }
 
     $actions=@($buttons | Where-Object { $_.Id -ge 1720 -and $_.Id -le 1723 } | Sort-Object Left)
     if($actions.Count -ne 4){ throw "Expected four rev.16 action buttons, found $($actions.Count)." }
-    $tests=Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Button' -and ($_.Text -eq 'Тесты' -or $_.Text -eq 'Tests') } | Select-Object -First 1
-    if(-not $tests){ throw 'Native Tests button was not found for action-toolbar right boundary.' }
+    $contentEdits=@(Get-Children $Window | Where-Object { $_.Visible -and $_.ClassName -eq 'Edit' })
+    if($contentEdits.Count -lt 1){ throw 'Visible Zapret status content bounds are unavailable.' }
+    $contentRight=($contentEdits|Measure-Object Right -Maximum).Maximum
     for($i=0;$i -lt $actions.Count;$i++) {
         $width=$actions[$i].Right-$actions[$i].Left
         $needed=[Windows.Forms.TextRenderer]::MeasureText([string]$actions[$i].Text,[Drawing.SystemFonts]::MessageBoxFont).Width+8
         if($width -lt $needed){ throw "Zapret action text is clipped id=$($actions[$i].Id) width=$width needed=$needed text='$($actions[$i].Text)'." }
-        if($actions[$i].Right -gt $tests.Right){ throw "Zapret action protrudes past panel boundary id=$($actions[$i].Id) right=$($actions[$i].Right) testsRight=$($tests.Right)." }
+        if($actions[$i].Right -gt $contentRight){ throw "Zapret action protrudes past current content boundary id=$($actions[$i].Id) right=$($actions[$i].Right) contentRight=$contentRight." }
         if($i -gt 0 -and $actions[$i].Left -lt $actions[$i-1].Right){ throw "Zapret actions overlap ids=$($actions[$i-1].Id),$($actions[$i].Id)." }
     }
     Write-Host 'REV16_ZAPRET_BUTTON_LAYOUT_OK'

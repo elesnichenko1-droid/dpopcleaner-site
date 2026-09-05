@@ -78,6 +78,28 @@ function Wait-Visible([IntPtr]$Window, [int]$Id, [int]$TimeoutMs = 6000) {
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Visible control id=$Id did not appear."
 }
+function Wait-OwnerDraw([IntPtr]$Window, [int]$Id, [int]$TimeoutMs = 6000) {
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
+    $lastStyle = 0
+    do {
+        Start-Sleep -Milliseconds 100
+        $child = Find-Child $Window $Id -Visible
+        if ($child) {
+            $lastStyle = $child.Style
+            if (($child.Style -band 0xF) -eq 0xB) { return $child }
+        }
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw ("Visible bridge button id={0} did not settle to BS_OWNERDRAW; lastStyle=0x{1:X}." -f $Id,$lastStyle)
+}
+function Assert-NoForbiddenVersionProxy1726([IntPtr]$Window) {
+    foreach ($child in @(Get-Children $Window | Where-Object { $_.Id -eq 1726 })) {
+        $isRev19ServiceHeading = $child.ClassName -eq 'Static' -and
+            ($child.Text -eq 'Сервисные действия' -or $child.Text -eq 'Service actions')
+        if (-not $isRev19ServiceHeading) {
+            throw 'Forbidden rev.10 version proxy id=1726 exists.'
+        }
+    }
+}
 function Capture-Window([IntPtr]$Window, [string]$Target) {
     [void][Rev12Native]::ShowWindow($Window, 9)
     [void][Rev12Native]::SetForegroundWindow($Window)
@@ -138,10 +160,10 @@ try {
     Click-Id $window 905
     [void](Wait-Visible $window 1703 6000)
     foreach ($id in @(1720,1721,1722,1723,1724,1725)) {
-        $button = Wait-Visible $window $id 6000
+        $button = Wait-OwnerDraw $window $id 6000
         if (($button.Style -band 0xF) -ne 0xB) { throw "Bridge button id=$id is not owner-draw." }
     }
-    if (Find-Child $window 1726) { throw 'Forbidden rev.10 version proxy id=1726 exists.' }
+    Assert-NoForbiddenVersionProxy1726 $window
 
     # The visual line reported by the user is custom/native rendering and is not a
     # trustworthy GetWindowText target. Save the actual installed Zapret page as

@@ -66,8 +66,9 @@ namespace SimpleUpdate.Tests
             var source = ReadSource("ZapretResponsiveLayoutHost.cs");
 
             StringAssert.Contains(source, "FindStatusEdits");
-            StringAssert.Contains(source, "statusDetailBottom + rowGap");
-            StringAssert.Contains(source, "availableVerticalSpace");
+            StringAssert.Contains(source, "ComputeStatusDetailHeight");
+            StringAssert.Contains(source, "statusDetailBottom + sectionGap");
+            StringAssert.Contains(source, "clientHeight");
             StringAssert.Contains(source, "updateHeadingTop");
             Assert.IsFalse(source.Contains("legacyStrategyTop"),
                 "Strategy Y must not be inherited from the previous responsive tick; maximize/restore must be reversible.");
@@ -88,7 +89,7 @@ namespace SimpleUpdate.Tests
         }
 
         [TestMethod]
-        public void Launcher_applies_responsive_layout_after_existing_Zapret_bridge_and_visual_polish()
+        public void Launcher_applies_responsive_layout_before_rev19_visual_owner_draw()
         {
             var launcher = ReadSource("LauncherContext.cs");
             StringAssert.Contains(launcher, "private ZapretResponsiveLayoutHost _zapretResponsiveHost;");
@@ -97,10 +98,10 @@ namespace SimpleUpdate.Tests
             StringAssert.Contains(launcher, "_zapretResponsiveHost.Dispose();");
 
             var bridgeIndex = launcher.IndexOf("_zapretHost.Show();", StringComparison.Ordinal);
-            var visualIndex = launcher.IndexOf("_zapretVisualHost.Show();", StringComparison.Ordinal);
             var responsiveIndex = launcher.IndexOf("_zapretResponsiveHost.Show();", StringComparison.Ordinal);
-            Assert.IsTrue(bridgeIndex >= 0 && visualIndex > bridgeIndex && responsiveIndex > visualIndex,
-                "Responsive geometry must run last so legacy/proxy positioning cannot overwrite the layout in the same 100ms tick.");
+            var visualIndex = launcher.IndexOf("_zapretVisualHost.Show();", StringComparison.Ordinal);
+            Assert.IsTrue(bridgeIndex >= 0 && responsiveIndex > bridgeIndex && visualIndex > responsiveIndex,
+                "rev.19 must establish final proxy geometry before visual owner-draw attaches to the launcher-owned hosts in the same 100ms tick.");
         }
     }
 }

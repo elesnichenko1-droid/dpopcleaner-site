@@ -8,15 +8,25 @@ class DPop0417Rev18UserReportContractTests(unittest.TestCase):
     def test_zapret_layout_uses_current_client_height_not_only_width(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs').read_text(encoding='utf-8')
         self.assertIn('clientHeight', source)
-        self.assertIn('availableVerticalSpace', source)
+        self.assertIn('ComputeStatusDetailHeight', source)
+        self.assertIn('sectionGap', source)
         self.assertIn('ResponsiveMaximumButtonHeight', source)
         self.assertIn('statusDetailBottom', source)
 
-    def test_ownerdraw_zapret_buttons_disable_native_windows_theme(self):
+    def test_bridge_buttons_use_launcher_host_ownerdraw_and_restore_native_theme(self):
         source = (ROOT / 'v0417/src/SimpleUpdate/ZapretVisualPolishHost.cs').read_text(encoding='utf-8')
+        self.assertIn('BridgeButtonIds', source)
         self.assertIn('SetWindowTheme', source)
         self.assertIn('SetWindowTheme(button, string.Empty, string.Empty)', source)
         self.assertIn('SetWindowTheme(pair.Key, null, null)', source)
+        self.assertIn('BS_OWNERDRAW', source)
+        self.assertIn('WM_DRAWITEM', source)
+        self.assertIn('BridgeHostSubclassDelegate', source)
+        self.assertIn('WS_CLIPCHILDREN', source)
+        self.assertIn('SetOwnerDrawStyle(button)', source)
+        self.assertNotIn('UnifiedZapretButtonIds', source)
+        self.assertNotIn('SetWindowSubclass(button, ButtonSubclassDelegate', source)
+        self.assertNotIn('StaticButtonSubclassProc', source)
 
     def test_single_tray_uses_separate_user_preference_and_keeps_core_tray_off(self):
         launcher = (ROOT / 'v0417/src/SimpleUpdate/LauncherContext.cs').read_text(encoding='utf-8')
