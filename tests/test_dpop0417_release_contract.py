@@ -144,6 +144,13 @@ class DPop0417ReleaseContractTests(unittest.TestCase):
         ):
             self.assertIn(token, workflow)
 
+        existing_release = workflow.index('if gh release view "${release_tag}"')
+        sync_tag = workflow.index('current_tag_sha=', existing_release)
+        verify_provenance = workflow.index('test "$verified_release_target" = "$source_sha"', existing_release)
+        clobber_asset = workflow.index('gh release upload "${release_tag}" "$asset" --clobber', existing_release)
+        self.assertLess(sync_tag, clobber_asset)
+        self.assertLess(verify_provenance, clobber_asset)
+
 
 if __name__ == '__main__':
     unittest.main()
