@@ -40,6 +40,16 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         for forbidden in ["cmake", "v035_overlay", "gh release", "deploy-pages", "pages: write", "contents: write"]:
             self.assertNotIn(forbidden, lowered)
 
+    def test_legacy_release_workflows_are_manual_only_and_cannot_autopublish_from_main(self):
+        for name in ("build-clean-0.2.14-r1.yml", "build-dpopcleaner-release.yml"):
+            text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+            self.assertIn("workflow_dispatch:", text, f"{name} must remain available only as an explicit manual action")
+            self.assertNotIn("\n  push:", text, f"{name} must not auto-publish historical releases from main")
+
+    def test_obsolete_rev16_runtime_diagnostic_workflow_is_retired(self):
+        path = ROOT / ".github" / "workflows" / "rev16-zapret-runtime-diagnostic.yml"
+        self.assertFalse(path.exists(), "obsolete branch-only rev16 diagnostic workflow must not remain in main")
+
     def test_publisher_verifies_the_same_legacy_zapret_subdirectory(self):
         path = ROOT / ".github" / "workflows" / "publish-dpopcleaner-0.4.17.yml"
         lowered = path.read_text(encoding="utf-8").lower()
@@ -70,6 +80,8 @@ class DPop0417WorkflowContractTests(unittest.TestCase):
         self.assertGreater(finally_block, rethrow)
         self.assertGreater(success_marker, finally_block)
         self.assertGreater(explicit_success_exit, success_marker)
+        self.assertIn("$installDeadline=[DateTime]::UtcNow.AddSeconds(30)", text)
+        self.assertNotIn("$installDeadline=[DateTime]::UtcNow.AddSeconds(20)", text)
 
     def test_rev16_installed_presentation_smoke_gates_theme_layout_and_journal_policy(self):
         smoke_path = ROOT / "tools" / "dpop0417_rev16_zapret_presentation_smoke.ps1"

@@ -61,8 +61,8 @@ def main() -> None:
     require("gShuttingDown.load" in text, "Worker/result path must guard against shutdown")
     require("DPOP0418_TEST_SLOW_UPDATE_MS" in client,
             "Close smoke must use deterministic slow-update test hook")
-    require("0.4.18" in version and "kVersionCode = 418" in version and "kRevision = 2" in version,
-            "Native core identity must be 0.4.18 / 418 / revision 2")
+    require("0.4.18" in version and "kVersionCode = 418" in version and "kRevision = 1" in version,
+            "Native core identity must be 0.4.18 / 418 / initial revision 1")
 
 
 if __name__ == "__main__":

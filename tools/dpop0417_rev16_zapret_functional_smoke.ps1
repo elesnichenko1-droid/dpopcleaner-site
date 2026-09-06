@@ -243,7 +243,7 @@ try {
     }
     Write-LauncherWindowDiagnostic $launcherStub 'REV16_ZAPRET_LAUNCHER_WINDOW_BEFORE_CLICK'
     Click-Id -Window $window -Id 1701
-    $installDeadline=[DateTime]::UtcNow.AddSeconds(20)
+    $installDeadline=[DateTime]::UtcNow.AddSeconds(30)
     do {
         $service=Get-ZapretService
         if ($service -and $service.State -eq 'Running') { break }

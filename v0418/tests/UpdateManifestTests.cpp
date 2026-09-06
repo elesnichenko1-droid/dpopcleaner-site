@@ -58,11 +58,25 @@ int main() {
     if (dpop0418::IsUsableStableManifest(wrongChannel, error))
         return Fail("non-stable channel must fail closed");
 
+    std::string missingProduct = ValidJson();
+    const std::string productNeedle = "  \"product\": \"DPopCleaner\",\n";
+    missingProduct.erase(missingProduct.find(productNeedle), productNeedle.size());
+    dpop0418::UpdateManifest parsedMissingProduct{};
+    if (dpop0418::ParseUpdateManifestUtf8(missingProduct, parsedMissingProduct, error))
+        return Fail("missing product must reject manifest");
+
+    std::string missingChannel = ValidJson();
+    const std::string channelNeedle = "  \"channel\": \"stable\",\n";
+    missingChannel.erase(missingChannel.find(channelNeedle), channelNeedle.size());
+    dpop0418::UpdateManifest parsedMissingChannel{};
+    if (dpop0418::ParseUpdateManifestUtf8(missingChannel, parsedMissingChannel, error))
+        return Fail("missing channel must reject manifest");
+
     std::string missingHash = ValidJson();
-    const std::string needle = "  \"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n";
-    missingHash.erase(missingHash.find(needle), needle.size());
-    dpop0418::UpdateManifest parsedMissing{};
-    if (dpop0418::ParseUpdateManifestUtf8(missingHash, parsedMissing, error))
+    const std::string hashNeedle = "  \"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n";
+    missingHash.erase(missingHash.find(hashNeedle), hashNeedle.size());
+    dpop0418::UpdateManifest parsedMissingHash{};
+    if (dpop0418::ParseUpdateManifestUtf8(missingHash, parsedMissingHash, error))
         return Fail("missing SHA-256 must reject manifest");
 
     return 0;
