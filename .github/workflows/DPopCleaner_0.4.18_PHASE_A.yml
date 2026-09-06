@@ -26,3 +26,12 @@ jobs:
       - name: Verify Phase A identity contract
         shell: pwsh
         run: python -m pytest -q tests/test_dpop0418_phase_a_identity_contract.py
+      - name: Configure native CMake tests
+        shell: pwsh
+        run: cmake -S v0418 -B build0418 -A x64
+      - name: Build settings and update-policy tests
+        shell: pwsh
+        run: cmake --build build0418 --config Release --target AppSettingsTests UpdatePolicyTests
+      - name: Run settings and update-policy tests
+        shell: pwsh
+        run: ctest --test-dir build0418 -C Release -R 'AppSettingsTests|UpdatePolicyTests' --output-on-failure
