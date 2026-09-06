@@ -21,8 +21,9 @@ def test_zapret_button_layout_keeps_existing_contract_helpers():
 
 
 def test_zapret_button_spacing_is_intentionally_roomy():
-    assert "private const int ResponsiveRowGap = 10;" in LOWER
-    assert "private const int ResponsiveColumnGap = 10;" in LOWER
-    assert "private const int ResponsiveButtonHeight = 40;" in LOWER
-    assert "private const int ResponsiveMinimumButtonWidth = 100;" in LOWER
-    assert "private const int ResponsiveTextPadding = 30;" in LOWER
+    assert "private const int responsive row gap = 10;" not in LOWER
+    assert "private const int responsive row gap = 10;".replace("responsive row gap", "ResponsiveRowGap").lower() in LOWER
+    assert "private const int ResponsiveColumnGap = 10;".lower() in LOWER
+    assert "private const int ResponsiveButtonHeight = 40;".lower() in LOWER
+    assert "private const int ResponsiveMinimumButtonWidth = 100;".lower() in LOWER
+    assert "private const int ResponsiveTextPadding = 30;".lower() in LOWER
