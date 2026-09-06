@@ -1,0 +1,48 @@
+name: Zapret button polish test
+
+on:
+  push:
+    branches:
+      - fix/zapret-button-polish-2026-09
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply button spacing polish
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'private const int ResponsiveRowGap = 8;': 'private const int ResponsiveRowGap = 10;',
+              'private const int ResponsiveColumnGap = 8;': 'private const int ResponsiveColumnGap = 10;',
+              'private const int ResponsiveButtonHeight = 34;': 'private const int ResponsiveButtonHeight = 40;',
+              'private const int ResponsiveMinimumButtonWidth = 76;': 'private const int ResponsiveMinimumButtonWidth = 100;',
+              'private const int ResponsiveTextPadding = 28;': 'private const int ResponsiveTextPadding = 30;',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing expected source token: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Run focused test
+        run: python tests/test_zapret_button_spacing_202609.py
+
+      - name: Commit polished layout
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add v0417/src/SimpleUpdate/ZapretResponsiveLayoutHost.cs
+          git commit -m "fix: polish Zapret button spacing"
+          git push
