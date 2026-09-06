@@ -11,12 +11,12 @@ namespace DPopCleaner.SimpleUpdate
         internal const int ServiceActionsHeadingId = 1726;
         internal const int ServiceActionsHeadingHostId = 1727;
 
-        private const int ResponsiveRowGap = 8;
-        private const int ResponsiveColumnGap = 8;
-        private const int ResponsiveButtonHeight = 34;
+        private const int ResponsiveRowGap = 10;
+        private const int ResponsiveColumnGap = 10;
+        private const int ResponsiveButtonHeight = 40;
         private const int ResponsiveMaximumButtonHeight = 48;
-        private const int ResponsiveMinimumButtonWidth = 76;
-        private const int ResponsiveTextPadding = 28;
+        private const int ResponsiveMinimumButtonWidth = 100;
+        private const int ResponsiveTextPadding = 30;
         private const int CompactIdleStatusDetailHeight = 116;
         private const int ExpandedStatusDetailHeight = 220;
         private const int TallWindowMaximumRowShift = 36;
